@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Ericsson and others.
+ * Copyright (c) 2008, 2010 Ericsson and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -28,20 +28,20 @@ import org.eclipse.cdt.dsf.debug.service.IRunControl.IExitedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IResumedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IStartedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.ISuspendedDMEvent;
+import org.eclipse.cdt.dsf.debug.service.command.BufferedCommandControl;
 import org.eclipse.cdt.dsf.debug.service.command.CommandCache;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService.ICommandControlDMContext;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
-import org.eclipse.cdt.dsf.mi.service.command.commands.CLIAttach;
-import org.eclipse.cdt.dsf.mi.service.command.commands.CLIDetach;
-import org.eclipse.cdt.dsf.mi.service.command.commands.CLIInfoThreads;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIThreadListIds;
+import org.eclipse.cdt.dsf.gdb.service.IGDBBackend;
+import org.eclipse.cdt.dsf.mi.service.command.CommandFactory;
 import org.eclipse.cdt.dsf.mi.service.command.output.CLIInfoThreadsInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIThreadListIdsInfo;
 import org.eclipse.cdt.dsf.service.AbstractDsfService;
 import org.eclipse.cdt.dsf.service.DsfServiceEventHandler;
 import org.eclipse.cdt.dsf.service.DsfSession;
+import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.osgi.framework.BundleContext;
@@ -56,16 +56,18 @@ public class MIProcesses extends AbstractDsfService implements IMIProcesses, ICa
 	// MIProcesses service and the MIRunControl service for the MI 
 	// implementation of DSF:
 	//
-	//                           MIControlDMContext
+	//                        MIControlDMContext (ICommandControlDMContext)
 	//                                |
-	//                           MIProcessDMC (IProcess)
-	//    MIContainerDMC ______/      |
-	//     (IContainer)               |
-	//          |                MIThreadDMC (IThread)
-	//    MIExecutionDMC  _____/
-	//     (IExecution)
+	//                          MIProcessDMC (IProcess)
+	//                             /     \
+    //                            /       \
+	//                 MIContainerDMC     MIThreadDMC (IThread)
+	//                  (IContainer)         /
+	//                          \           /
+	//                         MIExecutionDMC
+	//                          (IExecution)
 	//
-	
+
 	/**
 	 * Context representing a thread in GDB/MI
 	 */
@@ -111,9 +113,10 @@ public class MIProcesses extends AbstractDsfService implements IMIProcesses, ICa
 			return 0;
 		}
 
-		public String getId(){
-			return fThreadId;
-		}
+		// Enable if need arises
+//		public String getId(){
+//			return fThreadId;
+//		}
 
 		@Override
 		public String toString() { return baseToString() + ".thread[" + fThreadId + "]"; }  //$NON-NLS-1$ //$NON-NLS-2$
@@ -304,6 +307,8 @@ public class MIProcesses extends AbstractDsfService implements IMIProcesses, ICa
 
     private ICommandControlService fCommandControl;
 	private CommandCache fContainerCommandCache;
+	private CommandFactory fCommandFactory;
+	private IGDBBackend fGdbBackend;
 
 	private static final String FAKE_THREAD_ID = "0"; //$NON-NLS-1$
 	// The unique id should be an empty string so that the views know not to display the fake id
@@ -345,7 +350,21 @@ public class MIProcesses extends AbstractDsfService implements IMIProcesses, ICa
 //				new Hashtable<String, String>());
 
 		fCommandControl = getServicesTracker().getService(ICommandControlService.class);
-        fContainerCommandCache = new CommandCache(getSession(), fCommandControl);
+		BufferedCommandControl bufferedCommandControl = new BufferedCommandControl(fCommandControl, getExecutor(), 2);
+		
+		fCommandFactory = getServicesTracker().getService(IMICommandControl.class).getCommandFactory();
+		
+		fGdbBackend = getServicesTracker().getService(IGDBBackend.class);
+		
+		// This cache stores the result of a command when received; also, this cache
+		// is manipulated when receiving events.  Currently, events are received after
+		// three scheduling of the executor, while command results after only one.  This
+		// can cause problems because command results might be processed before an event
+		// that actually arrived before the command result.
+		// To solve this, we use a bufferedCommandControl that will delay the command
+		// result by two scheduling of the executor.
+		// See bug 280461
+        fContainerCommandCache = new CommandCache(getSession(), bufferedCommandControl);
         fContainerCommandCache.setContextAvailable(fCommandControl.getContext(), true);
         getSession().addServiceEventListener(this, null);
 
@@ -413,7 +432,7 @@ public class MIProcesses extends AbstractDsfService implements IMIProcesses, ICa
 				        protected void handleSuccess() {
 				        	if (getData() instanceof IMIContainerDMContext) {
 				        		IMIContainerDMContext contDmc = (IMIContainerDMContext)getData();
-				        		fContainerCommandCache.execute(new CLIInfoThreads(contDmc),
+				        		fContainerCommandCache.execute(fCommandFactory.createCLIInfoThreads(contDmc),
 				        				new DataRequestMonitor<CLIInfoThreadsInfo>(getExecutor(), rm) {
 				        		        	@Override
 				        		        	protected void handleSuccess() {
@@ -467,7 +486,7 @@ public class MIProcesses extends AbstractDsfService implements IMIProcesses, ICa
 
 			ICommandControlDMContext controlDmc = DMContexts.getAncestorOfType(procCtx, ICommandControlDMContext.class);
 			fCommandControl.queueCommand(
-					new CLIAttach(controlDmc, ((IMIProcessDMContext)procCtx).getProcId()),
+					fCommandFactory.createCLIAttach(controlDmc, ((IMIProcessDMContext)procCtx).getProcId()),
 					new DataRequestMonitor<MIInfo>(getExecutor(), rm) {
 						@Override
 						protected void handleSuccess() {
@@ -498,7 +517,7 @@ public class MIProcesses extends AbstractDsfService implements IMIProcesses, ICa
     		// This service version cannot use -target-detach because it didn't exist
     		// in versions of GDB up to and including GDB 6.8
     		fCommandControl.queueCommand(
-    				new CLIDetach(controlDmc),
+    				fCommandFactory.createCLIDetach(controlDmc),
     				new DataRequestMonitor<MIInfo>(getExecutor(), rm) {
     					@Override
     					protected void handleSuccess() {
@@ -537,7 +556,7 @@ public class MIProcesses extends AbstractDsfService implements IMIProcesses, ICa
 		final IMIContainerDMContext containerDmc = DMContexts.getAncestorOfType(dmc, IMIContainerDMContext.class);
 		if (containerDmc != null) {
 			fContainerCommandCache.execute(
-					new MIThreadListIds(containerDmc),
+					fCommandFactory.createMIThreadListIds(containerDmc),
 					new DataRequestMonitor<MIThreadListIdsInfo>(getExecutor(), rm) {
 						@Override
 						protected void handleSuccess() {
@@ -625,12 +644,21 @@ public class MIProcesses extends AbstractDsfService implements IMIProcesses, ICa
      */
     @DsfServiceEventHandler
     public void eventDispatched(ISuspendedDMEvent e) {
-       	if (e instanceof IContainerSuspendedDMEvent) {
-    		// This will happen in all-stop mode
-       		fContainerCommandCache.setContextAvailable(e.getDMContext(), true);
-       	} else {
-       		// This will happen in non-stop mode
-       	}
+		// This assert may turn out to be overzealous. Refer to
+		// https://bugs.eclipse.org/bugs/show_bug.cgi?id=280631#c26
+       	assert e instanceof IContainerSuspendedDMEvent : "Unexpected type of suspended event: " + e.getClass().toString(); //$NON-NLS-1$
+       	
+   		fContainerCommandCache.setContextAvailable(e.getDMContext(), true);
+   		
+		// If user is debugging a gdb target that doesn't send thread
+		// creation events, make sure we don't use cached thread
+		// information. Reset the cache after every suspend. See bugzilla
+		// 280631
+   		try {
+			if (fGdbBackend.getUpdateThreadListOnSuspend()) {
+				fContainerCommandCache.reset(e.getDMContext());
+			}
+		} catch (CoreException exc) {}
     }
 
     /**

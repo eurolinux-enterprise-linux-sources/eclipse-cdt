@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -90,8 +90,12 @@ public interface ICDebugConstants {
      */
     public static final String PREF_FILTERED_DEBUGGERS = PLUGIN_ID + ".cDebug.filteredDebuggers"; //$NON-NLS-1$
 
-    /**
-	 * Boolean preference controlling whether the instruction stepping mode should be activated.
+	/**
+	 * Boolean preference used to persist the instruction-stepping mode. The
+	 * persistence is global but the mode is per debug target. We update the
+	 * persisted global value when a debug session ends, using the mode that
+	 * session is in at that time. In other words, the most recently terminated
+	 * debug session dictates the initial mode of the next new debug session.
 	 * 
 	 * Temporary. See bugs 79872 and 80323.
 	 */

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2007 Symbian Software Ltd. and others.
+ * Copyright (c) 2006, 2009 Symbian Software Ltd. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,7 +22,7 @@ public class IndexFileLocation implements IIndexFileLocation {
 	private final String fullPath;
 	
 	public IndexFileLocation(URI uri, String fullPath) {
-		if(uri==null)
+		if (uri == null)
 			throw new IllegalArgumentException();
 		this.uri = uri;
 		this.fullPath = fullPath;
@@ -50,8 +50,8 @@ public class IndexFileLocation implements IIndexFileLocation {
 	 */
 	@Override
 	public boolean equals(Object obj) {
-		if(obj instanceof IIndexFileLocation) {
-			return uri.equals(((IIndexFileLocation)obj).getURI());
+		if (obj instanceof IIndexFileLocation) {
+			return uri.equals(((IIndexFileLocation) obj).getURI());
 		}
 		return false;
 	}

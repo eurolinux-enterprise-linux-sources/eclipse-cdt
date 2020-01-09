@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,8 +8,8 @@
  * Contributors:
  *    Markus Schorn - initial API and implementation
  *    Andrew Ferguson (Symbian)
+ *    Sergey Prigogin (Google)
  *******************************************************************************/ 
-
 package org.eclipse.cdt.internal.core.index;
 
 import java.util.Collection;
@@ -21,6 +21,7 @@ import org.eclipse.cdt.core.index.IIndex;
 import org.eclipse.cdt.core.index.IIndexFile;
 import org.eclipse.cdt.core.index.IIndexFileLocation;
 import org.eclipse.cdt.internal.core.pdom.ASTFilePathResolver;
+import org.eclipse.cdt.internal.core.pdom.YieldableIndexLock;
 import org.eclipse.core.runtime.CoreException;
 
 /**
@@ -65,7 +66,28 @@ public interface IWritableIndex extends IIndex {
 	/**
 	 * Creates a file object for the given location or returns an existing one.
 	 */
-	IIndexFragmentFile addFile(int linkageID, IIndexFileLocation fileLocation) throws CoreException;
+	IIndexFragmentFile addFile(int linkageID, IIndexFileLocation location) throws CoreException;
+
+	/**
+	 * Creates a uncommitted file object for the given location.
+	 */
+	IIndexFragmentFile addUncommittedFile(int linkageID, IIndexFileLocation location) throws CoreException;
+
+	/**
+	 * Makes an uncommitted file that was created earlier by calling
+	 * {@link #addUncommittedFile(int, IIndexFileLocation)} method visible in the index.
+	 *
+	 * @return The file that was updated.
+	 * @throws CoreException
+	 */
+	IIndexFragmentFile commitUncommittedFile() throws CoreException;
+
+	/**
+	 * Removes an uncommitted file if there is one. Used to recover from a failed index update.
+	 *  
+	 * @throws CoreException
+	 */
+	void clearUncommittedFile() throws CoreException;
 
 	/**
 	 * Adds content to the given file.
@@ -73,7 +95,7 @@ public interface IWritableIndex extends IIndex {
 	void setFileContent(IIndexFragmentFile sourceFile, 
 			int linkageID, IncludeInformation[] includes, 
 			IASTPreprocessorStatement[] macros, IASTName[][] names,
-			ASTFilePathResolver resolver) throws CoreException;
+			ASTFilePathResolver resolver, YieldableIndexLock lock) throws CoreException, InterruptedException;
 
 	/**
 	 * Clears the entire index.
@@ -128,4 +150,9 @@ public interface IWritableIndex extends IIndex {
 	 * Returns the size of the database in bytes.
 	 */
 	long getDatabaseSizeBytes();
+
+	/**
+	 * Clears the result cache, caller needs to hold a write-lock.
+	 */
+	void clearResultCache();
 }

@@ -67,17 +67,16 @@ import org.eclipse.cdt.core.parser.util.CharArrayUtils;
 import org.eclipse.cdt.ui.CUIPlugin;
 import org.eclipse.cdt.ui.text.ICPartitions;
 
-import org.eclipse.cdt.internal.core.dom.parser.GCCBuiltinSymbolProvider.CBuiltinParameter;
-import org.eclipse.cdt.internal.core.dom.parser.GCCBuiltinSymbolProvider.CPPBuiltinParameter;
+import org.eclipse.cdt.internal.core.dom.parser.c.CBuiltinParameter;
 import org.eclipse.cdt.internal.core.dom.parser.c.CBuiltinVariable;
 import org.eclipse.cdt.internal.core.dom.parser.c.CImplicitFunction;
 import org.eclipse.cdt.internal.core.dom.parser.c.CImplicitTypedef;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPBuiltinParameter;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPBuiltinVariable;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPImplicitFunction;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPImplicitMethod;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPImplicitTypedef;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.AccessContext;
-import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPTemplates.CPPImplicitFunctionTemplate;
 
 import org.eclipse.cdt.internal.ui.viewsupport.CElementImageProvider;
 
@@ -101,7 +100,7 @@ public class DOMCompletionProposalComputer extends ParsingBasedProposalComputer 
 
 		List<ICompletionProposal> proposals = new ArrayList<ICompletionProposal>();
 		
-		if(inPreprocessorDirective(context)) {
+		if (inPreprocessorDirective(context)) {
 			if (!inPreprocessorKeyword(context)) {
 				// add only macros
 				if (prefix.length() == 0) {
@@ -282,14 +281,9 @@ public class DOMCompletionProposalComputer extends ParsingBasedProposalComputer 
 		}
 	}
 
-	protected void handleBinding(IBinding binding,
-			CContentAssistInvocationContext cContext,
-			String prefix, 
-			IASTCompletionContext astContext, 
-			List<ICompletionProposal> proposals) {
-
+	protected void handleBinding(IBinding binding, CContentAssistInvocationContext cContext, String prefix, 
+			IASTCompletionContext astContext, List<ICompletionProposal> proposals) {
 		if ((binding instanceof CPPImplicitFunction
-				|| binding instanceof CPPImplicitFunctionTemplate 
 				|| binding instanceof CPPImplicitTypedef
 				|| binding instanceof CPPBuiltinVariable
 				|| binding instanceof CPPBuiltinParameter

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -118,7 +118,7 @@ public class SyncVariableDataAccess {
              */
             final DsfSession session = DsfSession.getSession(fDmc.getSessionId());
             if (session == null) {
-                cancel(false);
+                rm.setStatus(new Status(IStatus.ERROR, DsfUIPlugin.PLUGIN_ID, IDsfStatusConstants.INVALID_STATE, "Debug session already shut down.", null)); //$NON-NLS-1$
                 rm.done();
                 return;
             }
@@ -168,11 +168,11 @@ public class SyncVariableDataAccess {
         GetVariableValueQuery query = new GetVariableValueQuery(dmc);
         session.getExecutor().execute(query);
 
-        /*
-         * Now we have the data, go and get it. Since the call is completed now
-         * the ".get()" will not suspend it will immediately return with the
-         * data.
-         */
+		/*
+		 * This class is about synchronous access to the variable, so wait until
+		 * the query has completed on the DSF session thread and return the
+		 * result.
+		 */
         try {
             return query.get();
         } catch (InterruptedException e) {
@@ -204,7 +204,7 @@ public class SyncVariableDataAccess {
              */
             final DsfSession session = DsfSession.getSession(fDmc.getSessionId());
             if (session == null) {
-                cancel(false);
+                rm.setStatus(new Status(IStatus.ERROR, DsfUIPlugin.PLUGIN_ID, IDsfStatusConstants.INVALID_STATE, "Debug session already shut down.", null)); //$NON-NLS-1$
                 rm.done();
                 return;
             }
@@ -259,11 +259,10 @@ public class SyncVariableDataAccess {
         SetVariableValueQuery query = new SetVariableValueQuery(dmc, value, formatId);
         session.getExecutor().execute(query);
 
-        /*
-         * Now we have the data, go and get it. Since the call is completed now
-         * the ".get()" will not suspend it will immediately return with the
-         * data.
-         */
+		/*
+		 * This class is about synchronous access to the variable, so wait until
+		 * the query has completed on the DSF session thread. 
+		 */
         try {
             /*
              * Return value is irrelevant, any error would come through with an
@@ -303,7 +302,7 @@ public class SyncVariableDataAccess {
              */
             final DsfSession session = DsfSession.getSession(fDmc.getSessionId());
             if (session == null) {
-                cancel(false);
+                rm.setStatus(new Status(IStatus.ERROR, DsfUIPlugin.PLUGIN_ID, IDsfStatusConstants.INVALID_STATE, "Debug session already shut down.", null)); //$NON-NLS-1$
                 rm.done();
                 return;
             }
@@ -329,7 +328,7 @@ public class SyncVariableDataAccess {
                         /*
                          * All good set return value.
                          */
-                        rm.setData(new Object());
+                        rm.setData(getData());
                         rm.done();
                     }
                 }
@@ -375,11 +374,17 @@ public class SyncVariableDataAccess {
 
         private IFormattedDataDMContext fDmc;
         private String fFormatId;
+        private boolean fEditable;
 
         public GetFormattedValueValueQuery(IFormattedDataDMContext dmc, String formatId) {
-            super();
-            fDmc = dmc;
-            fFormatId = formatId;
+        	this(dmc, formatId, false);
+        }
+
+        public GetFormattedValueValueQuery(IFormattedDataDMContext dmc, String formatId, boolean editable) {
+        	super();
+        	fDmc = dmc;
+        	fFormatId = formatId;
+        	fEditable = editable;
         }
 
         @Override
@@ -390,7 +395,7 @@ public class SyncVariableDataAccess {
              */
             final DsfSession session = DsfSession.getSession(fDmc.getSessionId());
             if (session == null) {
-                cancel(false);
+                rm.setStatus(new Status(IStatus.ERROR, DsfUIPlugin.PLUGIN_ID, IDsfStatusConstants.INVALID_STATE, "Debug session already shut down.", null)); //$NON-NLS-1$
                 rm.done();
                 return;
             }
@@ -414,10 +419,7 @@ public class SyncVariableDataAccess {
             service.getFormattedExpressionValue(formDmc, new DataRequestMonitor<FormattedValueDMData>(session.getExecutor(), rm) {
                 @Override
                 protected void handleSuccess() {
-                    /*
-                     * All good set return value.
-                     */
-                    rm.setData(getData().getFormattedValue());
+                    rm.setData(fEditable ? getData().getEditableValue() : getData().getFormattedValue());
                     rm.done();
                 }
             });
@@ -425,6 +427,14 @@ public class SyncVariableDataAccess {
     }
 
     public String getFormattedValue(Object element, String formatId) {
+    	return getValue(element, formatId, false);
+    }
+    
+    public String getEditableValue(Object element, String formatId) {
+    	return getValue(element, formatId, true);
+    }
+    
+    private String getValue(Object element, String formatId, boolean editable) {
 
         /*
          * Get the DMC and the session. If element is not an register DMC, or
@@ -440,7 +450,7 @@ public class SyncVariableDataAccess {
          * guard against RejectedExecutionException, because
          * DsfSession.getSession() above would only return an active session.
          */
-        GetFormattedValueValueQuery query = new GetFormattedValueValueQuery(dmc, formatId);
+        GetFormattedValueValueQuery query = new GetFormattedValueValueQuery(dmc, formatId, editable);
         session.getExecutor().execute(query);
 
         /*
@@ -478,7 +488,7 @@ public class SyncVariableDataAccess {
              */
             final DsfSession session = DsfSession.getSession(fDmc.getSessionId());
             if (session == null) {
-                cancel(false);
+                rm.setStatus(new Status(IStatus.ERROR, DsfUIPlugin.PLUGIN_ID, IDsfStatusConstants.INVALID_STATE, "Debug session already shut down.", null)); //$NON-NLS-1$
                 rm.done();
                 return;
             }

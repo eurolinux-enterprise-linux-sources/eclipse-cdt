@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,21 +14,24 @@ package org.eclipse.cdt.dsf.mi.service.command;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.eclipse.cdt.dsf.concurrent.ConfinedToDsfExecutor;
 import org.eclipse.cdt.dsf.debug.service.IProcesses.IProcessDMContext;
 import org.eclipse.cdt.dsf.debug.service.IProcesses.IThreadDMContext;
+import org.eclipse.cdt.dsf.debug.service.IRunControl;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IContainerDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IExecutionDMContext;
 import org.eclipse.cdt.dsf.debug.service.command.ICommand;
+import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService.ICommandControlDMContext;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandListener;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandResult;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandToken;
 import org.eclipse.cdt.dsf.debug.service.command.IEventListener;
-import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService.ICommandControlDMContext;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
 import org.eclipse.cdt.dsf.gdb.service.IGDBBackend;
 import org.eclipse.cdt.dsf.mi.service.IMIProcesses;
 import org.eclipse.cdt.dsf.mi.service.MIProcesses;
 import org.eclipse.cdt.dsf.mi.service.MIProcesses.ContainerStartedDMEvent;
+import org.eclipse.cdt.dsf.mi.service.command.commands.CLICommand;
 import org.eclipse.cdt.dsf.mi.service.command.commands.MIExecContinue;
 import org.eclipse.cdt.dsf.mi.service.command.commands.MIExecFinish;
 import org.eclipse.cdt.dsf.mi.service.command.commands.MIExecNext;
@@ -38,6 +41,7 @@ import org.eclipse.cdt.dsf.mi.service.command.commands.MIExecStep;
 import org.eclipse.cdt.dsf.mi.service.command.commands.MIExecStepInstruction;
 import org.eclipse.cdt.dsf.mi.service.command.commands.MIExecUntil;
 import org.eclipse.cdt.dsf.mi.service.command.events.MIBreakpointHitEvent;
+import org.eclipse.cdt.dsf.mi.service.command.events.MICatchpointHitEvent;
 import org.eclipse.cdt.dsf.mi.service.command.events.MIEvent;
 import org.eclipse.cdt.dsf.mi.service.command.events.MIFunctionFinishedEvent;
 import org.eclipse.cdt.dsf.mi.service.command.events.MIInferiorExitEvent;
@@ -56,6 +60,7 @@ import org.eclipse.cdt.dsf.mi.service.command.output.MIOOBRecord;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIOutput;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIResult;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIResultRecord;
+import org.eclipse.cdt.dsf.mi.service.command.output.MIStreamRecord;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIValue;
 import org.eclipse.cdt.dsf.service.DsfServicesTracker;
 
@@ -134,6 +139,21 @@ public class MIRunControlEventProcessor
     						}
     					}
     				}
+    				
+					// GDB < 7.0 does not provide a reason when stopping on a
+					// catchpoint. However, the reason is contained in the
+					// stream records that precede the exec async output one.
+					// This is ugly, but we don't really have an alternative.
+    				if (events.isEmpty()) {
+    					MIStreamRecord[] streamRecords = ((MIOutput)output).getStreamRecords();
+    					for (MIStreamRecord streamRecord : streamRecords) {
+    						String log = streamRecord.getString();
+    						if (log.startsWith("Catchpoint ")) { //$NON-NLS-1$
+    							events.add(MICatchpointHitEvent.parse(getExecutionContext(exec), exec.getToken(), results, streamRecord));
+    						}
+    					}
+    				}
+    				
         			// We were stopped for some unknown reason, for example
         			// GDB for temporary breakpoints will not send the
         			// "reason" ??? still fire a stopped event.
@@ -150,9 +170,52 @@ public class MIRunControlEventProcessor
     			}
     		}
     	}
+    	
+    	// Now check for a oob command result.  This happens on Windows when interrupting GDB.
+    	// In this case, GDB before 7.0 does not always send a *stopped event, so we must do it ourselves
+    	// Bug 304096 (if you have the patience to go through it :-))
+    	MIResultRecord rr = ((MIOutput)output).getMIResultRecord();
+    	if (rr != null) {
+    		int id = rr.getToken();
+    		String state = rr.getResultClass();
+    		if ("error".equals(state)) { //$NON-NLS-1$
+
+    			MIResult[] results = rr.getMIResults();
+    			for (int i = 0; i < results.length; i++) {
+    				String var = results[i].getVariable();
+    				MIValue val = results[i].getMIValue();
+    				if (var.equals("msg")) { //$NON-NLS-1$
+    					if (val instanceof MIConst) {
+    						String message = ((MIConst) val).getString();
+    						if (message.toLowerCase().startsWith("quit")) { //$NON-NLS-1$
+    							IRunControl runControl = fServicesTracker.getService(IRunControl.class);
+    							IMIProcesses procService = fServicesTracker.getService(IMIProcesses.class);
+    							if (runControl != null && procService != null) {
+    								// We don't know which thread stopped so we simply create a container event.
+    								String groupId = MIProcesses.UNIQUE_GROUP_ID;
+    								IProcessDMContext procDmc = procService.createProcessContext(fControlDmc, groupId);
+    								IContainerDMContext processContainerDmc = procService.createContainerContext(procDmc, groupId);
+
+    								if (runControl.isSuspended(processContainerDmc) == false) {
+    									// Create an MISignalEvent because that is what the *stopped event should have been
+    									MIEvent<?> event = MISignalEvent.parse(processContainerDmc, id, rr.getMIResults());
+    									fCommandControl.getSession().dispatchEvent(event, fCommandControl.getProperties());
+    								}
+    							}
+    						}
+    					}
+    				}
+    			}
+    		}
+    	}
     }
-    
-    protected MIEvent<?> createEvent(String reason, MIExecAsyncOutput exec) {
+
+	/**
+	 * Create an execution context given an exec-async-output OOB record 
+	 * 
+	 * @since 3.0
+	 */
+    protected IExecutionDMContext getExecutionContext(MIExecAsyncOutput exec) {
     	String threadId = null; 
 
     	MIResult[] results = exec.getMIResults();
@@ -183,6 +246,12 @@ public class MIRunControlEventProcessor
    			execDmc = procService.createExecutionContext(processContainerDmc, threadDmc, threadId);
     	}
     	
+    	return execDmc;
+    }
+
+    @ConfinedToDsfExecutor("")
+    protected MIEvent<?> createEvent(String reason, MIExecAsyncOutput exec) {
+    	IExecutionDMContext execDmc = getExecutionContext(exec);
     	MIEvent<?> event = null;
     	if ("breakpoint-hit".equals(reason)) { //$NON-NLS-1$
     		event = MIBreakpointHitEvent.parse(execDmc, exec.getToken(), exec.getMIResults());
@@ -283,7 +352,48 @@ public class MIRunControlEventProcessor
                 	}
                 }            	
             } else if ("error".equals(state)) { //$NON-NLS-1$
-            } 
+            } else if ("done".equals(state)) { //$NON-NLS-1$
+            	// For GDBs older than 7.0, GDB does not trigger a *stopped event
+            	// when it stops due to a CLI command.  We have to trigger the 
+            	// MIStoppedEvent ourselves
+            	if (cmd instanceof CLICommand<?>) {
+            		// It is important to limit this to runControl operations (e.g., 'next', 'continue', 'jump')
+            		// There are other CLI commands that we use that could still be sent when the target is considered
+            		// running, due to timing issues.
+            		boolean isAttachingOperation = isAttachingOperation(((CLICommand<?>)cmd).getOperation());
+            		boolean isSteppingOperation = CLIEventProcessor.isSteppingOperation(((CLICommand<?>)cmd).getOperation());
+            		if (isSteppingOperation || isAttachingOperation) {
+            			IRunControl runControl = fServicesTracker.getService(IRunControl.class);
+            			IMIProcesses procService = fServicesTracker.getService(IMIProcesses.class);
+            			if (runControl != null && procService != null) {
+            				// We don't know which thread stopped so we simply create a container event.
+            				String groupId = MIProcesses.UNIQUE_GROUP_ID;
+            				IProcessDMContext procDmc = procService.createProcessContext(fControlDmc, groupId);
+            				IContainerDMContext processContainerDmc = procService.createContainerContext(procDmc, groupId);
+
+            				// An attaching operation is debugging a new inferior and always stops it.
+            				// We should not check that the container is suspended, because at startup, we are considered
+            				// suspended, even though we can get a *stopped event.
+            				if (isAttachingOperation || runControl.isSuspended(processContainerDmc) == false) {
+            					MIEvent<?> event = MIStoppedEvent.parse(processContainerDmc, id, rr.getMIResults());
+            					fCommandControl.getSession().dispatchEvent(event, fCommandControl.getProperties());
+            				}
+            			}
+            		}
+            	}
+            }
         }
+    }
+    
+    private static boolean isAttachingOperation(String operation) {
+        // Get the command name.
+        int indx = operation.indexOf(' ');
+        if (indx != -1) {
+            operation = operation.substring(0, indx).trim();
+        } else {
+            operation = operation.trim();
+        }
+    	/* attach: at, att, atta, attac, attach */
+    	return (operation.startsWith("at") && "attach".indexOf(operation) != -1); //$NON-NLS-1$ //$NON-NLS-2$
     }
 }

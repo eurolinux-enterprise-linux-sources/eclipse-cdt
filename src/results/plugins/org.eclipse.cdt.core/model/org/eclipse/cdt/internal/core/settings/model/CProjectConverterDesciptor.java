@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -98,7 +98,7 @@ public class CProjectConverterDesciptor {
 			if(supportedIds != null){
 				IProjectDescription eDes = project.getDescription();
 				String natures[] = eDes.getNatureIds();
-				Set natureSet = new HashSet(Arrays.asList(natures));
+				Set<String> natureSet = new HashSet<String>(Arrays.asList(natures));
 				natureSet.removeAll(Arrays.asList(supportedIds));
 				if(natureSet.size() == natures.length)
 					return false;

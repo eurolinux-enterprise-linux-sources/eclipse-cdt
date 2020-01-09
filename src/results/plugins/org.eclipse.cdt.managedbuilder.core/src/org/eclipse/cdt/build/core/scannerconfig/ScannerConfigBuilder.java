@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,8 +10,8 @@
  *******************************************************************************/
 package org.eclipse.cdt.build.core.scannerconfig;
 
-import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 
 import org.eclipse.cdt.build.internal.core.scannerconfig.CfgDiscoveredPathManager;
@@ -43,6 +43,9 @@ import org.eclipse.core.runtime.SubProgressMonitor;
  * Consolidates discovered scanner configuration and updates project's scanner configuration.
  * 
  * @see IncrementalProjectBuilder
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
  */
 public class ScannerConfigBuilder extends ACBuilder {
 	/*
@@ -57,6 +60,11 @@ public class ScannerConfigBuilder extends ACBuilder {
 	 * force the discovery, i.e. run the discovery even if it is disabled
 	 */
 	public static final int FORCE_DISCOVERY = 1 << 1;
+	/**
+	 * skip running gcc to fetch built-in specs scanner info
+	 * @since 7.0
+	 */
+	public static final int SKIP_SI_DISCOVERY = 1 << 2;
 
 	public final static String BUILDER_ID = ManagedBuilderCorePlugin.getUniqueIdentifier() + ".ScannerConfigBuilder"; //$NON-NLS-1$
 	
@@ -67,7 +75,11 @@ public class ScannerConfigBuilder extends ACBuilder {
 	/**
 	 * @see IncrementalProjectBuilder#build
 	 */
+	@Override
 	protected IProject [] build(int kind, Map args, IProgressMonitor monitor) throws CoreException {
+		if (DEBUG_EVENTS)
+			printEvent(kind, args);
+
 		// If auto discovery is disabled, do nothing
 //		boolean autodiscoveryEnabled;
 //		boolean autodiscoveryEnabled2;
@@ -126,16 +138,15 @@ public class ScannerConfigBuilder extends ACBuilder {
 			//            }
 						ICfgScannerConfigBuilderInfo2Set info = CfgScannerConfigProfileManager.getCfgScannerConfigBuildInfo(cfg);
 						IProject project = cfg.getOwner().getProject();
-						Map infoMap = info.getInfoMap();
+						Map<CfgInfoContext, IScannerConfigBuilderInfo2> infoMap = info.getInfoMap();
 						int num = infoMap.size();
 						if(num != 0){
 							Properties envProps = calcEnvironment(cfg);
 							monitor.beginTask(MakeMessages.getString("ScannerConfigBuilder.Invoking_Builder"), num); //$NON-NLS-1$
-							for(Iterator iter = infoMap.entrySet().iterator(); iter.hasNext();){
+							for (Entry<CfgInfoContext, IScannerConfigBuilderInfo2> entry : infoMap.entrySet()) {
 								try {
-									Map.Entry entry = (Map.Entry)iter.next();
-									CfgInfoContext c = (CfgInfoContext)entry.getKey();
-									IScannerConfigBuilderInfo2 buildInfo2 = (IScannerConfigBuilderInfo2)entry.getValue();
+									CfgInfoContext c = entry.getKey();
+									IScannerConfigBuilderInfo2 buildInfo2 = entry.getValue();
 									build(c, buildInfo2, (flags & (~PERFORM_CORE_UPDATE)), envProps, new SubProgressMonitor(monitor, 1));
 								} catch (CoreException e){
 									// builder not installed or disabled
@@ -180,13 +191,18 @@ public class ScannerConfigBuilder extends ACBuilder {
             SCProfileInstance instance = ScannerConfigProfileManager.getInstance().
         		getSCProfileInstance(project, context.toInfoContext(), buildInfo2.getSelectedProfileId());
             // if there are any providers call job to pull scanner info
-            if ((instance == null) || !buildInfo2.getProviderIdList().isEmpty()) 
-            	instance = CfgSCJobsUtil.getProviderScannerInfo(project, context, instance, buildInfo2, env, new SubProgressMonitor(monitor, 70));
+            if ((flags & SKIP_SI_DISCOVERY) == 0) {
+                if ((instance == null) || !buildInfo2.getProviderIdList().isEmpty())
+                    instance = CfgSCJobsUtil.getProviderScannerInfo(project, context, instance, buildInfo2, env, new SubProgressMonitor(monitor, 70));
+            }
 
             // update and persist scanner configuration
             CfgSCJobsUtil.updateScannerConfiguration(project, context, instance, buildInfo2, new SubProgressMonitor(monitor, 30));
             
+            // Remove the previous discovered path info to ensure it get's regenerated.
+            // TODO we should really only do this if the information has changed
             CfgDiscoveredPathManager.getInstance().removeDiscoveredInfo(project, context, false);
+            
 			if((flags & PERFORM_CORE_UPDATE) != 0)
 				CfgDiscoveredPathManager.getInstance().updateCoreSettings(project, new IConfiguration[]{cfg});
 

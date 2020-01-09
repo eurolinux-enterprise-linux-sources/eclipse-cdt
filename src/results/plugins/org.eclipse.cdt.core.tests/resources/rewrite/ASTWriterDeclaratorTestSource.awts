@@ -50,13 +50,18 @@ int fun3(int i, const char *a, ...);
 //!CPPFunctionDeclaratorTest
 //%CPP
 char & operator [](unsigned int);
+class TestClass
+{
+    int alpha;
+    TestClass(int a);
+    virtual void pure() =0;
+};
 TestClass::TestClass(int a)
 :alpha(a)
 {
 }
 
 void undefPar(const char *c) throw (int);
-virtual void pure() = 0;
 int getV() const;
 int vol() volatile;
 
@@ -87,3 +92,17 @@ int b, a;
 }
 
 
+//!ICPPASTDeclarator with nested declarator being a variable
+//%C
+int *(*var[3]);
+
+//!ICPPASTDeclarator with nested declarator and redundant parentheses 
+//%C
+char (*((*fptr))(int, char));
+
+//!ICPPASTDeclarator with nested declarator as a method
+//%CPP
+class Foo
+{
+    int (*(*aMethod())[2]);
+};

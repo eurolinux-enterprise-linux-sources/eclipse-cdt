@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -30,12 +30,8 @@ import java.util.Map;
 
 import org.eclipse.cdt.core.CCProjectNature;
 import org.eclipse.cdt.core.CCorePlugin;
-import org.eclipse.cdt.core.CDescriptorEvent;
 import org.eclipse.cdt.core.CProjectNature;
 import org.eclipse.cdt.core.IBinaryParser;
-import org.eclipse.cdt.core.ICDescriptor;
-import org.eclipse.cdt.core.ICDescriptorListener;
-import org.eclipse.cdt.core.ICExtensionReference;
 import org.eclipse.cdt.core.IBinaryParser.IBinaryArchive;
 import org.eclipse.cdt.core.IBinaryParser.IBinaryFile;
 import org.eclipse.cdt.core.IBinaryParser.IBinaryObject;
@@ -50,12 +46,22 @@ import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.model.IElementChangedListener;
 import org.eclipse.cdt.core.model.IIncludeReference;
 import org.eclipse.cdt.core.model.IParent;
+import org.eclipse.cdt.core.model.IProblemRequestor;
 import org.eclipse.cdt.core.model.ISourceRoot;
 import org.eclipse.cdt.core.model.ITranslationUnit;
 import org.eclipse.cdt.core.model.IWorkingCopy;
+import org.eclipse.cdt.core.settings.model.CProjectDescriptionEvent;
+import org.eclipse.cdt.core.settings.model.ICConfigExtensionReference;
+import org.eclipse.cdt.core.settings.model.ICConfigurationDescription;
+import org.eclipse.cdt.core.settings.model.ICDescriptionDelta;
+import org.eclipse.cdt.core.settings.model.ICProjectDescription;
+import org.eclipse.cdt.core.settings.model.ICProjectDescriptionListener;
+import org.eclipse.cdt.core.settings.model.ICSettingObject;
 import org.eclipse.cdt.internal.core.CCoreInternals;
 import org.eclipse.cdt.internal.core.LocalProjectScope;
 import org.eclipse.cdt.internal.core.resources.ResourceLookup;
+import org.eclipse.cdt.internal.core.settings.model.CProjectDescription;
+import org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager;
 import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.filesystem.IFileInfo;
 import org.eclipse.core.filesystem.IFileStore;
@@ -72,7 +78,9 @@ import org.eclipse.core.resources.IWorkspaceRoot;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.ISafeRunnable;
+import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.SafeRunner;
 import org.eclipse.core.runtime.content.IContentType;
@@ -80,7 +88,7 @@ import org.eclipse.core.runtime.content.IContentTypeManager;
 import org.eclipse.core.runtime.content.IContentTypeManager.ContentTypeChangeEvent;
 import org.eclipse.core.runtime.content.IContentTypeManager.IContentTypeChangeListener;
 
-public class CModelManager implements IResourceChangeListener, ICDescriptorListener, IContentTypeChangeListener {
+public class CModelManager implements IResourceChangeListener, IContentTypeChangeListener, ICProjectDescriptionListener {
 
 	public static boolean VERBOSE = false;
 
@@ -123,7 +131,7 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 	/**
 	 * A map from ITranslationUnit to IWorkingCopy of the shared working copies.
 	 */
-	public Map<IBufferFactory, Map<ITranslationUnit, WorkingCopy>> sharedWorkingCopies = new HashMap<IBufferFactory, Map<ITranslationUnit, WorkingCopy>>();
+	private Map<IBufferFactory, Map<ITranslationUnit, WorkingCopy>> sharedWorkingCopies = new HashMap<IBufferFactory, Map<ITranslationUnit, WorkingCopy>>();
 	/**
 	 * Set of elements which are out of sync with their buffers.
 	 */
@@ -147,12 +155,12 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 	/**
 	 * The list of started BinaryRunners on projects.
 	 */
-	private HashMap<IProject, BinaryRunner> binaryRunners = new HashMap<IProject, BinaryRunner>();
+	private final Map<IProject, BinaryRunner> binaryRunners = new HashMap<IProject, BinaryRunner>();
 
 	/**
 	 * Map of the binary parser for each project.
 	 */
-	private HashMap<IProject, BinaryParserConfig[]> binaryParsersMap = new HashMap<IProject, BinaryParserConfig[]>();
+	private final Map<IProject, BinaryParserConfig[]> binaryParsersMap = Collections.synchronizedMap(new HashMap<IProject, BinaryParserConfig[]>());
 
 	/**
 	 * The lis of the SourceMappers on projects.
@@ -176,13 +184,18 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 
 				// Register to the workspace;
 				ResourcesPlugin.getWorkspace().addResourceChangeListener(factory,
-																			IResourceChangeEvent.POST_CHANGE
-																					| IResourceChangeEvent.PRE_DELETE
-																					| IResourceChangeEvent.PRE_CLOSE);
+						IResourceChangeEvent.POST_CHANGE
+						| IResourceChangeEvent.PRE_DELETE
+						| IResourceChangeEvent.PRE_CLOSE);
 
 				// Register the Core Model on the Descriptor
 				// Manager, it needs to know about changes.
-				CCorePlugin.getDefault().getCDescriptorManager().addDescriptorListener(factory);
+//				CCorePlugin.getDefault().getCDescriptorManager().addDescriptorListener(factory);
+
+				// Register as project description listener
+				CProjectDescriptionManager.getInstance().addCProjectDescriptionListener(factory,
+						CProjectDescriptionEvent.APPLIED);
+
 				// Register the Core Model on the ContentTypeManager
 				// it needs to know about changes.
 				Platform.getContentTypeManager().addContentTypeChangeListener(factory);
@@ -460,8 +473,7 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 		try {
 			fileStore = EFS.getStore(locationURI);
 		} catch (CoreException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
+			CCorePlugin.log(e1);
 			return null;
 		}
 		
@@ -586,14 +598,15 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 	public BinaryParserConfig[] getBinaryParser(IProject project) {
 		BinaryParserConfig[] parsers = binaryParsersMap.get(project);
 		if (parsers == null) {
-			try {
-				ICDescriptor cdesc = CCorePlugin.getDefault().getCProjectDescription(project, false);
-				if (cdesc != null) {
-					ICExtensionReference[] cextensions = cdesc.get(CCorePlugin.BINARY_PARSER_UNIQ_ID, true);
-					if (cextensions.length > 0) {
-						ArrayList<BinaryParserConfig> list = new ArrayList<BinaryParserConfig>(cextensions.length);
-						for (ICExtensionReference cextension : cextensions) {
-							BinaryParserConfig config = new BinaryParserConfig(cextension);
+			ICProjectDescription desc = CCorePlugin.getDefault().getProjectDescription(project, false);
+			if (desc != null) {
+				ICConfigurationDescription cfgDesc = desc.getDefaultSettingConfiguration();
+				if (cfgDesc != null) {
+					ICConfigExtensionReference[] refs = cfgDesc.get(CCorePlugin.BINARY_PARSER_UNIQ_ID);
+					if (refs.length > 0) {
+						ArrayList<BinaryParserConfig> list = new ArrayList<BinaryParserConfig>(refs.length);
+						for (ICConfigExtensionReference ref : refs) {
+							BinaryParserConfig config = new BinaryParserConfig(ref);
 							list.add(config);
 						}
 						parsers = new BinaryParserConfig[list.size()];
@@ -603,7 +616,6 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 						parsers = new BinaryParserConfig[0];
 					}
 				}
-			} catch (CoreException e) {
 			}
 			if (parsers == null) {
 				try {
@@ -629,25 +641,30 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 		// Only if file has no extension, has an extension that is an integer
 		// or is a binary file content type
 		String ext = file.getFileExtension();
-		if (ext != null) {
+		if (ext != null && ext.length() > 0) {
 			// shared libraries often have a version number
-			boolean isNumber = true;
-			for (int i = 0; i < ext.length(); ++i)
-				if (!Character.isDigit(ext.charAt(i))) {
-					isNumber = false;
-					break;
+			// strip version extension: libc.so.3.2.1 -> libc.so
+			IPath baseFileName = new Path(file.getName());
+			outer: do {
+				for (int i = 0; i < ext.length(); ++i) {
+					if (!Character.isDigit(ext.charAt(i))) {
+						break outer;
+					}
 				}
-			if (!isNumber) {
-				boolean isBinary= false;
-				final IContentTypeManager ctm = Platform.getContentTypeManager();
-				final IContentType ctbin = ctm.getContentType(CCorePlugin.CONTENT_TYPE_BINARYFILE);
-				final IContentType[] cts= ctm.findContentTypesFor(file.getName());
-				for (int i=0; !isBinary && i < cts.length; i++) {
-					isBinary= cts[i].isKindOf(ctbin);
-				}
-				if (!isBinary) {
-					return null;
-				}
+				// extension is a number -> remove it
+				baseFileName = baseFileName.removeFileExtension();
+				ext = baseFileName.getFileExtension();
+			} while (ext != null && ext.length() > 0);
+			
+			boolean isBinary= false;
+			final IContentTypeManager ctm = Platform.getContentTypeManager();
+			final IContentType ctbin = ctm.getContentType(CCorePlugin.CONTENT_TYPE_BINARYFILE);
+			final IContentType[] cts= ctm.findContentTypesFor(baseFileName.toString());
+			for (int i=0; !isBinary && i < cts.length; i++) {
+				isBinary= cts[i].isKindOf(ctbin);
+			}
+			if (!isBinary) {
+				return null;
 			}
 		}
 		
@@ -740,7 +757,7 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 				try {
 					cproject.close();
 				} catch (CModelException e) {
-					e.printStackTrace();
+					CCorePlugin.log(e);
 				}
 				binaryParsersMap.remove(project);
 
@@ -755,13 +772,21 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 
 	public BinaryRunner getBinaryRunner(ICProject cproject) {
 		BinaryRunner runner = null;
+		IProject project = cproject.getProject();
 		synchronized (binaryRunners) {
-			IProject project = cproject.getProject();
 			runner = binaryRunners.get(project);
-			if (runner == null) {
-				runner = new BinaryRunner(project);
-				binaryRunners.put(project, runner);
-				runner.start();
+		}
+		if (runner == null) {
+			// creation of BinaryRunner must occur outside the synchronized block
+			runner = new BinaryRunner(project);
+			synchronized (binaryRunners) {
+				if (binaryRunners.get(project) == null) {
+					binaryRunners.put(project, runner);
+					runner.start();
+				} else {
+					// another thread was faster
+					runner = binaryRunners.get(project);
+				}
 			}
 		}
 		return runner;
@@ -772,7 +797,10 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 	}
 
 	public void removeBinaryRunner(IProject project) {
-		BinaryRunner runner = binaryRunners.remove(project);
+		BinaryRunner runner;
+		synchronized (binaryRunners) {
+			runner = binaryRunners.remove(project);
+		}
 		if (runner != null) {
 			runner.stop();
 		}
@@ -870,41 +898,70 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 							fire(ElementChangedEvent.POST_CHANGE);
 						}
 					} catch (Exception e) {
-						e.printStackTrace();
+						CCorePlugin.log(e);
 					}
 					break;
 			}
 		}
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.cdt.core.ICDescriptorListener#descriptorChanged(org.eclipse.cdt.core.CDescriptorEvent)
-	 */
-	public void descriptorChanged(CDescriptorEvent event) {
-		int flags = event.getFlags();
-		if ( (flags & CDescriptorEvent.EXTENSION_CHANGED) != 0) {
-			ICDescriptor cdesc = event.getDescriptor();
-			if (cdesc != null) {
-				IProject project = cdesc.getProject();
-				try {
-					ICExtensionReference[] newExts = CCorePlugin.getDefault().getBinaryParserExtensions(project);
-					BinaryParserConfig[] currentConfigs = getBinaryParser(project);
-					// anything added/removed
-					if (newExts.length != currentConfigs.length) {
-						resetBinaryParser(project);
-					} else { // may reorder
-						for (int i = 0; i < newExts.length; i++) {
-							if (!newExts[i].getID().equals(currentConfigs[i].getId())) {
+	public void handleEvent(CProjectDescriptionEvent event) {
+		switch(event.getEventType()) {
+		case CProjectDescriptionEvent.APPLIED:
+			CProjectDescription newDes = (CProjectDescription)event.getNewCProjectDescription();
+			CProjectDescription oldDes = (CProjectDescription)event.getOldCProjectDescription();
+			if(oldDes != null && newDes != null) {
+				ICConfigurationDescription newCfg = newDes.getDefaultSettingConfiguration();
+				ICConfigurationDescription oldCfg = oldDes.getDefaultSettingConfiguration();
+				int flags = 0;
+				if(oldCfg != null && newCfg != null){
+					if(newCfg.getId().equals(oldCfg.getId())){
+						ICDescriptionDelta cfgDelta = findCfgDelta(event.getProjectDelta(), newCfg.getId());
+						if(cfgDelta != null){
+							flags = cfgDelta.getChangeFlags() & (ICDescriptionDelta.EXT_REF | ICDescriptionDelta.OWNER);
+						}
+					} else {
+						flags = CProjectDescriptionManager.getInstance().calculateDescriptorFlags(newCfg, oldCfg);
+					}
+				}
+				if ((flags & ICDescriptionDelta.EXT_REF) != 0) {
+					// update binary parsers
+					IProject project = newDes.getProject();
+					try {
+						ICConfigExtensionReference[] newExts = CCorePlugin.getDefault().getDefaultBinaryParserExtensions(project);
+						BinaryParserConfig[] currentConfigs = binaryParsersMap.get(project);
+						// anything added/removed
+						if (currentConfigs != null) {
+							if (newExts.length != currentConfigs.length) {
 								resetBinaryParser(project);
-								break;
+							} else { // may reorder
+								for (int i = 0; i < newExts.length; i++) {
+									if (!newExts[i].getID().equals(currentConfigs[i].getId())) {
+										resetBinaryParser(project);
+										break;
+									}
+								}
 							}
 						}
+					} catch (CoreException e) {
+						resetBinaryParser(project);
 					}
-				} catch (CoreException e) {
-					resetBinaryParser(project);
 				}
 			}
+			break;
 		}
+	}
+
+	private ICDescriptionDelta findCfgDelta(ICDescriptionDelta delta, String id){
+		if(delta == null)
+			return null;
+		ICDescriptionDelta children[] = delta.getChildren();
+		for(int i = 0; i < children.length; i++){
+			ICSettingObject s = children[i].getNewSetting();
+			if(s != null && id.equals(s.getId()))
+				return children[i];
+		}
+		return null;
 	}
 
 	/* (non-Javadoc)
@@ -1232,14 +1289,18 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 	 */
 	public void shutdown() {
 		// Remove ourself from the DescriptorManager.
-		CCorePlugin.getDefault().getCDescriptorManager().removeDescriptorListener(factory);
+		CProjectDescriptionManager.getInstance().removeCProjectDescriptionListener(this);
+//		CCorePlugin.getDefault().getCDescriptorManager().removeDescriptorListener(factory);
 		// Remove ourself from the ContentTypeManager
 		Platform.getContentTypeManager().removeContentTypeChangeListener(factory);
 
 		// Do any shutdown of services.
 		ResourcesPlugin.getWorkspace().removeResourceChangeListener(factory);
 
-		BinaryRunner[] runners = binaryRunners.values().toArray(new BinaryRunner[0]);
+		BinaryRunner[] runners;
+		synchronized (binaryRunners) {
+			runners = binaryRunners.values().toArray(new BinaryRunner[0]);
+		}
 		for (BinaryRunner runner : runners) {
 			runner.stop();
 		}
@@ -1277,4 +1338,61 @@ public class CModelManager implements IResourceChangeListener, ICDescriptorListe
 		CCoreInternals.getPDOMManager().preCloseProject(create(project));
 	}
 
+	public IWorkingCopy[] getSharedWorkingCopies(IBufferFactory factory) {
+		// if factory is null, default factory must be used
+		if (factory == null)
+			factory = BufferManager.getDefaultBufferManager().getDefaultBufferFactory();
+
+		Map<ITranslationUnit, WorkingCopy> perFactoryWorkingCopies = sharedWorkingCopies.get(factory);
+		if (perFactoryWorkingCopies == null)
+			return NoWorkingCopy;
+		Collection<WorkingCopy> copies = perFactoryWorkingCopies.values();
+		return copies.toArray(new IWorkingCopy[copies.size()]);
+	}
+
+	public IWorkingCopy findSharedWorkingCopy(IBufferFactory factory, ITranslationUnit tu) {
+		// if factory is null, default factory must be used
+		if (factory == null)
+			factory = BufferManager.getDefaultBufferManager();
+
+		Map<ITranslationUnit, WorkingCopy> perFactoryWorkingCopies = sharedWorkingCopies.get(factory);
+		if (perFactoryWorkingCopies == null)
+			return null;
+
+		return perFactoryWorkingCopies.get(tu);
+	}
+
+	public IWorkingCopy getSharedWorkingCopy(IBufferFactory factory, ITranslationUnit tu, IProblemRequestor requestor,
+			IProgressMonitor monitor) throws CModelException {
+
+		// if factory is null, default factory must be used
+		if (factory == null)
+			factory = BufferManager.getDefaultBufferManager();
+
+		Map<ITranslationUnit, WorkingCopy> perFactoryWorkingCopies = sharedWorkingCopies.get(factory);
+		if (perFactoryWorkingCopies == null) {
+			perFactoryWorkingCopies = new HashMap<ITranslationUnit, WorkingCopy>();
+			sharedWorkingCopies.put(factory, perFactoryWorkingCopies);
+		}
+		WorkingCopy workingCopy = perFactoryWorkingCopies.get(tu);
+		if (workingCopy != null) {
+			workingCopy.useCount++;
+			return workingCopy;
+		}
+		CreateWorkingCopyOperation op = new CreateWorkingCopyOperation(tu, perFactoryWorkingCopies,
+				factory, requestor);
+		op.runOperation(monitor);
+		return (IWorkingCopy) op.getResultElements()[0];
+	}
+
+	public IWorkingCopy removeSharedWorkingCopy(final IBufferFactory bufferFactory,	ITranslationUnit originalElement) {
+		// In order to be shared, working copies have to denote the same compilation unit
+		// AND use the same buffer factory.
+		// Assuming there is a little set of buffer factories, then use a 2 level Map cache.
+		Map<ITranslationUnit, WorkingCopy> perFactoryWorkingCopies = sharedWorkingCopies.get(bufferFactory);
+		if (perFactoryWorkingCopies != null) {
+			return perFactoryWorkingCopies.remove(originalElement);
+		}
+		return null;
+	}
 }

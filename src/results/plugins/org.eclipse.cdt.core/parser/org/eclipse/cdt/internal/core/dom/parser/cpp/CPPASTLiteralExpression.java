@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2004, 2009 IBM Corporation and others.
+ *  Copyright (c) 2004, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -12,13 +12,16 @@
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
 
 import org.eclipse.cdt.core.dom.ast.ASTVisitor;
+import org.eclipse.cdt.core.dom.ast.IASTLiteralExpression;
 import org.eclipse.cdt.core.dom.ast.IBasicType;
+import org.eclipse.cdt.core.dom.ast.IBasicType.Kind;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
+import org.eclipse.cdt.core.dom.ast.IValue;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTLiteralExpression;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPBasicType;
 import org.eclipse.cdt.core.parser.util.CharArrayUtils;
 import org.eclipse.cdt.internal.core.dom.parser.ASTNode;
+import org.eclipse.cdt.internal.core.dom.parser.Value;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
 
 /**
@@ -96,7 +99,7 @@ public class CPPASTLiteralExpression extends ASTNode implements ICPPASTLiteralEx
     		}
     		case lk_true:
     		case lk_false:
-    			return new CPPBasicType(ICPPBasicType.t_bool, 0, this);
+    			return new CPPBasicType(Kind.eBoolean, 0, this);
     		case lk_char_constant:
     			return new CPPBasicType(getCharType(), 0, this);
     		case lk_float_constant: 
@@ -106,27 +109,49 @@ public class CPPASTLiteralExpression extends ASTNode implements ICPPASTLiteralEx
     		case lk_string_literal:
     			IType type = new CPPBasicType(getCharType(), 0, this);
     			type = new CPPQualifierType(type, true, false);
-    			return new CPPArrayType(type);
+    			return new CPPArrayType(type, getStringLiteralSize());
     	}
     	return null;
     }
     
-    private int getCharType() {
-    	return getValue()[0] == 'L' ? ICPPBasicType.t_wchar_t : IBasicType.t_char;
+	public boolean isLValue() {
+		return getKind() == IASTLiteralExpression.lk_string_literal;
+	}
+
+	private IValue getStringLiteralSize() {
+		char[] value= getValue();
+		int length= value.length-1;
+		if (value[0] != '"') {
+			length--;
+		}
+		return Value.create(length);
+	}
+
+	private Kind getCharType() {
+    	switch (getValue()[0]) {
+    	case 'L':
+    		return Kind.eWChar;
+    	case 'u':
+    		return Kind.eChar16;
+    	case 'U':
+    		return Kind.eChar32;
+    	default:
+    		return Kind.eChar;
+    	}
     }
     
 	private IType classifyTypeOfFloatLiteral() {
 		final char[] lit= getValue();
 		final int len= lit.length;
-		int kind= IBasicType.t_double;
+		Kind kind= Kind.eDouble;
 		int flags= 0;
 		if (len > 0) {
 			switch (lit[len - 1]) {
 			case 'f': case 'F':
-				kind= IBasicType.t_float;
+				kind= Kind.eFloat;
 				break;
 			case 'l': case 'L':
-				flags |= ICPPBasicType.IS_LONG;
+				flags |= IBasicType.IS_LONG;
 				break;
 			}
 		}
@@ -157,20 +182,15 @@ public class CPPASTLiteralExpression extends ASTNode implements ICPPASTLiteralEx
 
 		int flags= 0;
 		if (unsigned) {
-			flags |= ICPPBasicType.IS_UNSIGNED;
+			flags |= IBasicType.IS_UNSIGNED;
 		}
 		
 		if (makelong > 1) {
-			flags |= ICPPBasicType.IS_LONG_LONG;
-			GPPBasicType result = new GPPBasicType(IBasicType.t_int, flags, null);
-			result.setFromExpression(this);
-			return result;
+			flags |= IBasicType.IS_LONG_LONG;
+		} else if (makelong == 1) {
+			flags |= IBasicType.IS_LONG;
 		} 
-		
-		if (makelong == 1) {
-			flags |= ICPPBasicType.IS_LONG;
-		} 
-		return new CPPBasicType(IBasicType.t_int, flags, this);
+		return new CPPBasicType(Kind.eInt, flags, this);
 	}
 
     /**

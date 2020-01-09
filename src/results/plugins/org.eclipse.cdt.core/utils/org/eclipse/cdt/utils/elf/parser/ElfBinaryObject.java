@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2009 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -181,8 +181,20 @@ public class ElfBinaryObject extends BinaryObjectAdapter {
 	}
 
 	protected void addSymbols(Elf.Symbol[] array, int type, List<Symbol> list) {
-		for (int i = 0; i < array.length; i++) {
-			list.add(new Symbol(this, array[i].toString(), type, array[i].st_value, array[i].st_size));
+		for (org.eclipse.cdt.utils.elf.Elf.Symbol element : array) {
+			// Multiple function symbol entries for the same address are generated
+			// do not add duplicate symbols with 0 size to the list
+			boolean duplicateAddressFound = false;
+			if (type == ISymbol.FUNCTION && element.st_size == 0){
+				for (Symbol s : list) {
+					if (s.getAddress().equals(element.st_value)){
+						duplicateAddressFound = true;
+						break;
+					}
+				}
+			}
+			if (!duplicateAddressFound)	
+				list.add(new Symbol(this, element.toString(), type, element.st_value, element.st_size));
 		}
 	}
 
@@ -190,7 +202,7 @@ public class ElfBinaryObject extends BinaryObjectAdapter {
 	/* (non-Javadoc)
 	 * @see org.eclipse.core.runtime.IAdaptable#getAdapter(java.lang.Class)
 	 */
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	@Override
 	public Object getAdapter(Class adapter) {
 		if (adapter.equals(Elf.class)) {

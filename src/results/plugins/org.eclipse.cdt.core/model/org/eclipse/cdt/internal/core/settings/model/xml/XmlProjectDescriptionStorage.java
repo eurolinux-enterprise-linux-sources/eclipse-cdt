@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 2008 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -40,6 +40,7 @@ import org.eclipse.cdt.core.settings.model.ICSettingsStorage;
 import org.eclipse.cdt.core.settings.model.ICStorageElement;
 import org.eclipse.cdt.core.settings.model.extension.ICProjectConverter;
 import org.eclipse.cdt.core.settings.model.util.CDataUtil;
+import org.eclipse.cdt.internal.core.XmlUtil;
 import org.eclipse.cdt.internal.core.envvar.ContributedEnvironment;
 import org.eclipse.cdt.internal.core.settings.model.AbstractCProjectDescriptionStorage;
 import org.eclipse.cdt.internal.core.settings.model.CProjectDescription;
@@ -47,9 +48,9 @@ import org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager;
 import org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionStorageManager;
 import org.eclipse.cdt.internal.core.settings.model.ExceptionFactory;
 import org.eclipse.cdt.internal.core.settings.model.ICProjectDescriptionStorageType;
+import org.eclipse.cdt.internal.core.settings.model.ICProjectDescriptionStorageType.CProjectDescriptionStorageTypeProxy;
 import org.eclipse.cdt.internal.core.settings.model.SettingsContext;
 import org.eclipse.cdt.internal.core.settings.model.SettingsModelMessages;
-import org.eclipse.cdt.internal.core.settings.model.ICProjectDescriptionStorageType.CProjectDescriptionStorageTypeProxy;
 import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.filesystem.IFileInfo;
 import org.eclipse.core.filesystem.IFileStore;
@@ -58,16 +59,21 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.resources.IWorkspaceRunnable;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.QualifiedName;
+import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.IJobChangeEvent;
 import org.eclipse.core.runtime.jobs.ILock;
 import org.eclipse.core.runtime.jobs.ISchedulingRule;
 import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.core.runtime.jobs.JobChangeAdapter;
 import org.eclipse.core.runtime.jobs.MultiRule;
 import org.osgi.framework.Version;
 import org.w3c.dom.Document;
@@ -125,18 +131,48 @@ public class XmlProjectDescriptionStorage extends AbstractCProjectDescriptionSto
 		private final ICProjectDescription fDes;
 		private final ICStorageElement fElement;
 
+		/*
+		 * See Bug 249951 & Bug 310007
+		 * Notification run with the workspace lock (which clients can't acquire explicitly)
+		 * The result is deadlock if:
+		 *   1) Notification listener does getProjectDescription  (workspaceLock -> serializingLock)
+		 *   2) setProjectDescription does IFile write  (serializingLock -> workspaceLock)
+		 * This workaround stops the periodic notification job while we're persisting the project description
+		 * which prevents notification (1) from occurring while we do (2)
+		 */
+		private class NotifyJobCanceller extends JobChangeAdapter {
+			@Override
+			public void aboutToRun(IJobChangeEvent event) {
+				final Job job = event.getJob();
+				if ("org.eclipse.core.internal.events.NotificationManager$NotifyJob".equals(job.getClass().getName())) { //$NON-NLS-1$
+					job.cancel();
+				}
+			}
+		}
+
 		public DesSerializationRunnable(ICProjectDescription des, ICStorageElement el) {
 			fDes = des;
 			fElement = el;
 		}
 
 		public void run(IProgressMonitor monitor) throws CoreException {
+			JobChangeAdapter notifyJobCanceller = new NotifyJobCanceller();
 			try {
+				// See Bug 249951 & Bug 310007
+				Job.getJobManager().addJobChangeListener(notifyJobCanceller);
+				// Ensure we can check a null-job into the workspace 
+				// i.e. if notification is currently in progress wait for it to finish...
+				ResourcesPlugin.getWorkspace().run(new IWorkspaceRunnable() {
+					public void run(IProgressMonitor monitor) throws CoreException {
+					}
+				}, null, IWorkspace.AVOID_UPDATE, null);
+				// end Bug 249951 & Bug 310007
 				serializingLock.acquire();
 				projectModificaitonStamp = serialize(fDes.getProject(), ICProjectDescriptionStorageType.STORAGE_FILE_NAME, fElement);
 				((ContributedEnvironment) CCorePlugin.getDefault().getBuildEnvironmentManager().getContributedEnvironment()).serialize(fDes);
 			} finally {
 				serializingLock.release();
+				Job.getJobManager().removeJobChangeListener(notifyJobCanceller);				
 			}
 		}
 
@@ -250,20 +286,34 @@ public class XmlProjectDescriptionStorage extends AbstractCProjectDescriptionSto
 	/**
 	 * Method to check whether the description has been modified externally.
 	 * If so the current read-only descriptor is nullified.
+	 * It updates the cached modification stamp
 	 * @return boolean indicating whether reload is needed
 	 */
 	protected synchronized boolean checkExternalModification() {
-		ICProjectDescription desc = getLoadedDescription();
 		// If loaded, and we have cached the modification stamp, reload
-		if (desc != null && projectModificaitonStamp != IResource.NULL_STAMP) {
-			long currentModificationStamp = project.getFile(ICProjectDescriptionStorageType.STORAGE_FILE_NAME).getModificationStamp();
-			if (projectModificaitonStamp < currentModificationStamp) {
-				setCurrentDescription(null, true);
-				projectModificaitonStamp = currentModificationStamp;
-				return true;
-			}
+		long currentModificationStamp = getModificationStamp(project.getFile(ICProjectDescriptionStorageType.STORAGE_FILE_NAME));
+		if (projectModificaitonStamp != currentModificationStamp) {
+			setCurrentDescription(null, true);
+			projectModificaitonStamp = currentModificationStamp;
+			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Gets the modification stamp for the resource.
+	 * If the returned value has changed since last call to
+	 * {@link #getModificationStamp(IResource)}, then the resource has changed.
+	 * @param resource IResource to fetch modification stamp for
+	 * @return long modification stamp
+	 */
+	protected long getModificationStamp(IResource resource) {
+		// The modification stamp is based on the ResourceInfo modStamp and file store modification time. Note that
+		// because of bug 160728 subsequent generations of resources may have the same modStamp. Until this is fixed
+		// the suggested solution is to use modStamp + modTime
+		//
+		// Both values are cached in resourceInfo, so this is fast.
+		return resource.getModificationStamp() + resource.getLocalTimeStamp();		
 	}
 
 	/**
@@ -316,7 +366,8 @@ public class XmlProjectDescriptionStorage extends AbstractCProjectDescriptionSto
 			if (project.exists() && project.isOpen()) {
 				fProjectDescription = new SoftReference<ICProjectDescription>(des);
 			} else {
-				CCorePlugin.log(SettingsModelMessages.getString("CProjectDescriptionManager.16")); //$NON-NLS-1$
+				IStatus status = new Status(IStatus.ERROR, CCorePlugin.PLUGIN_ID, -1, SettingsModelMessages.getString("CProjectDescriptionManager.16"), null); //$NON-NLS-1$
+				CCorePlugin.log(new CoreException(status));
 			}
 		} else {
 			fProjectDescription = new SoftReference<ICProjectDescription>(null);
@@ -428,7 +479,7 @@ public class XmlProjectDescriptionStorage extends AbstractCProjectDescriptionSto
 			InternalXmlStorageElement storage = createStorage(project, ICProjectDescriptionStorageType.STORAGE_FILE_NAME, true, false, false);
 			try {
 				// Update the modification stamp
-				projectModificaitonStamp = project.getFile(ICProjectDescriptionStorageType.STORAGE_FILE_NAME).getModificationStamp();
+				projectModificaitonStamp = getModificationStamp(project.getFile(ICProjectDescriptionStorageType.STORAGE_FILE_NAME));
 				CProjectDescription des = new CProjectDescription(project, new XmlStorage(storage), storage, true, false);
 				try {
 					setThreadLocalProjectDesc(des);
@@ -463,6 +514,7 @@ public class XmlProjectDescriptionStorage extends AbstractCProjectDescriptionSto
 	 */
 	private ByteArrayOutputStream write(ICStorageElement element) throws CoreException {
 		Document doc = ((InternalXmlStorageElement) element).fElement.getOwnerDocument();
+		XmlUtil.prettyFormat(doc);
 
 		ByteArrayOutputStream stream = new ByteArrayOutputStream();
 		try {
@@ -536,7 +588,7 @@ public class XmlProjectDescriptionStorage extends AbstractCProjectDescriptionSto
 				} else {
 					projectFile.create(new ByteArrayInputStream(utfString.getBytes("UTF-8")), IResource.FORCE, new NullProgressMonitor()); //$NON-NLS-1$
 				}
-				return projectFile.getModificationStamp();
+				return getModificationStamp(projectFile);
 			} finally {
 				Job.getJobManager().endRule(rule);
 			}
@@ -761,6 +813,8 @@ public class XmlProjectDescriptionStorage extends AbstractCProjectDescriptionSto
 			DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
 			Document doc = builder.newDocument();
 			Element newXmlEl = null;
+			synchronized (doc) {
+			synchronized (el.fLock) {
 			if (el.fElement.getParentNode().getNodeType() == Node.DOCUMENT_NODE) {
 				Document baseDoc = el.fElement.getOwnerDocument();
 				NodeList list = baseDoc.getChildNodes();
@@ -776,6 +830,7 @@ public class XmlProjectDescriptionStorage extends AbstractCProjectDescriptionSto
 				newXmlEl = (Element) importAddNode(doc, el.fElement);
 			}
 			return newXmlEl;
+			}}
 		} catch (ParserConfigurationException e) {
 			throw ExceptionFactory.createCoreException(e);
 		} catch (FactoryConfigurationError e) {

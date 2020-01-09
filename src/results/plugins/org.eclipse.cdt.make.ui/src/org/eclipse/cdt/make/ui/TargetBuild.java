@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,7 +17,9 @@ import java.util.List;
 import org.eclipse.cdt.make.core.IMakeTarget;
 import org.eclipse.cdt.make.internal.ui.MakeUIPlugin;
 import org.eclipse.cdt.make.internal.ui.preferences.MakePreferencePage;
+import org.eclipse.cdt.ui.CUIPlugin;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IWorkspaceRunnable;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
@@ -38,6 +40,10 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.BuildAction;
 import org.eclipse.ui.progress.IProgressService;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class TargetBuild {
 
 	/**
@@ -84,6 +90,7 @@ public class TargetBuild {
 	static public void buildTargets(Shell shell, final IMakeTarget[] targets) {
 		saveAllResources(targets);
 		Job targetJob = new Job(MakeUIPlugin.getResourceString("TargetBuild.backgroundTask.name")) { //$NON-NLS-1$
+			@Override
 			protected IStatus run(IProgressMonitor monitor) {
 				monitor.beginTask(MakeUIPlugin.getResourceString("TargetBuild.monitor.beginTask"), targets.length); //$NON-NLS-1$
 				try {
@@ -95,7 +102,7 @@ public class TargetBuild {
 								target.build(new SubProgressMonitor(monitor, 1));
 							}
 						};
-						MakeUIPlugin.getWorkspace().run(runnable, monitor);
+						MakeUIPlugin.getWorkspace().run(runnable, null, IResource.NONE, monitor);
 					}
 				} catch (CoreException e) {
 					return e.getStatus();
@@ -106,10 +113,13 @@ public class TargetBuild {
 				return Status.OK_STATUS;
 			}
 			
+			@Override
 			public boolean belongsTo(Object family) {
 				return ResourcesPlugin.FAMILY_MANUAL_BUILD == family;
 			}
 		};
+		// workaround for bug 270326, initialize CUIPlugin preference store to avoid race condition
+		CUIPlugin.getDefault().getPreferenceStore().getString("dummy"); //$NON-NLS-1$
 		targetJob.schedule();
 
 		if (!MakePreferencePage.isBuildTargetInBackground()) {

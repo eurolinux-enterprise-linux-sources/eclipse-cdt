@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Nokia and others.
+ * Copyright (c) 2007, 2010 Nokia and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -103,6 +103,22 @@ public class ActionsList extends Composite {
 			tableItem.setText(1, action.getTypeName());
 			tableItem.setText(2, action.getSummary());
 			tableItem.setData(action);
+		}
+		updateButtons();
+	}
+
+	/**
+	 * Remove an action from the list
+	 * 
+	 * @since 7.0
+	 */
+	public void removeAction(IBreakpointAction action) {
+		TableItem[] currentItems = table.getItems();
+		for (int i = 0; i < currentItems.length; i++) {
+			if (((IBreakpointAction) currentItems[i].getData()).equals(action)) {
+				table.remove(i);
+				break;
+			}
 		}
 		updateButtons();
 	}

@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2006, 2009 IBM Corporation and others.
+ *  Copyright (c) 2006, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -8,12 +8,11 @@
  *  Contributors:
  *     IBM Corporation - initial API and implementation
  *     Wind River Systems, Inc. - extended implementation
+ *     Navid Mehregani (TI) - Bugzilla 310191 - Detail pane does not clear up when DSF-GDB session is terminated
  *******************************************************************************/
 package org.eclipse.cdt.dsf.debug.internal.ui.viewmodel.numberformat.detail;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -29,6 +28,7 @@ import org.eclipse.cdt.dsf.debug.internal.ui.viewmodel.detailsupport.DetailPaneM
 import org.eclipse.cdt.dsf.debug.internal.ui.viewmodel.detailsupport.DetailPaneWordWrapAction;
 import org.eclipse.cdt.dsf.debug.internal.ui.viewmodel.detailsupport.MessagesForDetailPane;
 import org.eclipse.cdt.dsf.debug.internal.ui.viewmodel.detailsupport.TextViewerAction;
+import org.eclipse.cdt.dsf.debug.ui.IDsfDebugUIConstants;
 import org.eclipse.cdt.dsf.debug.ui.viewmodel.IDebugVMConstants;
 import org.eclipse.cdt.dsf.debug.ui.viewmodel.numberformat.FormattedValueVMUtil;
 import org.eclipse.cdt.dsf.internal.ui.DsfUIPlugin;
@@ -273,6 +273,10 @@ public class NumberFormatDetailPane implements IDetailPane2, IAdaptable, IProper
             fViewerInput = viewerInput;
             fElements = elements;
         }
+                
+        public IProgressMonitor getDetailMonitor() {
+        	return fMonitor;
+        }
         
         /* (non-Javadoc)
          * @see org.eclipse.core.runtime.jobs.Job#run(org.eclipse.core.runtime.IProgressMonitor)
@@ -308,6 +312,11 @@ public class NumberFormatDetailPane implements IDetailPane2, IAdaptable, IProper
                     new DataRequestMonitor<Map<String,Object>>(executor, null) {
                         @Override
                         protected void handleCompleted() {
+                        	
+                        	// Bugzilla 310191: Detail pane does not clear up when DSF-GDB session is terminated
+                        	if (fMonitor.isCanceled())
+                        		return;
+                        	
                             Set<String> properties = new HashSet<String>(1);
                             properties.add(IElementPropertiesProvider.PROP_NAME);
                             final String[] formats = (String[])getData().get(
@@ -326,18 +335,17 @@ public class NumberFormatDetailPane implements IDetailPane2, IAdaptable, IProper
                                         StringBuffer finalResult = new StringBuffer();
                                         finalResult.append(NAME).append(getData().get(IElementPropertiesProvider.PROP_NAME)).append(CRLF);
 
-                                        List<String> formatsList = new ArrayList<String>(Arrays.asList(formats));
-                                        Collections.sort(formatsList);
-
-                                        for (int i = 0; i < formatsList.size(); i++) {
-                                            String formatId = formatsList.get(i);
-                                            finalResult.append(SPACES);
-                                            finalResult.append( FormattedValueVMUtil.getFormatLabel(formatId) );
-                                            finalResult.append(FORMAT_SEPARATOR);
-                                            finalResult.append( getData().get(FormattedValueVMUtil.getPropertyForFormatId(formatId)) );                                            
-                                            if ( i < formatsList.size() + 1 ) {
-                                                finalResult.append(CRLF); 
-                                            }
+                                        if (formats != null) {
+                                        	for (int i = 0; i < formats.length; i++) {
+                                        		String formatId = formats[i];
+                                        		finalResult.append(SPACES);
+                                        		finalResult.append( FormattedValueVMUtil.getFormatLabel(formatId) );
+                                        		finalResult.append(FORMAT_SEPARATOR);
+                                        		finalResult.append( getData().get(FormattedValueVMUtil.getPropertyForFormatId(formatId)) );                                            
+                                        		if ( i < formats.length + 1 ) {
+                                        			finalResult.append(CRLF); 
+                                        		}
+                                        	}
                                         }
                                         detailComputed(null, finalResult.toString());
                                     }
@@ -633,10 +641,15 @@ public class NumberFormatDetailPane implements IDetailPane2, IAdaptable, IProper
             } else if (firstElement instanceof IDMVMContext) {
             	IVMNode vmNode = ((IDMVMContext) firstElement).getVMNode();
             	if (vmNode != null) {
+            	    Object input = firstElement;
 	            	IVMProvider vmProvider = vmNode.getVMProvider();
-	                fDetailJob = new DetailJob(vmProvider.getPresentationContext(), firstElement, 
-	                        (ITreeSelection)selection, null);
-	                    fDetailJob.schedule();
+	                final IPresentationContext context= vmProvider.getPresentationContext();
+	                if (IDsfDebugUIConstants.ID_EXPRESSION_HOVER.equals(context.getId())) {
+	                    // magic access to viewer input - see ExpressionVMProvider
+	                    input = context.getProperty("__viewerInput"); //$NON-NLS-1$
+	                }
+                    fDetailJob = new DetailJob(context, input, (ITreeSelection)selection, null);
+	                fDetailJob.schedule();
             	}
             }
         }
@@ -697,7 +710,7 @@ public class NumberFormatDetailPane implements IDetailPane2, IAdaptable, IProper
     /* (non-Javadoc)
      * @see org.eclipse.core.runtime.IAdaptable#getAdapter(java.lang.Class)
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     public Object getAdapter(Class required) {
         if (IFindReplaceTarget.class.equals(required)) {
             return fTextViewer.getFindReplaceTarget();
@@ -724,6 +737,11 @@ public class NumberFormatDetailPane implements IDetailPane2, IAdaptable, IProper
     protected void clearTextViewer(){
         if (fDetailJob != null) {
             fDetailJob.cancel();
+            
+            // Bugzilla 310191: Detail pane does not clear up when DSF-GDB session is terminated
+            IProgressMonitor progressMonitor = fDetailJob.getDetailMonitor();
+            if (progressMonitor!=null)
+            	progressMonitor.setCanceled(true);
         }
         fLastDisplayed = null;
         fDetailDocument.set(""); //$NON-NLS-1$

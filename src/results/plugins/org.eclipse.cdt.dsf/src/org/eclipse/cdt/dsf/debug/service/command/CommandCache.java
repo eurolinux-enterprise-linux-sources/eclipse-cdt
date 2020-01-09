@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,22 +22,29 @@ import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
+import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
 import org.eclipse.cdt.dsf.concurrent.IDsfStatusConstants;
+import org.eclipse.cdt.dsf.concurrent.ImmediateExecutor;
 import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.datamodel.IDMContext;
 import org.eclipse.cdt.dsf.internal.DsfPlugin;
 import org.eclipse.cdt.dsf.service.DsfSession;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
 
 /**
- *  This is a utility class for caching results  of MI Commands.  Return MIInfo 
- *  data is retrieved  from the cache  if command was previously executed,  and 
- *  it is executed with MICommand service if it was not previously seen. 
+ * This is a utility class for caching results of commands--typically commands
+ * sent to an external engine via some protocol (GDB/MI, e.g.). Commands are
+ * sent to their intended target through the supplied {@link ICommandControl},
+ * and their results are cached so as to quickly service future identical
+ * commands.
  * 
- *  Resetting the cache has to be performed by the object owning the cache when
- *  when an event indicates that the data is obsolete (which is specific to the
- *  types of commands being cached).  
+ * The cache has to be reset by the client that owns and uses the cache. A reset
+ * should be done when an event occurs that alters the state of a context such
+ * that commands on that context may no longer yield the same outcome as they
+ * did before the event. A reset can be done on the entire cache or on a per
+ * context basis.
  * 
  * @since 1.0
  */
@@ -113,6 +120,13 @@ public class CommandCache implements ICommandListener
 
     private DsfSession fSession;
     
+    /**
+     * The command control to be used to send commands to the backend.
+     * In certain cases, a {@link BufferedCommandControl} should be used
+     * to artificially delay the processing of command results; these
+     * artificial delays are important to keep events and command results
+     * ordered as received by the backend.
+     */
     private ICommandControl fCommandControl;    
     
     /*
@@ -158,14 +172,64 @@ public class CommandCache implements ICommandListener
     
     private ArrayList<CommandInfo> fPendingQWaitingForCoalescedCompletion = new ArrayList<CommandInfo>();
     
+    private static boolean DEBUG = false;
+	private static final String CACHE_TRACE_IDENTIFIER = " [CHE]"; //$NON-NLS-1$
+	private static String BLANK_CACHE_TRACE_IDENTIFIER = ""; //$NON-NLS-1$
+	static {
+        DEBUG = "true".equals(Platform.getDebugOption("org.eclipse.cdt.dsf/debugCache"));  //$NON-NLS-1$//$NON-NLS-2$
+		for (int i=0; i<CACHE_TRACE_IDENTIFIER.length(); i++) {
+			BLANK_CACHE_TRACE_IDENTIFIER += " "; //$NON-NLS-1$
+		}
+    }  
+
+	private void debug(String message) {
+		debug(message, ""); //$NON-NLS-1$
+    }
+    
+    private void debug(String message, String prefix) {
+    	if (DEBUG) {
+    		// The message can span more than one line
+    		String[] multiLine = message.split("\n"); //$NON-NLS-1$
+    		
+			// Create a blank prefix for proper alignment
+    		String blankPrefix = ""; //$NON-NLS-1$
+    		for (int i=0; i<prefix.length(); i++) {
+    			blankPrefix += " "; //$NON-NLS-1$
+    		}
+
+    		for (int i = 0; i < multiLine.length; i++) {
+    			String traceIdentifier;
+    			if (i == 0) {
+    	    		// For the first line we prepend the cache identifier string
+    				traceIdentifier = CACHE_TRACE_IDENTIFIER + prefix;
+    				
+    			} else {
+    	    		// For all other lines we prepend a blank prefix for proper alignment
+    				traceIdentifier = BLANK_CACHE_TRACE_IDENTIFIER + blankPrefix;
+    			}
+    				
+    			message = DsfPlugin.getDebugTime() + traceIdentifier + 
+    						" " + multiLine[i]; //$NON-NLS-1$
+
+    			// Make sure our lines are not too long
+    			while (message.length() > 100) {
+    				String partial = message.substring(0, 100) + "\\"; //$NON-NLS-1$
+    				message = message.substring(100);
+    				System.out.println(partial);
+    			}
+    			System.out.println(message);
+    		}
+    	}
+    }
+
     public CommandCache(DsfSession session, ICommandControl control) {
         fSession = session;
         fCommandControl = control;
-        
-        /*
-         *  We listen for the notifications that the commands have been sent to the 
-         *  backend from the GDB/MI Communications engine.
-         */
+
+		/*
+		 * We listen for the notifications that the commands have been sent to
+		 * their intended target via the ICommandControl service.
+		 */
         fCommandControl.addCommandListener(this);
     }
 
@@ -256,12 +320,15 @@ public class CommandCache implements ICommandListener
          */ 
         if(fCachedContexts.get(context) != null && fCachedContexts.get(context).containsKey(cachedCmd)){
         	CommandResultInfo result = fCachedContexts.get(context).get(cachedCmd);
+        	debug(command.toString().trim());
             if (result.getStatus().getSeverity() <= IStatus.INFO) {
             	@SuppressWarnings("unchecked") 
             	V v = (V)result.getData();
             	rm.setData(v);
+            	debug(v.toString());
             } else {
             	rm.setStatus(result.getStatus());
+            	debug(result.getStatus().toString());
             }
             rm.done();
             return;
@@ -271,6 +338,8 @@ public class CommandCache implements ICommandListener
          *  Return an error if the target is available anymore.
          */ 
         if (!isTargetAvailable(command.getContext())) {
+        	debug(command.toString().trim(), "[N/A]"); //$NON-NLS-1$
+
             rm.setStatus(new Status(IStatus.ERROR, DsfPlugin.PLUGIN_ID, IDsfStatusConstants.INVALID_STATE, "Target not available.", null)); //$NON-NLS-1$
             rm.done();
             return;
@@ -283,12 +352,14 @@ public class CommandCache implements ICommandListener
         for ( CommandInfo sentCommand : fPendingQCommandsSent ) {
             if ( sentCommand.equals( cachedCmd )) {
                 sentCommand.getRequestMonitorList().add(genericDone);
+            	debug(command.toString().trim(), "[SNT]"); //$NON-NLS-1$
                 return;
             }
         }
         for ( CommandInfo notYetSentCommand : fPendingQCommandsNotYetSent ) {
             if ( notYetSentCommand.equals( cachedCmd )) {
                 notYetSentCommand.getRequestMonitorList().add(genericDone);
+            	debug(command.toString().trim(), "[SND]"); //$NON-NLS-1$
                 return;
             }
         }
@@ -322,7 +393,24 @@ public class CommandCache implements ICommandListener
         
         finalCachedCmd.fToken = fCommandControl.queueCommand(
             finalCachedCmd.getCommand(), 
-            new DataRequestMonitor<ICommandResult>(fSession.getExecutor(), null) { 
+            new DataRequestMonitor<ICommandResult>(ImmediateExecutor.getInstance(), null) {
+            	@Override
+            	public synchronized void done() {
+            		// protect against the cache being called in non-session thread, but at 
+            		// the same time avoid adding extra dispatch cycles to command processing. 
+            		if (fSession.getExecutor().isInExecutorThread()) {;
+            			super.done();
+            		} else {
+            			fSession.getExecutor().execute(new DsfRunnable() {
+            				public void run() {
+            					superDone();
+            				}
+            			});
+            		}
+            	}
+            	private void superDone() {
+            		super.done();
+            	}
                 @Override
                 public void handleCompleted() {
                     
@@ -330,13 +418,17 @@ public class CommandCache implements ICommandListener
                      *  Match this up with a command set we know about.
                      */
                     if ( ! fPendingQCommandsSent.remove(finalCachedCmd) ) {
-                        /* 
-                         *  It should not be the case that this is possible. It would mean we
-                         *  have mismanaged  the queues or completions  are lost at the lower
-                         *  levels.  When the removal and cancellation is completed this code
-                         *  will probably not be here. But for now just return.
-                         */
-                        return ;
+                    	/*
+                    	 * This can happen if the call to queueCommand() completes without
+                    	 * actually having to send the command.  In that case, we should find
+                    	 * our command in the fPendingQCommandsNotYetSent queue.
+                    	 * For example, upon termination some queueCommand() implementation
+                    	 * may complete immediately with an error status. Bug 309309
+                    	 */
+                        if ( ! fPendingQCommandsNotYetSent.remove(finalCachedCmd) ) {
+                        	assert false : "Missing command"; //$NON-NLS-1$
+                        	return;
+                        }
                     }
 
                     ICommandResult result = getData();
@@ -400,20 +492,21 @@ public class CommandCache implements ICommandListener
                             }
                         }
                     } else {
-                        /*
-                         *  This is an original request which completed. Indicate success or
-                         *  failure to the original requesters.
-                         */
-                        CommandResultInfo resultInfo = new CommandResultInfo(result, status);
+                    	// Save the command result in cache, but only if the command's context 
+                    	// is still available.  Otherwise an error may get cached incorrectly.
+                    	if (isTargetAvailable(context)) {
+                    		CommandResultInfo resultInfo = new CommandResultInfo(result, status);
 
-                        if (fCachedContexts.get(context) != null){
-                        	fCachedContexts.get(context).put(finalCachedCmd, resultInfo);
-                        } else {
-                        	HashMap<CommandInfo, CommandResultInfo> map = new HashMap<CommandInfo, CommandResultInfo>();
-                        	map.put(finalCachedCmd, resultInfo);
-                        	fCachedContexts.put(context, map);
-                        }
-                        
+                    		if (fCachedContexts.get(context) != null){
+                    			fCachedContexts.get(context).put(finalCachedCmd, resultInfo);
+                    		} else {
+                    			HashMap<CommandInfo, CommandResultInfo> map = new HashMap<CommandInfo, CommandResultInfo>();
+                    			map.put(finalCachedCmd, resultInfo);
+                    			fCachedContexts.put(context, map);
+                    		}
+                    	}
+                    	// This is an original request which completed. Indicate success or
+                    	// failure to the original requesters.
                         if (!isSuccess()) {
                             /*
                              *  We had some form of error with the original command. So notify the 
@@ -470,12 +563,10 @@ public class CommandCache implements ICommandListener
         }
         return false;
     }
-    
-    
-    
-    /**
-     * Clears the cache data.
-     */
+
+	/**
+	 * Clears all the cache data. Equivalent to <code>reset(null)</code>.
+	 */
     public void reset() {
     	fCachedContexts.clear();
     }
@@ -486,9 +577,8 @@ public class CommandCache implements ICommandListener
          */
     }
     
-    /*
-     * (non-Javadoc)
-     * @see org.eclipse.cdt.dsf.mi.service.control.IDebuggerControl.ICommandListener#commandQueued(org.eclipse.cdt.dsf.mi.core.command.ICommand)
+    /* (non-Javadoc)
+     * @see org.eclipse.cdt.dsf.debug.service.command.ICommandListener#commandQueued(org.eclipse.cdt.dsf.debug.service.command.ICommandToken)
      */
     public void commandQueued(ICommandToken token) {
         /*
@@ -496,9 +586,8 @@ public class CommandCache implements ICommandListener
          */
     }
     
-    /*
-     * (non-Javadoc)
-     * @see org.eclipse.cdt.dsf.mi.service.control.IDebuggerControl.ICommandListener#commandDone(org.eclipse.cdt.dsf.mi.core.command.ICommand, org.eclipse.cdt.dsf.mi.core.command.ICommandResult)
+    /* (non-Javadoc)
+     * @see org.eclipse.cdt.dsf.debug.service.command.ICommandListener#commandDone(org.eclipse.cdt.dsf.debug.service.command.ICommandToken, org.eclipse.cdt.dsf.debug.service.command.ICommandResult)
      */
     public void commandDone(ICommandToken token, ICommandResult result) {
         /*
@@ -512,8 +601,7 @@ public class CommandCache implements ICommandListener
      * this command for possible coalescence since it has been given to the debug engine
      * and is currently being processed.
      * 
-     * (non-Javadoc)
-     * @see org.eclipse.cdt.dsf.mi.service.control.IDebuggerControl.ICommandListener#commandSent(org.eclipse.cdt.dsf.mi.core.command.ICommand)
+     * @see org.eclipse.cdt.dsf.debug.service.command.ICommandListener#commandSent(org.eclipse.cdt.dsf.debug.service.command.ICommandToken)
      */
     public void commandSent(ICommandToken token) {
         
@@ -523,6 +611,10 @@ public class CommandCache implements ICommandListener
         
         CommandInfo cachedCmd = new CommandInfo( CommandStyle.NONCOALESCED, genericCommand, null) ;
         
+        // It is important to actually fetch the content of the fPendingQCommandsNotYetSent map
+        // instead of only using 'cachedCmd'.  This is because although cachedCmd can be considered
+        // equal to unqueuedCommand, it is not identical and we need the full content of unqueuedCommand.
+        // For instance, cachedCmd does not have the list of requestMonitors that unqueuedCommand has.
         for ( CommandInfo unqueuedCommand : new ArrayList<CommandInfo>(fPendingQCommandsNotYetSent) ) {
             if ( unqueuedCommand.equals( cachedCmd )) {
                 fPendingQCommandsNotYetSent.remove(unqueuedCommand);

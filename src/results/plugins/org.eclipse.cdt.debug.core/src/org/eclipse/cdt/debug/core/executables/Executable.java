@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Nokia and others.
+ * Copyright (c) 2008, 2010 Nokia and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,6 +13,7 @@ package org.eclipse.cdt.debug.core.executables;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -88,6 +89,9 @@ public class Executable extends PlatformObject {
 	private final Map<ITranslationUnit, String> remappedPaths;
 	private final ArrayList<ITranslationUnit> sourceFiles;
 	private boolean refreshSourceFiles;
+	private boolean remapSourceFiles;
+	private ISourceFileRemapping[] remappers;
+	private String[] symReaderSources;
 
 	public IPath getPath() {
 		return executablePath;
@@ -97,14 +101,19 @@ public class Executable extends PlatformObject {
 		return project;
 	}
 
-	public Executable(IPath path, IProject project, IResource resource) {
+	/**
+	 * @since 7.0
+	 */
+	public Executable(IPath path, IProject project, IResource resource, ISourceFileRemapping[] sourceFileRemappings) {
 		this.executablePath = path;
 		this.project = project;
 		this.name = new File(path.toOSString()).getName();
 		this.resource = resource;
+		this.remappers = sourceFileRemappings;		
 		remappedPaths = new HashMap<ITranslationUnit, String>();
 		sourceFiles = new ArrayList<ITranslationUnit>();
 		refreshSourceFiles = true;
+		remapSourceFiles = true;
 	}
 
 	public IResource getResource() {
@@ -120,7 +129,7 @@ public class Executable extends PlatformObject {
 		return name;
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	@Override
 	public Object getAdapter(Class adapter) {
 		if (adapter.equals(IResource.class))
@@ -130,14 +139,25 @@ public class Executable extends PlatformObject {
 				return this.getProject();
 		return super.getAdapter(adapter);
 	}
+	
+	private String remapSourceFile(String filename) {
+		for (ISourceFileRemapping remapper : remappers) {
+			String remapped = remapper.remapSourceFile(this.getPath(), filename);
+			if (!remapped.equals(filename)) {
+				return remapped;
+			}
+		}
+		return filename;
+	}
+	
 
 	/**
 	 * @noreference This method is not intended to be referenced by clients.
 	 * @since 6.0
 	 */
-	public TranslationUnit[] getSourceFiles(IProgressMonitor monitor) {
+	public synchronized ITranslationUnit[] getSourceFiles(IProgressMonitor monitor) {
 		
-		if (!refreshSourceFiles)
+		if (!refreshSourceFiles && !remapSourceFiles)
 			return sourceFiles.toArray(new TranslationUnit[sourceFiles.size()]) ;
 		
 		// Try to get the list of source files used to build the binary from the
@@ -151,27 +171,23 @@ public class Executable extends PlatformObject {
 
 		ICProject cproject = factory.create(project);
 
-		String[] symReaderSources = ExecutablesManager.getExecutablesManager().getSourceFiles(this, monitor);
+		if (refreshSourceFiles)
+		{
+			symReaderSources = ExecutablesManager.getExecutablesManager().getSourceFiles(this, monitor);
+		}
 		if (symReaderSources != null && symReaderSources.length > 0) {
-			for (int i = 0; i < symReaderSources.length; i++) {
-				String filename = symReaderSources[i];
+			for (String filename : symReaderSources) {
 				String orgPath = filename;
 
-				filename = ExecutablesManager.getExecutablesManager().remapSourceFile(this, filename);
+				filename = remapSourceFile(filename);
 
-				// Sometimes the path in the symbolics will have a
-				// different
-				// case than the actual file system path. Even if the
-				// file
-				// system is not case sensitive this will confuse the
-				// Path
-				// class.
-				// So make sure the path is canonical, otherwise
-				// breakpoints
-				// won't be resolved, etc..
-				// Also check for relative path names and attempt to
-				// resolve
-				// them relative to the executable.
+				// Sometimes the path in the symbolics will have a different
+				// case than the actual file system path. Even if the file
+				// system is not case sensitive this will confuse the Path
+				// class. So make sure the path is canonical, otherwise
+				// breakpoints won't be resolved, etc.. Also check for relative
+				// path names and attempt to resolve them relative to the
+				// executable.
 
 				boolean fileExists = false;
 
@@ -198,11 +214,10 @@ public class Executable extends PlatformObject {
 					if (sourceFile.exists())
 						wkspFile = sourceFile;
 					else {
-						IFile[] filesInWP = ResourcesPlugin.getWorkspace().getRoot().findFilesForLocation(sourcePath);
-
-						for (int j = 0; j < filesInWP.length; j++) {
-							if (filesInWP[j].isAccessible()) {
-								wkspFile = filesInWP[j];
+						IFile[] filesInWP = ResourcesPlugin.getWorkspace().getRoot().findFilesForLocationURI(URIUtil.toURI(sourcePath));
+						for (IFile fileInWP : filesInWP) {
+							if (fileInWP.isAccessible()) {
+								wkspFile = fileInWP;
 								break;
 							}
 						}
@@ -218,10 +233,17 @@ public class Executable extends PlatformObject {
 					TranslationUnit tu;
 					if (wkspFile != null)
 						tu = new TranslationUnit(cproject, wkspFile, id);
-					else
-						tu = new ExternalTranslationUnit(cproject, URIUtil.toURI(sourcePath), id);
+					else {
+						// Be careful not to convert a unix path like
+						// "/src/home" to "c:\source\home" on Windows. See
+						// bugzilla 297781
+						URI uri = (sourcePath.toFile().exists()) ? URIUtil.toURI(sourcePath) : URIUtil.toURI(filename);						
+						tu = new ExternalTranslationUnit(cproject, uri, id);
+					}
 
-					sourceFiles.add(tu);
+					if (!sourceFiles.contains(tu)) {
+						sourceFiles.add(tu);
+					}
 
 					if (!orgPath.equals(filename)) {
 						remappedPaths.put(tu, orgPath);
@@ -231,6 +253,7 @@ public class Executable extends PlatformObject {
 		}
 		
 		refreshSourceFiles = false;
+		remapSourceFiles = false;
 		return sourceFiles.toArray(new TranslationUnit[sourceFiles.size()]) ;
 	}
 
@@ -241,11 +264,18 @@ public class Executable extends PlatformObject {
 		this.refreshSourceFiles = refreshSourceFiles;
 	}
 
-	public String getOriginalLocation(ITranslationUnit tu) {
+	public synchronized String getOriginalLocation(ITranslationUnit tu) {
 		String orgLocation = remappedPaths.get(tu);
 		if (orgLocation == null)
 			orgLocation = tu.getLocation().toOSString();
 		return orgLocation;
+	}
+
+	/**
+	 * @since 7.0
+	 */
+	public void setRemapSourceFiles(boolean remapSourceFiles) {
+		this.remapSourceFiles = remapSourceFiles;
 	}
 
 }

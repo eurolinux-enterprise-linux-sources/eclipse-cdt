@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,9 +22,15 @@ import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
 import org.eclipse.cdt.core.dom.ast.IVariable;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassSpecialization;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassTemplate;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassTemplatePartialSpecialization;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassType;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPEnumeration;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionTemplate;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPNamespace;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateInstance;
 import org.eclipse.cdt.core.index.IIndexMacro;
 import org.eclipse.cdt.core.model.ICElement;
 import org.eclipse.cdt.core.model.ITranslationUnit;
@@ -73,11 +79,20 @@ public class CElementHandleFactory {
 			element= definition 
 					? new MethodHandle(parentElement, (ICPPMethod) binding)
 					: new MethodDeclarationHandle(parentElement, (ICPPMethod) binding);
-		}	
-		else if (binding instanceof IFunction) {
-			element= definition 
-					? new FunctionHandle(parentElement, (IFunction) binding)
-					: new FunctionDeclarationHandle(parentElement, (IFunction) binding);
+		} else if (binding instanceof IFunction) {
+			if (binding instanceof ICPPTemplateInstance) {
+				element= definition 
+				? new FunctionTemplateHandle(parentElement, (ICPPTemplateInstance) binding)
+				: new FunctionTemplateDeclarationHandle(parentElement, (ICPPTemplateInstance) binding);
+			} else if (binding instanceof ICPPFunctionTemplate) {
+				element= definition 
+				? new FunctionTemplateHandle(parentElement, (ICPPFunctionTemplate) binding)
+				: new FunctionTemplateDeclarationHandle(parentElement, (ICPPFunctionTemplate) binding);
+			} else {
+				element= definition 
+				? new FunctionHandle(parentElement, (IFunction) binding)
+				: new FunctionDeclarationHandle(parentElement, (IFunction) binding);
+			}
 		}
 		else if (binding instanceof IField) {
 			element= new FieldHandle(parentElement, (IField) binding);
@@ -95,12 +110,7 @@ public class CElementHandleFactory {
 			element= new EnumeratorHandle(parentElement, (IEnumerator) binding);
 		}
 		else if (binding instanceof ICompositeType) {
-			if (binding instanceof ICPPClassTemplate) {
-				element= new StructureTemplateHandle(parentElement, (ICompositeType) binding);
-			}
-			else {
-				element= new StructureHandle(parentElement, (ICompositeType) binding);
-			}
+			element= createHandleForComposite(parentElement, (ICompositeType) binding);
 		}
 		else if (binding instanceof ICPPNamespace) {
 			element= new NamespaceHandle(parentElement, (ICPPNamespace) binding);
@@ -123,6 +133,17 @@ public class CElementHandleFactory {
 			}
 			return tu;
 		}
+		
+		if (parentBinding instanceof IEnumeration) {
+			ICElement grandParent= createParent(tu, parentBinding);
+			if (parentBinding instanceof ICPPEnumeration && parentBinding.getNameCharArray().length > 0) {
+				if (grandParent != null) {
+					return new EnumerationHandle(grandParent, (ICPPEnumeration) parentBinding);
+				}
+			} else {
+				return grandParent;
+			}
+		}
 
 		if (parentBinding instanceof ICPPNamespace) {
 			char[] scopeName= parentBinding.getNameCharArray();
@@ -139,9 +160,27 @@ public class CElementHandleFactory {
 		if (parentBinding instanceof ICompositeType) {
 			ICElement grandParent= createParent(tu, parentBinding);
 			if (grandParent != null) {
-				return new StructureHandle(grandParent, (ICompositeType) parentBinding);
+				return createHandleForComposite(grandParent, (ICompositeType) parentBinding);
 			}
 		}
 		return null;
+	}
+
+	private static CElementHandle createHandleForComposite(ICElement parent, ICompositeType classBinding)
+			throws DOMException {
+		if (classBinding instanceof ICPPClassTemplatePartialSpecialization) {
+			return new StructureTemplateHandle(parent, (ICPPClassTemplatePartialSpecialization) classBinding);
+		}
+		if (classBinding instanceof ICPPClassTemplate) {
+			return new StructureTemplateHandle(parent, (ICPPClassTemplate) classBinding);
+		}
+		if (classBinding instanceof ICPPClassSpecialization) {
+			ICPPClassSpecialization spec= (ICPPClassSpecialization) classBinding;
+			ICPPClassType orig= spec.getSpecializedBinding();
+			if (orig instanceof ICPPClassTemplate) {
+				return new StructureTemplateHandle(parent, (ICPPClassSpecialization) classBinding, (ICPPClassTemplate) orig);
+			}
+		}
+		return new StructureHandle(parent, classBinding);
 	}
 }

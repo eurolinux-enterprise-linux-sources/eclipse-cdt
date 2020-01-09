@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2007 Intel Corporation and others.
+ * Copyright (c) 2005, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,6 +20,8 @@ import org.eclipse.core.runtime.content.IContentType;
  * multiple inputType children.
  * 
  * @since 3.0
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noimplement This interface is not intended to be implemented by clients.
  */
 public interface IInputType extends IBuildObject {
 	public static final String INPUT_TYPE_ELEMENT_NAME = "inputType";	//$NON-NLS-1$
@@ -59,7 +61,7 @@ public interface IInputType extends IBuildObject {
 	/**
 	 * Removes the InputOrder element specified in the argument.
 	 * 
-	 * @param path The InputOrder element
+	 * @param element The InputOrder element
 	 */
 	public void removeInputOrder(IInputOrder element);
 
@@ -241,8 +243,6 @@ public interface IInputType extends IBuildObject {
 	/**
 	 * Sets the Eclipse <code>IContentType</code> that describes the
 	 * dependency files of this input type. 
-	 * 
-	 * @return type
 	 */
 	public void setDependencyContentType(IContentType type);
 	
@@ -380,7 +380,7 @@ public interface IInputType extends IBuildObject {
 	 * Returns the name of the build variable associated this this input type's resources
 	 * The build variable used in the build file to represent the list of input files when 
 	 * multipleOfType is True.  The same variable name can be used by an outputType to 
-	 * identify a set of output files that contribute to this tool�s input 
+	 * identify a set of output files that contribute to this tool's input 
 	 * (i.e., those using the same buildVariable name).  The default name is chosen by MBS.
 	 * 
 	 * @return String
@@ -389,8 +389,6 @@ public interface IInputType extends IBuildObject {
 
 	/**
 	 * Sets the name of the build variable associated this this input type's resources
-	 * 
-	 * @return variableName
 	 */
 	public void setBuildVariable(String variableName);
 

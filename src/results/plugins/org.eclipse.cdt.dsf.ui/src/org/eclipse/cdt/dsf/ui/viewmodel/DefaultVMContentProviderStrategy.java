@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -19,7 +19,6 @@ import org.eclipse.cdt.dsf.concurrent.ConfinedToDsfExecutor;
 import org.eclipse.cdt.dsf.concurrent.CountingRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.MultiRequestMonitor;
-import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.ui.concurrent.ViewerCountingRequestMonitor;
 import org.eclipse.cdt.dsf.ui.concurrent.ViewerDataRequestMonitor;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IChildrenCountUpdate;
@@ -77,7 +76,7 @@ public class DefaultVMContentProviderStrategy implements IElementContentProvider
         }
 
         if (allNodesTheSame) {
-            updateNode(firstNode, updates);
+            updateNodeChildren(firstNode, updates);
         } else {
             // Sort the updates by the node.
             Map<IVMNode, List<IHasChildrenUpdate>> nodeUpdatesMap = new HashMap<IVMNode, List<IHasChildrenUpdate>>();
@@ -98,13 +97,21 @@ public class DefaultVMContentProviderStrategy implements IElementContentProvider
 
             // Iterate through the nodes in the sorted map.
             for (IVMNode node : nodeUpdatesMap.keySet()) {
-                updateNode(node, nodeUpdatesMap.get(node).toArray(
+                updateNodeChildren(node, nodeUpdatesMap.get(node).toArray(
                     new IHasChildrenUpdate[nodeUpdatesMap.get(node).size()]));
             }
         }
     }
 
-    private void updateNode(IVMNode node, final IHasChildrenUpdate[] updates) {
+	/**
+	 * @param node
+	 *            the type of element (thread, variable, frame, e.g,) that's in
+	 *            the update requests. All the given requests contain the same
+	 *            type of element.
+	 * @param updates
+	 *            the has-children requests
+	 */
+    private void updateNodeChildren(IVMNode node, final IHasChildrenUpdate[] updates) {
         final IVMNode[] childNodes = getVMProvider().getChildVMNodes(node);
         if (childNodes.length == 0) {
             // If parent element's node has no children, just set the
@@ -119,17 +126,13 @@ public class DefaultVMContentProviderStrategy implements IElementContentProvider
             getVMProvider().updateNode(childNodes[0], updates);
         } else {
             // Create a matrix of element updates:
-            // The first dimension "i" is the list of children updates that came
-            // from the viewer.
-            // For each of these updates, there are "j" number of elment updates
-            // corresponding
-            // to the number of child nodes in this node.
-            // Each children update from the viewer is complete when all the child
-            // nodes
-            // fill in their elements update.
-            // Once the matrix is constructed, the child nodes are given the list of
-            // updates
-            // equal to the updates requested by the viewer.
+			// The first dimension "i" is the list of children updates that came
+			// from the viewer. For each of these updates, there are "j" number
+			// of element updates corresponding to the number of child nodes in
+			// this node. Each children update from the viewer is complete when
+			// all the child nodes fill in their elements update. Once the
+			// matrix is constructed, the child nodes are given the list of
+			// updates equal to the updates requested by the viewer.
             VMHasChildrenUpdate[][] elementsUpdates = new VMHasChildrenUpdate[childNodes.length][updates.length];
             for (int i = 0; i < updates.length; i++) {
                 final IHasChildrenUpdate update = updates[i];
@@ -151,6 +154,7 @@ public class DefaultVMContentProviderStrategy implements IElementContentProvider
                         update.done();
                     }
                 };
+                hasChildrenMultiRequestMon.requireDoneAdding();
     
                 for (int j = 0; j < childNodes.length; j++) {
                     elementsUpdates[j][i] = new VMHasChildrenUpdate(update, hasChildrenMultiRequestMon
@@ -161,6 +165,7 @@ public class DefaultVMContentProviderStrategy implements IElementContentProvider
                             }
                         }));
                 }
+                hasChildrenMultiRequestMon.doneAdding();
             }
     
             for (int j = 0; j < childNodes.length; j++) {
@@ -184,22 +189,23 @@ public class DefaultVMContentProviderStrategy implements IElementContentProvider
                     // Optimization: there is only one child node, just pass on the child count to it.
                     getVMProvider().updateNode(childNodes[0], update);
                 } else {
-                    getChildrenCountsForNode(update, node, new ViewerDataRequestMonitor<Integer[]>(getVMProvider()
-                        .getExecutor(), update) {
-                        @Override
-                        protected void handleCompleted() {
-                            if (isSuccess()) {
-                                int numChildren = 0;
-                                for (Integer count : getData()) {
-                                    numChildren += count.intValue();
+                    getChildrenCountsForNode(
+                        update, node, 
+                        new ViewerDataRequestMonitor<Integer[]>(getVMProvider().getExecutor(), update) {
+                            @Override
+                            protected void handleCompleted() {
+                                if (isSuccess()) {
+                                    int numChildren = 0;
+                                    for (Integer count : getData()) {
+                                        numChildren += count.intValue();
+                                    }
+                                    update.setChildCount(numChildren);
+                                } else {
+                                    update.setChildCount(0);
                                 }
-                                update.setChildCount(numChildren);
-                            } else {
-                                update.setChildCount(0);
+                                update.done();
                             }
-                            update.done();
-                        }
-                    });
+                        });
                 }
             } else {
                 update.done();
@@ -221,18 +227,19 @@ public class DefaultVMContentProviderStrategy implements IElementContentProvider
                     // Optimization: there is only one child node, pass the updates to it.
                     getVMProvider().updateNode(childNodes[0], update);
                 } else {
-                    getChildrenCountsForNode(update, node, new ViewerDataRequestMonitor<Integer[]>(getVMProvider()
-                        .getExecutor(), update) {
-                        @Override
-                        protected void handleCompleted() {
-                            if (!isSuccess()) {
-                                update.done();
-                                return;
-                            }
+                    getChildrenCountsForNode(
+                        update, node, 
+                        new ViewerDataRequestMonitor<Integer[]>(getVMProvider().getExecutor(), update) {
+                            @Override
+                            protected void handleCompleted() {
+                                if (!isSuccess()) {
+                                    update.done();
+                                    return;
+                                }
 
-                            updateChildrenWithCounts(update, node, getData());
-                        }
-                    });
+                                updateChildrenWithCounts(update, node, getData());
+                            }
+                        });
                 }
             } else {
                 // Stale update. Just ignore.
@@ -257,30 +264,29 @@ public class DefaultVMContentProviderStrategy implements IElementContentProvider
 
         // Get the mapping of all the counts.
         final Integer[] counts = new Integer[childNodes.length];
-        final MultiRequestMonitor<RequestMonitor> childrenCountMultiReqMon = new MultiRequestMonitor<RequestMonitor>(
-            getVMProvider().getExecutor(), rm) {
+        final CountingRequestMonitor crm = new CountingRequestMonitor(getVMProvider().getExecutor(), rm) {
             @Override
             protected void handleSuccess() {
                 rm.setData(counts);
                 rm.done();
             }
         };
+        int countRM = 0;
 
         for (int i = 0; i < childNodes.length; i++) {
             final int nodeIndex = i;
             getVMProvider().updateNode(
                 childNodes[i],
-                new VMChildrenCountUpdate(update, childrenCountMultiReqMon.add(new ViewerDataRequestMonitor<Integer>(
-                    getVMProvider().getExecutor(), update) {
+                new VMChildrenCountUpdate(update, new DataRequestMonitor<Integer>(getVMProvider().getExecutor(), crm) {
                     @Override
-                    protected void handleCompleted() {
-                    	if (isSuccess()) {
-                            counts[nodeIndex] = getData();
-                    	}
-                        childrenCountMultiReqMon.requestMonitorDone(this);
+                    protected void handleSuccess() {
+                        counts[nodeIndex] = getData();
+                        crm.done();
                     }
-                })));
+                }));
+            countRM++;
         }
+        crm.setDoneCount(countRM);
     }
 
     /**
@@ -381,13 +387,12 @@ public class DefaultVMContentProviderStrategy implements IElementContentProvider
     /**
      * Convenience method which checks whether given layout node is a node that
      * is configured in this ViewModelProvider.
+     * <br>
+     * Note: isOurNode() will also return true if the given node was previously
+     * configured in the VM provider but was later disposed.
      */
     private boolean isOurNode(IVMNode node) {
-        for (IVMNode nodeToSearch : getVMProvider().getAllVMNodes()) {
-            if (nodeToSearch.equals(node))
-                return true;
-        }
-        return false;
+        return node.getVMProvider() == getVMProvider();
     }
 
 }

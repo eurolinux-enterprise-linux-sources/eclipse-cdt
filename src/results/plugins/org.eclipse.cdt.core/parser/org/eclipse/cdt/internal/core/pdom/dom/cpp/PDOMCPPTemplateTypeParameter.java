@@ -43,15 +43,13 @@ class PDOMCPPTemplateTypeParameter extends PDOMCPPBinding implements IPDOMMember
 		ICPPTemplateTypeParameter, ICPPUnknownBinding, ICPPUnknownType, IIndexType,
 		IPDOMCPPTemplateParameter {
 
-	private static final int DEFAULT_TYPE = PDOMCPPBinding.RECORD_SIZE + 0;	
-	private static final int MEMBERLIST = PDOMCPPBinding.RECORD_SIZE + 4;
-	private static final int PARAMETERID= PDOMCPPBinding.RECORD_SIZE + 8;
+	private static final int PACK_BIT = 1 << 31;
 
-	/**
-	 * The size in bytes of a PDOMCPPTemplateTypeParameter record in the database.
-	 */
+	private static final int DEFAULT_TYPE = PDOMCPPBinding.RECORD_SIZE;	
+	private static final int MEMBERLIST = DEFAULT_TYPE + Database.TYPE_SIZE;
+	private static final int PARAMETERID= MEMBERLIST + Database.PTR_SIZE;
 	@SuppressWarnings("hiding")
-	protected static final int RECORD_SIZE = PDOMCPPBinding.RECORD_SIZE + 12;
+	protected static final int RECORD_SIZE = PARAMETERID + 4;
 	
 	private ICPPScope fUnknownScope;
 	private int fCachedParamID= -1;
@@ -61,7 +59,11 @@ class PDOMCPPTemplateTypeParameter extends PDOMCPPBinding implements IPDOMMember
 		super(linkage, parent, param.getNameCharArray());
 		
 		final Database db = getDB();
-		db.putInt(record + PARAMETERID, param.getParameterID());
+		int id= param.getParameterID();
+		if (param.isParameterPack()) {
+			id |= PACK_BIT;
+		}
+		db.putInt(record + PARAMETERID, id);
 	}
 
 	public PDOMCPPTemplateTypeParameter(PDOMLinkage linkage, long bindingRecord) {
@@ -79,18 +81,22 @@ class PDOMCPPTemplateTypeParameter extends PDOMCPPBinding implements IPDOMMember
 	}
 	
 	public short getParameterPosition() {
-		readParamID();
-		return (short) fCachedParamID;
+		return (short) getParameterID();
 	}
 	
 	public short getTemplateNestingLevel() {
 		readParamID();
-		return (short)(fCachedParamID >> 16);
+		return (short)(getParameterID() >> 16);
 	}
 	
+	public boolean isParameterPack() {
+		readParamID();
+		return (fCachedParamID & PACK_BIT) != 0;
+	}
+
 	public int getParameterID() {
 		readParamID();
-		return fCachedParamID;
+		return fCachedParamID & ~PACK_BIT;
 	}
 	
 	private void readParamID() {
@@ -100,7 +106,7 @@ class PDOMCPPTemplateTypeParameter extends PDOMCPPBinding implements IPDOMMember
 				fCachedParamID= db.getInt(record + PARAMETERID);
 			} catch (CoreException e) {
 				CCorePlugin.log(e);
-				fCachedParamID= -2;
+				fCachedParamID= Integer.MAX_VALUE;
 			}
 		}
 	}
@@ -130,10 +136,7 @@ class PDOMCPPTemplateTypeParameter extends PDOMCPPBinding implements IPDOMMember
 
 	public IType getDefault() {
 		try {
-			PDOMNode node = getLinkage().getNode(getDB().getRecPtr(record + DEFAULT_TYPE));
-			if (node instanceof IType) {
-				return (IType) node;
-			}
+			return getLinkage().loadType(record + DEFAULT_TYPE);
 		} catch (CoreException e) {
 			CCorePlugin.log(e);
 		}
@@ -169,11 +172,7 @@ class PDOMCPPTemplateTypeParameter extends PDOMCPPBinding implements IPDOMMember
 			if (val != null) {
 				IType dflt= val.getTypeValue();
 				if (dflt != null) {
-					final Database db= getPDOM().getDB();
-					PDOMNode typeNode = getLinkage().addType(this, dflt);
-					if (typeNode != null) {
-						db.putRecPtr(record + DEFAULT_TYPE, typeNode.getRecord());
-					}
+					getLinkage().storeType(record + DEFAULT_TYPE, dflt);
 				}
 			}
 		} catch (CoreException e) {
@@ -193,23 +192,13 @@ class PDOMCPPTemplateTypeParameter extends PDOMCPPBinding implements IPDOMMember
 				// ignore
 			}
 			if (newDefault != null) {
-				final Database db = getDB();
-				IType mytype= getDefault();
-				PDOMNode typeNode = getLinkage().addType(this, newDefault);
-				if (typeNode != null) {
-					db.putRecPtr(record + DEFAULT_TYPE, typeNode.getRecord());
-					if (mytype != null) 
-						linkage.deleteType(mytype, record);
-				}
+				getLinkage().storeType(record + DEFAULT_TYPE, newDefault);
 			}
 		}
 	}
 	
 	public void forceDelete(PDOMLinkage linkage) throws CoreException {
 		getDBName().delete();
-		IType type= getDefault();
-		if (type instanceof PDOMNode) {
-			((PDOMNode) type).delete(linkage);
-		}
+		getLinkage().storeType(record + DEFAULT_TYPE, null);
 	}
 }

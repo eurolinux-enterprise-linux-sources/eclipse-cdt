@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Institute for Software, HSR Hochschule fuer Technik  
+ * Copyright (c) 2008, 2009 Institute for Software, HSR Hochschule fuer Technik  
  * Rapperswil, University of applied sciences and others
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
@@ -23,11 +23,13 @@ public final class Messages extends NLS {
 
 	public static String GenerateGettersAndSettersInputPage_DeselectAll;
 	public static String GenerateGettersAndSettersInputPage_header;
+	public static String GenerateGettersAndSettersInputPage_PlaceImplHeader;
 	public static String GenerateGettersAndSettersInputPage_SelectAll;
 	public static String GenerateGettersAndSettersInputPage_SelectGetters;
 	public static String GenerateGettersAndSettersInputPage_SelectSetters;
 	public static String GenerateGettersAndSettersRefactoring_NoCassDefFound;
 	public static String GenerateGettersAndSettersRefactoring_NoFields;
+	public static String GenerateGettersAndSettersRefactoring_NoImplFile;
 	public static String GettersAndSetters_Name;
 
 	static {

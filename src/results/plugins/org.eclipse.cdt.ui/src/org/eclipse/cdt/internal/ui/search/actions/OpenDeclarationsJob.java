@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2009, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,8 +7,12 @@
  *
  * Contributors:
  *    Markus Schorn - initial API and implementation
- *******************************************************************************/ 
+ *	  Sergey Prigogin (Google)
+******************************************************************************/
 package org.eclipse.cdt.internal.ui.search.actions;
+
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,7 +58,6 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateDeclaration;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTranslationUnit;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunction;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameter;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPSpecialization;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateParameter;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPUsingDeclaration;
@@ -80,6 +83,7 @@ import org.eclipse.cdt.internal.core.dom.parser.cpp.ICPPUnknownBinding;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPSemantics;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.LookupData;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.SemanticUtil;
 import org.eclipse.cdt.internal.core.index.IIndexFragmentName;
 import org.eclipse.cdt.internal.core.model.ASTCache.ASTRunnable;
 import org.eclipse.cdt.internal.core.model.ext.CElementHandleFactory;
@@ -108,7 +112,7 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 		fTextSelection= textSelection;
 		fSelectedText= text;
 	}
-	
+
 	@Override
 	protected IStatus run(IProgressMonitor monitor) {
 		try {
@@ -116,15 +120,15 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 		} catch (CoreException e) {
 			return e.getStatus();
 		}
-	}	
-	
+	}
+
 	IStatus performNavigation(IProgressMonitor monitor) throws CoreException {
 		fAction.clearStatusLine();
 
 		assert fIndex == null;
 		if (fIndex != null)
 			return Status.CANCEL_STATUS;
-		
+
 		fMonitor= monitor;
 		fIndex= CCorePlugin.getIndexManager().getIndex(fTranslationUnit.getCProject(),
 				IIndexManager.ADD_DEPENDENCIES | IIndexManager.ADD_DEPENDENT);
@@ -150,26 +154,13 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 		int selectionLength = fTextSelection.getLength();
 
 		final IASTNodeSelector nodeSelector = ast.getNodeSelector(null);
-		
+
 		IASTName sourceName= nodeSelector.findEnclosingName(selectionStart, selectionLength);
+		IName[] implicitTargets = findImplicitTargets(ast, nodeSelector, selectionStart, selectionLength);
 		if (sourceName == null) {
-			IASTName implicit = nodeSelector.findEnclosingImplicitName(selectionStart, selectionLength);
-			if (implicit != null) {
-				IASTImplicitNameOwner owner = (IASTImplicitNameOwner) implicit.getParent();
-				IASTImplicitName[] implicits = owner.getImplicitNames();
-				// There may be more than one name in the same spot
-				if (implicits.length > 0) {
-					List<IName> allNames = new ArrayList<IName>();
-					for (IASTImplicitName name : implicits) {
-						if (((ASTNode) name).getOffset() == ((ASTNode) implicit).getOffset()) {
-							IBinding binding = name.resolveBinding(); // guaranteed to resolve
-							IName[] declNames = findDeclNames(ast, NameKind.REFERENCE, binding);
-							allNames.addAll(Arrays.asList(declNames));
-						}
-					}
-					if (navigateViaCElements(fTranslationUnit.getCProject(), fIndex, allNames.toArray(new IName[0])))
-						return Status.OK_STATUS;
-				}
+			if (implicitTargets.length > 0) {
+				if (navigateViaCElements(fTranslationUnit.getCProject(), fIndex, implicitTargets))
+					return Status.OK_STATUS;
 			}
 		} else {
 			boolean found= false;
@@ -192,51 +183,44 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 				navigateToName(sourceName);
 				return Status.OK_STATUS;
 			}
-			IName[] declNames = null;
+			IName[] targets = IName.EMPTY_ARRAY;
 			String filename = ast.getFilePath();
 			for (IBinding binding : bindings) {
 				if (binding != null && !(binding instanceof IProblemBinding)) {
 					IName[] names = findDeclNames(ast, kind, binding);
-					for (int i = 0; i < names.length; i++) {
-						if (names[i] instanceof IIndexName &&
-								filename.equals(((IIndexName) names[i]).getFileLocation().getFileName())) {
+					for (final IName name : names) {
+						if (name instanceof IIndexName &&
+								filename.equals(((IIndexName) name).getFileLocation().getFileName())) {
 							// Exclude index names from the current file.
-							names[i] = null;
-						} else if (isSameName(names[i], sourceName)) {
+						} else if (areOverlappingNames(name, sourceName)) {
 							// Exclude the current location.
-							names[i] = null;
 						} else if (binding instanceof IParameter) {
-							if (!isInSameFunction(sourceName, names[i])) {
-								names[i] = null;
+							if (isInSameFunction(sourceName, name)) {
+								targets = ArrayUtil.append(targets, name);
 							}
 						} else if (binding instanceof ICPPTemplateParameter) {
-							if (!isInSameTemplate(sourceName, names[i])) {
-								names[i] = null;
+							if (isInSameTemplate(sourceName, name)) {
+								targets = ArrayUtil.append(targets, name);
 							}
+						} else if (name != null) {
+							targets = ArrayUtil.append(targets, name);
 						}
-					}
-					compact(names);
-					if (declNames == null) {
-						declNames = names;
-					} else {
-						declNames = (IName[]) ArrayUtil.addAll(IName.class, declNames, names);
 					}
 				}
 			}
-			declNames = (IName[]) ArrayUtil.removeNulls(IName.class, declNames);
-
-			if (navigateViaCElements(fTranslationUnit.getCProject(), fIndex, declNames)) {
+			targets = ArrayUtil.trim(ArrayUtil.addAll(targets, implicitTargets));
+			if (navigateViaCElements(fTranslationUnit.getCProject(), fIndex, targets)) {
 				found= true;
 			} else {
-				// Leave old method as fallback for local variables, parameters and 
+				// Leave old method as fallback for local variables, parameters and
 				// everything else not covered by ICElementHandle.
-				found = navigateOneLocation(declNames);
+				found = navigateOneLocation(targets);
 			}
 			if (!found && !navigationFallBack(ast, sourceName, kind)) {
 				fAction.reportSymbolLookupFailure(new String(sourceName.toCharArray()));
 			}
 			return Status.OK_STATUS;
-		} 
+		}
 
 		// No enclosing name, check if we're in an include statement
 		IASTNode node= nodeSelector.findEnclosingNode(selectionStart, selectionLength);
@@ -257,30 +241,29 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 		if (!navigationFallBack(ast, null, NameKind.REFERENCE)) {
 			fAction.reportSelectionMatchFailure();
 		}
-		return Status.OK_STATUS; 
+		return Status.OK_STATUS;
 	}
-	
+
 	private IName[] findDeclNames(IASTTranslationUnit ast, NameKind kind, IBinding binding) throws CoreException {
 		IName[] declNames = findNames(fIndex, ast, kind, binding);
-		if (declNames.length == 0) {
-			if (binding instanceof ICPPSpecialization) {
-				// bug 207320, handle template instances
-				IBinding specialized= ((ICPPSpecialization) binding).getSpecializedBinding();
-				if (specialized != null && !(specialized instanceof IProblemBinding)) {
-					declNames = findNames(fIndex, ast, NameKind.DEFINITION, specialized);
-				}
-			} else if (binding instanceof ICPPMethod) {
-				// bug 86829, handle implicit methods.
-				ICPPMethod method= (ICPPMethod) binding;
-				if (method.isImplicit()) {
-					try {
-						IBinding clsBinding= method.getClassOwner();
-						if (clsBinding != null && !(clsBinding instanceof IProblemBinding)) {
-							declNames= findNames(fIndex, ast, NameKind.REFERENCE, clsBinding);
-						}
-					} catch (DOMException e) {
-						// don't log problem bindings.
+		// Bug 207320, handle template instances.
+		while (declNames.length == 0 && binding instanceof ICPPSpecialization) {
+			binding = ((ICPPSpecialization) binding).getSpecializedBinding();
+			if (binding != null && !(binding instanceof IProblemBinding)) {
+				declNames = findNames(fIndex, ast, NameKind.DEFINITION, binding);
+			}
+		}
+		if (declNames.length == 0 && binding instanceof ICPPMethod) {
+			// Bug 86829, handle implicit methods.
+			ICPPMethod method= (ICPPMethod) binding;
+			if (method.isImplicit()) {
+				try {
+					IBinding clsBinding= method.getClassOwner();
+					if (clsBinding != null && !(clsBinding instanceof IProblemBinding)) {
+						declNames= findNames(fIndex, ast, NameKind.REFERENCE, clsBinding);
 					}
+				} catch (DOMException e) {
+					// Don't log problem bindings.
 				}
 			}
 		}
@@ -310,24 +293,37 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 		declNames.addAll(Arrays.asList(ast.getDefinitionsInAST(binding)));
 		for (Iterator<IASTName> i = declNames.iterator(); i.hasNext();) {
 			IASTName name= i.next();
-			if (name.resolveBinding() instanceof ICPPUsingDeclaration) {
+			final IBinding b2 = name.resolveBinding();
+			if (b2 instanceof ICPPUsingDeclaration) {
 				i.remove();
+			}
+			if (binding != b2 && binding instanceof ICPPSpecialization) {
+				// Make sure binding specializes b2 so that for instance we do not navigate from
+				// one partial specialization to another.
+				IBinding spec= binding;
+				while (spec instanceof ICPPSpecialization) {
+					spec= ((ICPPSpecialization) spec).getSpecializedBinding();
+					if (spec == b2)
+						break;
+				}
+				if (!(spec instanceof ICPPSpecialization)) {
+					i.remove();
+				}
 			}
 		}
 		if (!declNames.isEmpty()) {
 			return declNames.toArray(new IASTName[declNames.size()]);
 		}
 
-		// 2. Try definition in index
+		// 2. Try definition in index.
 		return index.findNames(binding, IIndex.FIND_DEFINITIONS | IIndex.SEARCH_ACROSS_LANGUAGE_BOUNDARIES);
 	}
 
-	private IName[] findDeclarations(IIndex index, IASTTranslationUnit ast,
-			IBinding binding) throws CoreException {
+	private IName[] findDeclarations(IIndex index, IASTTranslationUnit ast, IBinding binding) throws CoreException {
 		IName[] declNames= ast.getDeclarationsInAST(binding);
 		for (int i = 0; i < declNames.length; i++) {
 			IName name = declNames[i];
-			if (name.isDefinition()) 
+			if (name.isDefinition())
 				declNames[i]= null;
 		}
 		declNames= (IName[]) ArrayUtil.removeNulls(IName.class, declNames);
@@ -336,7 +332,27 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 		}
 		return declNames;
 	}
-	
+
+	/**
+	 * Returns definitions of bindings referenced by implicit name at the given location.
+	 */
+	private IName[] findImplicitTargets(IASTTranslationUnit ast, IASTNodeSelector nodeSelector,
+			int offset, int length) throws CoreException {
+		IName[] definitions = IName.EMPTY_ARRAY;
+		IASTName firstName = nodeSelector.findEnclosingImplicitName(offset, length);
+		if (firstName != null) {
+			IASTImplicitNameOwner owner = (IASTImplicitNameOwner) firstName.getParent();
+			for (IASTImplicitName name : owner.getImplicitNames()) {
+				if (((ASTNode) name).getOffset() == ((ASTNode) firstName).getOffset()) {
+					IBinding binding = name.resolveBinding(); // Guaranteed to resolve.
+					IName[] declNames = findDeclNames(ast, NameKind.REFERENCE, binding);
+					definitions = ArrayUtil.addAll(definitions, declNames);
+				}
+			}
+		}
+		return ArrayUtil.trim(definitions);
+	}
+
 	private static NameKind getNameKind(IName name) {
 		if (name.isDefinition()) {
 			if (getBinding(name) instanceof ICPPUsingDeclaration) {
@@ -363,34 +379,17 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 		return null;
 	}
 
-	/**
-	 * Compacts an array by moving all <code>null</code> elements to the end.
-	 * @param array
-	 */
-	private void compact(Object[] array) {
-		for (int i = 0, j = 0; i < array.length; i++) {
-			if (array[i] != null) {
-				if (i != j) {
-					array[j] = array[i];
-					array[i] = null;
-				}
-				j++;
-			}
-		}
-	}
-
-	private boolean isSameName(IName n1, IName n2) {
+	private boolean areOverlappingNames(IName n1, IName n2) {
 		if (n1 == n2)
 			return true;
-		
+
 		IASTFileLocation loc1 = n1.getFileLocation();
 		IASTFileLocation loc2 = n2.getFileLocation();
 		if (loc1 == null || loc2 == null)
 			return false;
-		
 		return loc1.getFileName().equals(loc2.getFileName()) &&
-				loc1.getNodeOffset() == loc2.getNodeOffset() &&
-				loc1.getNodeLength() == loc2.getNodeLength();
+				max(loc1.getNodeOffset(), loc2.getNodeOffset()) <
+				min(loc1.getNodeOffset() + loc1.getNodeLength(), loc2.getNodeOffset() + loc2.getNodeLength());
 	}
 
 	private static boolean isInSameFunction(IASTName name1, IName name2) {
@@ -459,23 +458,39 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 		return navigateCElements(elements);
 	}
 
-	private boolean navigateCElements(final List<ICElement> elements) {
+	private boolean navigateCElements(List<ICElement> elements) {
 		if (elements.isEmpty()) {
 			return false;
 		}
 
+		final List<ICElement> uniqueElements;
+		if (elements.size() < 2) {
+			uniqueElements= elements;
+		} else {
+			// Make sure only one element per location is proposed
+			Set<String> sigs= new HashSet<String>();
+			sigs.add(null);
+			
+			uniqueElements= new ArrayList<ICElement>();
+			for (ICElement elem : elements) {
+				if (sigs.add(getLocationSignature((ISourceReference) elem))) {
+					uniqueElements.add(elem);
+				}
+			}
+		}
+		
 		runInUIThread(new Runnable() {
 			public void run() {
 				ISourceReference target= null;
-				if (elements.size() == 1) {
-					target= (ISourceReference) elements.get(0);
+				if (uniqueElements.size() == 1) {
+					target= (ISourceReference) uniqueElements.get(0);
 				} else {
 					if (OpenDeclarationsAction.sIsJUnitTest) {
-						throw new RuntimeException("ambiguous input: " + elements.size()); //$NON-NLS-1$
+						throw new RuntimeException("ambiguous input: " + uniqueElements.size()); //$NON-NLS-1$
 					}
-					ICElement[] elemArray= elements.toArray(new ICElement[elements.size()]);
+					ICElement[] elemArray= uniqueElements.toArray(new ICElement[uniqueElements.size()]);
 					target = (ISourceReference) OpenActionUtil.selectCElement(elemArray, fAction.getSite().getShell(),
-							CEditorMessages.OpenDeclarationsAction_dialog_title, CEditorMessages.OpenDeclarationsAction_selectMessage, 
+							CEditorMessages.OpenDeclarationsAction_dialog_title, CEditorMessages.OpenDeclarationsAction_selectMessage,
 							CElementBaseLabels.ALL_DEFAULT | CElementBaseLabels.ALL_FULLY_QUALIFIED | CElementBaseLabels.MF_POST_FILE_QUALIFIED, 0);
 				}
 				if (target != null) {
@@ -484,7 +499,7 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 					try {
 						sourceRange = target.getSourceRange();
 						if (tu != null && sourceRange != null) {
-							fAction.open(tu.getLocation(), sourceRange.getIdStartPos(), sourceRange.getIdLength());
+							fAction.open(tu, sourceRange.getIdStartPos(), sourceRange.getIdLength());
 						}
 					} catch (CoreException e) {
 						CUIPlugin.log(e);
@@ -493,6 +508,20 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 			}
 		});
 		return true;
+	}
+
+	private String getLocationSignature(ISourceReference elem) {
+		ITranslationUnit tu= elem.getTranslationUnit();
+		ISourceRange sourceRange;
+		try {
+			sourceRange = elem.getSourceRange();
+			if (tu != null && sourceRange != null) {
+				return tu.getPath().toString() + IPath.SEPARATOR + sourceRange.getIdStartPos() + IPath.SEPARATOR + sourceRange.getIdLength();
+			}
+		} catch (CoreException e) {
+			CUIPlugin.log(e);
+		}
+		return null;
 	}
 
 	private boolean navigateOneLocation(IName[] names) {
@@ -507,7 +536,7 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 	private boolean navigateToName(IName name) {
 		return navigateToLocation(name.getFileLocation());
 	}
-	
+
 	private boolean navigateToLocation(IASTFileLocation fileloc) {
 		if (fileloc == null) {
 			return false;
@@ -556,18 +585,17 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 			fAction.reportIncludeLookupFailure(new String(incStmt.getName().toCharArray()));
 		}
 	}
-	
+
 	private boolean navigationFallBack(IASTTranslationUnit ast, IASTName sourceName, NameKind kind) {
-		// bug 102643, as a fall-back we look up the selected word in the index
+		// Bug 102643, as a fall-back we look up the selected word in the index.
 		if (fSelectedText != null && fSelectedText.length() > 0) {
 			try {
 				final ICProject project = fTranslationUnit.getCProject();
 				final char[] name = fSelectedText.toCharArray();
 				List<ICElement> elems= new ArrayList<ICElement>();
-								
-				// bug 252549, search for names in the AST first
+	
+				// Bug 252549, search for names in the AST first.
 				Set<IBinding> primaryBindings= new HashSet<IBinding>();
-				Set<IBinding> ignoreIndexBindings= new HashSet<IBinding>();
 				ASTNameCollector nc= new ASTNameCollector(fSelectedText);
 				ast.accept(nc);
 				IASTName[] candidates= nc.getNames();
@@ -575,25 +603,21 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 					try {
 						IBinding b= astName.resolveBinding();
 						if (b != null && !(b instanceof IProblemBinding)) {
-							if (primaryBindings.add(b)) {
-								ignoreIndexBindings.add(fIndex.adaptBinding(b));
-							}
+							primaryBindings.add(b);
 						}
 					} catch (RuntimeException e) {
 						CUIPlugin.log(e);
 					}
 				}
-				
-				// Search the index, also
+
+				// Search the index, also.
 				final IndexFilter filter = IndexFilter.getDeclaredBindingFilter(ast.getLinkage().getLinkageID(), false);
 				final IIndexBinding[] idxBindings = fIndex.findBindings(name, false, filter, fMonitor);
 				for (IIndexBinding idxBinding : idxBindings) {
-					if (!ignoreIndexBindings.contains(idxBinding)) {
-						primaryBindings.add(idxBinding);
-					}
+					primaryBindings.add(idxBinding);
 				}
-				
-				// Search for a macro in the index
+
+				// Search for a macro in the index.
 				IIndexMacro[] macros= fIndex.findMacros(name, filter, fMonitor);
 				for (IIndexMacro macro : macros) {
 					ICElement elem= IndexUI.getCElementForMacro(project, fIndex, macro);
@@ -608,10 +632,10 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 				} else {
 					secondaryBindings= defaultRemoveSecondaryBindings(primaryBindings, sourceName);
 				}
-				
-				// Convert bindings to CElements
+
+				// Convert bindings to CElements.
 				Collection<IBinding> bs= primaryBindings;
-				for (int k=0; k<2; k++) {
+				for (int k = 0; k < 2; k++) {
 					for (IBinding binding : bs) {
 						IName[] names = findNames(fIndex, ast, kind, binding);
 						// Exclude names of the same kind.
@@ -623,16 +647,16 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 						names = (IName[]) ArrayUtil.removeNulls(IName.class, names);
 						convertToCElements(project, fIndex, names, elems);
 					}
-					// in case we did not find anything, consider the secondary bindings
+					// In case we did not find anything, consider the secondary bindings.
 					if (!elems.isEmpty())
 						break;
 					bs= secondaryBindings;
-				} 
+				}
 				if (navigateCElements(elems)) {
 					return true;
 				}
 				if (sourceName != null && sourceName.isDeclaration()) {
-					// Select the name at the current location as the last resort. 
+					// Select the name at the current location as the last resort.
 					return navigateToName(sourceName);
 				}
 			} catch (CoreException e) {
@@ -652,7 +676,7 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 							iterator.remove();
 					}
 				} catch (DOMException e) {
-					// ignore
+					// Ignore
 				}
 			}
 		}
@@ -661,16 +685,16 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 
 	private boolean checkOwnerNames(IBinding b1, IBinding b2) throws DOMException {
 		IBinding o1 = b1.getOwner();
-		IBinding o2= b2.getOwner();
-		if (o1 == o2) 
+		IBinding o2 = b2.getOwner();
+		if (o1 == o2)
 			return true;
-		
+
 		if (o1 == null || o2 == null)
 			return false;
-		
-		if (!CharArrayUtils.equals(o1.getNameCharArray(), o2.getNameCharArray())) 
+
+		if (!CharArrayUtils.equals(o1.getNameCharArray(), o2.getNameCharArray()))
 			return false;
-		
+
 		return checkOwnerNames(o1, o2);
 	}
 
@@ -679,11 +703,14 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 		String[] sourceQualifiedName= null;
 		int funcArgCount= -1;
 		if (sourceName != null) {
-			sourceQualifiedName= CPPVisitor.getQualifiedName(sourceName.resolveBinding());
-			if (sourceName.resolveBinding() instanceof ICPPUnknownBinding) {
-				LookupData data= CPPSemantics.createLookupData(sourceName, false);
-				if (data.functionCall()) {
-					funcArgCount= data.getFunctionArgumentCount();
+			final IBinding binding = sourceName.resolveBinding();
+			if (binding != null) {
+				sourceQualifiedName= CPPVisitor.getQualifiedName(binding);
+				if (binding instanceof ICPPUnknownBinding) {
+					LookupData data= CPPSemantics.createLookupData(sourceName, false);
+					if (data.isFunctionCall()) {
+						funcArgCount= data.getFunctionArgumentCount();
+					}
 				}
 			}
 		}
@@ -698,33 +725,35 @@ class OpenDeclarationsJob extends Job implements ASTRunnable {
 				}
 			}
 			if (funcArgCount != -1) {
-				// for c++ we can check the number of parameters
+				// For c++ we can check the number of parameters.
 				if (binding instanceof ICPPFunction) {
 					ICPPFunction f= (ICPPFunction) binding;
 					try {
-						IParameter[] pars= f.getParameters();
-						if (pars.length < funcArgCount) {
-							if (!f.takesVarArgs()) {
-								iterator.remove();
-								result.add(binding);
-								continue;
+						if (f.getRequiredArgumentCount() > funcArgCount) {
+							iterator.remove();
+							result.add(binding);
+							continue;
+						}
+						if (!f.takesVarArgs() && !f.hasParameterPack()) {
+							final IType[] parameterTypes = f.getType().getParameterTypes();
+							int maxArgs= parameterTypes.length;
+							if (maxArgs == 1 && SemanticUtil.isVoidType(parameterTypes[0])) {
+								maxArgs= 0;
 							}
-						} else if (pars.length > funcArgCount) {
-							IParameter p= pars[funcArgCount];
-							if (!(p instanceof ICPPParameter) || !((ICPPParameter) p).hasDefaultValue()) {
+							if (maxArgs < funcArgCount) {
 								iterator.remove();
 								result.add(binding);
 								continue;
 							}
 						}
 					} catch (DOMException e) {
-						// ignore problem bindings
+						// Ignore problem bindings.
 						continue;
 					}
 				}
 			}
 		}
-		
+
 		return result;
 	}
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -9,8 +9,11 @@
  *     John Camelon (IBM) - Initial API and implementation
  *     Bryan Wilkinson (QNX)
  *     Mike Kucera (IBM)
+ *     Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
+
+import static org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.SemanticUtil.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,27 +23,29 @@ import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTCompletionContext;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IASTImplicitName;
-import org.eclipse.cdt.core.dom.ast.IASTImplicitNameOwner;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IEnumerator;
 import org.eclipse.cdt.core.dom.ast.IFunction;
+import org.eclipse.cdt.core.dom.ast.IPointerType;
 import org.eclipse.cdt.core.dom.ast.IProblemBinding;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.IVariable;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTFieldReference;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPField;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunction;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPMember;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPReferenceType;
 import org.eclipse.cdt.internal.core.dom.parser.ASTNode;
 import org.eclipse.cdt.internal.core.dom.parser.IASTAmbiguityParent;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPSemantics;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CVQualifier;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.SemanticUtil;
 
-/**
- * @author jcamelon
- */
-public class CPPASTFieldReference extends ASTNode implements
-        ICPPASTFieldReference, IASTAmbiguityParent, IASTCompletionContext, IASTImplicitNameOwner {
+public class CPPASTFieldReference extends ASTNode implements ICPPASTFieldReference, IASTAmbiguityParent,
+		IASTCompletionContext {
 
     private boolean isTemplate;
     private IASTExpression owner;
@@ -112,8 +117,8 @@ public class CPPASTFieldReference extends ASTNode implements
     }
     
     public IASTImplicitName[] getImplicitNames() {
-    	if(implicitNames == null) {
-    		if(!isDeref)
+    	if (implicitNames == null) {
+    		if (!isDeref)
     			return implicitNames = IASTImplicitName.EMPTY_NAME_ARRAY;
 			
     		// collect the function bindings
@@ -123,7 +128,7 @@ public class CPPASTFieldReference extends ASTNode implements
 			} catch (DOMException e) {
 				return implicitNames = IASTImplicitName.EMPTY_NAME_ARRAY;
 			}
-			if(functionBindings.isEmpty())
+			if (functionBindings.isEmpty())
 				return implicitNames = IASTImplicitName.EMPTY_NAME_ARRAY;
 			
 			// create a name to wrap each binding
@@ -149,15 +154,18 @@ public class CPPASTFieldReference extends ASTNode implements
 	        }
 		}
       
-        if (owner != null && !owner.accept(action)) return false;
+        if (owner != null && !owner.accept(action))
+        	return false;
         
-        if(action.shouldVisitImplicitNames) { 
-        	for(IASTImplicitName name : getImplicitNames()) {
-        		if(!name.accept(action)) return false;
+        if (action.shouldVisitImplicitNames) { 
+        	for (IASTImplicitName name : getImplicitNames()) {
+        		if (!name.accept(action))
+        			return false;
         	}
         }
         
-        if (name != null && !name.accept(action)) return false;
+        if (name != null && !name.accept(action))
+        	return false;
         
         if (action.shouldVisitExpressions) {
 		    switch (action.leave(this)) {
@@ -188,11 +196,22 @@ public class CPPASTFieldReference extends ASTNode implements
 		IBinding binding = name.resolvePreBinding();
 		try {
 			if (binding instanceof IVariable) {
-                return ((IVariable) binding).getType();
+				IType e2= ((IVariable) binding).getType();
+				if (binding instanceof ICPPField && !((ICPPField) binding).isStatic()) {
+					IType e1= getFieldOwner().getExpressionType();
+					if (isPointerDereference()) {
+						e1= SemanticUtil.getNestedType(e1, TDEF | REF | CVTYPE);
+						if (e1 instanceof IPointerType) {
+							e1= ((IPointerType) e1).getType();
+						}
+					}
+					e2 = addQualifiersForAccess((ICPPField) binding, e2, e1);
+				}
+                return SemanticUtil.mapToAST(e2, this);
 			} else if (binding instanceof IEnumerator) {
 				return ((IEnumerator) binding).getType();
 			} else if (binding instanceof IFunction) {
-				return ((IFunction) binding).getType();
+				return SemanticUtil.mapToAST(((IFunction) binding).getType(), this);
 			}  else if (binding instanceof ICPPUnknownBinding) {
 				return CPPUnknownClass.createUnnamedInstance();
 			} else if (binding instanceof IProblemBinding) {
@@ -204,18 +223,53 @@ public class CPPASTFieldReference extends ASTNode implements
 	    return null;
     }
 
+	public static IType addQualifiersForAccess(ICPPField field, IType fieldType, IType ownerType) throws DOMException {
+		CVQualifier cvq1 = SemanticUtil.getCVQualifier(ownerType);
+		if (field.isMutable()) {
+			// Remove const, add union of volatile.
+			CVQualifier cvq2 = SemanticUtil.getCVQualifier(fieldType);
+			if (cvq2.isConst()) {
+				fieldType= SemanticUtil.getNestedType(fieldType, ALLCVQ | TDEF | REF);
+			}
+			fieldType= SemanticUtil.addQualifiers(fieldType, false, cvq1.isVolatile() || cvq2.isVolatile());
+		} else {
+			fieldType= SemanticUtil.addQualifiers(fieldType, cvq1.isConst(), cvq1.isVolatile());
+		}
+		return fieldType;
+	}
+
+    
+	public boolean isLValue() {
+		if (isPointerDereference())
+			return true;
+		
+		IBinding b= getFieldName().resolveBinding();
+		try {
+			if (b instanceof ICPPMember && ((ICPPMember) b).isStatic())
+				return true;
+			if (b instanceof IVariable) {
+				if (SemanticUtil.getNestedType(((IVariable) b).getType(), TDEF) instanceof ICPPReferenceType) {
+					return true;
+				}
+				return getFieldOwner().isLValue();
+			}
+		} catch (DOMException e) {
+		}
+		return false;
+	}
+
 	public IBinding[] findBindings(IASTName n, boolean isPrefix) {
 		IBinding[] bindings = CPPSemantics.findBindingsForContentAssist(n, isPrefix);
 		List<IBinding> filtered = new ArrayList<IBinding>();
-		
-		for (int i = 0; i < bindings.length; i++) {
-			if (bindings[i] instanceof ICPPMethod) {
-				ICPPMethod method = (ICPPMethod) bindings[i];
+
+		for (IBinding binding : bindings) {
+			if (binding instanceof ICPPMethod) {
+				ICPPMethod method = (ICPPMethod) binding;
 				if (method.isImplicit()) {
 					continue;
 				}
 			}
-			filtered.add(bindings[i]);
+			filtered.add(binding);
 		}
 		
 		return filtered.toArray(new IBinding[filtered.size()]);

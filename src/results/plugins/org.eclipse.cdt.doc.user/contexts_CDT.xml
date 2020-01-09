@@ -30,7 +30,12 @@
 <context id ="problems_view">
    <description>Click below to see help.</description>
    <topic href="reference/cdt_u_problems_view.htm"
-   	label="Problems view"/>
+   	label="Problems view (C/C++)"/>
+</context>
+<context id ="tasks_view">
+   <description>Click below to see help.</description>
+   <topic href="reference/cdt_u_tasks_view.htm"
+   	label="Tasks view"/>
 </context>
 <context id ="properties_view">
    <description>Click below to see help.</description>
@@ -70,7 +75,7 @@
 <context id ="c_editor_gen">
    <description>Click below to see help.</description>
    <topic href="reference/cdt_u_c_editor_gen.htm"
-   	label="C/C++ Editor Preferences"/>
+   	label="C/C++ Editor Advanced Preferences"/>
 </context>
 <context id ="c_editor_color">
    <description>Click below to see help.</description>
@@ -371,6 +376,7 @@
 <context id="cdt_u_prop_build_variables">
    <description></description>
    <topic href="reference/cdt_u_prop_build_variables.htm" label="Build Variables"/> 
+   <topic href="tasks/cdt_t_add_build_var.htm" label="Adding and Editing Build Variables"/> 
 </context>
 <context id="cdt_u_prop_build_discovery">
    <description></description>
@@ -403,7 +409,7 @@
 </context>       
 <context id="cdt_u_prop_build_setting_errparser">
    <description></description>
-   <topic href="reference/cdt_u_prop_build_setting_errparser.htm"    	
+   <topic href="reference/cdt_u_prop_build_settings_errparser.htm"    	
    label="Error Parsers"/> 
 </context>       
 <context id="cdt_u_prop_build_toolchain">
@@ -495,6 +501,10 @@
    <description></description>
    <topic href="reference/cdt_u_pref_prop_pages.htm"    	
    label="Property Pages Settins tab"/> 
+</context>
+<context id="tasktags_preference_page_context" title="Task Tags (C/C++)">
+   <description>Create todo task tags.</description>
+   <topic href="reference/cdt_u_pref_task_tags.htm" label="Task Tags preference"/>
 </context>                   
 <context id="cdt_u_pref_wizard_defaults">
    <description></description>
@@ -524,6 +534,15 @@
    <topic href="tasks/cdt_t_conv_proj.htm" label="Converting a C or C++ nature for a project"/>
 </context>
 <context id="cdt_creating_cpp_file_context" title="Creating your C++ file">
-   <topic href="getting_started/cdt_w_creating_cpp_file.html" label="Creating your C++ file"/>
+   <topic href="getting_started/cdt_w_newcpp.htm" label="Creating your C++ file"/>
 </context>
+<context id="project_explorer_context" title="Project Explorer">
+   <description>The Project Explorer displays project information.</description>
+   <topic href="reference/cdt_u_project_explorer_view.htm" label="Project Explorer view"/>
+</context>
+<!-- this contributes to platform's outline view context, see bug 317992
+<context id="content_outline_context" title="Outline">
+   <topic href="reference/cdt_u_outline_view.htm" label="Outline view"/>
+</context>
+-->
 </contexts>

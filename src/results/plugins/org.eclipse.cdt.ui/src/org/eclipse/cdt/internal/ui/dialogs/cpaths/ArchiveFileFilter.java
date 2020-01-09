@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2006 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -24,13 +24,14 @@ import org.eclipse.jface.viewers.Viewer;
 import org.eclipse.jface.viewers.ViewerFilter;
 
 /**
- * ArchiveFileFilter
- */
-/**
  * Viewer filter for archive selection dialogs.
  * Archives are files with file extension "a",  "dll", "so.
  * The filter is not case sensitive.
+ * 
+ * @deprecated as of CDT 4.0. This class was used for property pages
+ * for 3.X style projects.
  */
+@Deprecated
 public class ArchiveFileFilter extends ViewerFilter {
 
 	private static final String[] fgArchiveExtensions= { "a", "so", "dll" }; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$

@@ -12,9 +12,13 @@
  *******************************************************************************/
 package org.eclipse.cdt.internal.ui.text;
 
+import org.eclipse.core.resources.ProjectScope;
 import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.Platform;
+import org.eclipse.core.runtime.preferences.DefaultScope;
 import org.eclipse.core.runtime.preferences.IPreferencesService;
+import org.eclipse.core.runtime.preferences.IScopeContext;
+import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IRegion;
@@ -75,6 +79,8 @@ public final class CIndenter {
 		final boolean prefHasTemplates;
 		final String prefTabChar;
 		
+		private final IPreferencesService preferenceService;
+		private final IScopeContext[] preferenceContexts;
 		private final ICProject fProject;
 
 		/**
@@ -84,12 +90,22 @@ public final class CIndenter {
 		 * @return the value of the preference
 		 */
 		private String getCoreFormatterOption(String key) {
-			if (fProject == null)
-				return CCorePlugin.getOption(key);
-			return fProject.getOption(key, true);
+			return getCoreFormatterOption(key, null);
 		}
-		
+
+		private String getCoreFormatterOption(String key, String defaultValue) {
+			return preferenceService.getString(CCorePlugin.PLUGIN_ID, key, defaultValue, preferenceContexts);
+		}
+
+		private int getCoreFormatterOption(String key, int defaultValue) {
+			return preferenceService.getInt(CCorePlugin.PLUGIN_ID, key, defaultValue, preferenceContexts);
+		}
+
 		CorePrefs(ICProject project) {
+			preferenceService = Platform.getPreferencesService();
+			preferenceContexts = project != null ?
+					new IScopeContext[] { new ProjectScope(project.getProject()), new InstanceScope(), new DefaultScope() } :
+					new IScopeContext[] { new InstanceScope(), new DefaultScope() };
 			fProject= project;
 			prefUseTabs= prefUseTabs();
 			prefTabSize= prefTabSize();
@@ -345,9 +361,7 @@ public final class CIndenter {
 		}
 
 		private int prefAccessSpecifierExtraSpaces() {
-			// Hidden option that enables fractional indent of access specifiers.
-			IPreferencesService prefs = Platform.getPreferencesService();
-			return prefs.getInt(CCorePlugin.PLUGIN_ID, CCorePlugin.PLUGIN_ID + ".formatter.indent_access_specifier_extra_spaces", 0, null); //$NON-NLS-1$
+			return getCoreFormatterOption(DefaultCodeFormatterConstants.FORMATTER_INDENT_ACCESS_SPECIFIER_EXTRA_SPACES, 0);
 		}
 
 		private int prefNamespaceBodyIndent() {
@@ -833,7 +847,7 @@ public final class CIndenter {
 					} else if ((prevToken == Symbols.TokenEQUAL || prevToken == Symbols.TokenRBRACKET) &&
 							!fPrefs.prefIndentBracesForArrays) {
 						cancelIndent= true;
-					} else if (prevToken == Symbols.TokenRPAREN && fPrefs.prefIndentBracesForMethods) {
+					} else if ((prevToken == Symbols.TokenRPAREN || prevToken == Symbols.TokenCONST) && fPrefs.prefIndentBracesForMethods) {
 						extraIndent= 1;
 					} else if (prevToken == Symbols.TokenIDENT && fPrefs.prefIndentBracesForTypes) {
 						extraIndent= 1;
@@ -970,6 +984,7 @@ public final class CIndenter {
 			if (!skipScope())
 				fPosition= pos;
 			return skipToStatementStart(danglingElse, false);
+
 		case Symbols.TokenSEMICOLON:
 			// this is the 90% case: after a statement block
 			// the end of the previous statement / block previous.end
@@ -1035,6 +1050,12 @@ public final class CIndenter {
 		case Symbols.TokenTRY:
 			return skipToStatementStart(danglingElse, false);
 
+		case Symbols.TokenRETURN:
+		case Symbols.TokenTYPEDEF:
+		case Symbols.TokenUSING:
+			fIndent = fPrefs.prefContinuationIndent;
+			return fPosition;
+
 		case Symbols.TokenCONST:
 			nextToken();
 			if (fToken != Symbols.TokenRPAREN) {
@@ -1072,13 +1093,14 @@ public final class CIndenter {
 			return skipToPreviousListItemOrListStart();
 
 		case Symbols.TokenCOMMA:
-			// inside a list of some type
-			// easy if there is already a list item before with its own indentation - we just align
-			// if not: take the start of the list ( LPAREN, LBRACE, LBRACKET ) and either align or
-			// indent by list-indent
+			// Inside a list of some type.
+			// Easy if there is already a list item before with its own indentation - we just align.
+			// If not: take the start of the list (LPAREN, LBRACE, LBRACKET) and either align or
+			// indent by list-indent.
 			return skipToPreviousListItemOrListStart();
+
 		default:
-			// inside whatever we don't know about: similar to the list case:
+			// Inside whatever we don't know about: similar to the list case:
 			// if we are inside a continued expression, then either align with a previous line that
 			// has indentation or indent from the expression start line (either a scope introducer
 			// or the start of the expression).
@@ -1107,8 +1129,7 @@ public final class CIndenter {
 			}
 			if (fToken == Symbols.TokenCLASS
 					|| fToken == Symbols.TokenSTRUCT
-					|| fToken == Symbols.TokenUNION
-					|| fToken == Symbols.TokenENUM) {
+					|| fToken == Symbols.TokenUNION) {
 				// inside a type declaration?  Only so if not preceded by '(' or ',' as in
 				// a parameter list.  To be safe, only accept ';' or EOF
 				int pos= fPosition;
@@ -1138,6 +1159,9 @@ public final class CIndenter {
 		case Symbols.TokenIDENT:
 			nextToken();
 			while (skipQualifiers()) {
+				nextToken();
+			}
+			while (fToken == Symbols.TokenMINUS || fToken == Symbols.TokenPLUS) {
 				nextToken();
 			}
 			if (fToken == Symbols.TokenCASE) {
@@ -1229,6 +1253,29 @@ public final class CIndenter {
 	}
 
 	/**
+	 * Test whether the left brace at the current position marks an enum decl.
+	 * 
+	 * @return <code>true</code> if this looks like an enum decl.
+	 */
+	private boolean looksLikeEnumDeclaration() {
+		int pos = fPosition;
+		nextToken();
+		if (fToken == Symbols.TokenIDENT) {
+			nextToken();
+			while (skipQualifiers()) {
+				nextToken();
+			}
+		}
+		if (fToken == Symbols.TokenENUM) {
+			fPosition = pos;
+			return true;
+		}
+		fPosition = pos;
+		return false;
+	}
+
+
+	/**
 	 * Test whether the colon at the current position marks an access specifier.
 	 * 
 	 * @return <code>true</code> if current position marks an access specifier
@@ -1277,10 +1324,9 @@ public final class CIndenter {
 				case Symbols.TokenWHILE:
 				case Symbols.TokenFOR:
 				case Symbols.TokenTRY:
+					fIndent += fPrefs.prefIndentBracesForBlocks ? 1 : 0;
 					return fPosition;
-
 				case Symbols.TokenCLASS:
-				case Symbols.TokenENUM:
 				case Symbols.TokenSTRUCT:
 				case Symbols.TokenUNION:
 					isTypeBody= true;
@@ -1315,7 +1361,6 @@ public final class CIndenter {
 			case Symbols.TokenEOF:
 				if (isInBlock)
 					fIndent= getBlockIndent(mayBeMethodBody == READ_IDENT, isTypeBody);
-				// else: fIndent set by previous calls
 				return fPreviousPos;
 
 			case Symbols.TokenCOLON:
@@ -1431,6 +1476,8 @@ public final class CIndenter {
 				continue;
 			case Symbols.TokenDOUBLECOLON:
 			case Symbols.TokenOTHER:
+			case Symbols.TokenMINUS:
+			case Symbols.TokenPLUS:
 				continue;
 				
 			case Symbols.TokenQUESTIONMARK:
@@ -1563,10 +1610,11 @@ public final class CIndenter {
 	private int skipToPreviousListItemOrListStart() {
 		int startLine= fLine;
 		int startPosition= fPosition;
-		boolean seenEqual = fToken == Symbols.TokenEQUAL;
-		boolean seenShiftLeft = fToken == Symbols.TokenSHIFTLEFT;
-		boolean seenRightParen = fToken == Symbols.TokenRPAREN;
+		boolean continuationLineCandidate =
+				fToken == Symbols.TokenEQUAL || fToken == Symbols.TokenSHIFTLEFT ||
+				fToken == Symbols.TokenRPAREN;
 		while (true) {
+			int previous = fToken;
 			nextToken();
 
 			// If any line item comes with its own indentation, adapt to it
@@ -1575,8 +1623,8 @@ public final class CIndenter {
 					int lineOffset= fDocument.getLineOffset(startLine);
 					int bound= Math.min(fDocument.getLength(), startPosition + 1);
 					if ((fToken == Symbols.TokenSEMICOLON || fToken == Symbols.TokenRBRACE ||
-							fToken == Symbols.TokenLBRACE && !looksLikeArrayInitializerIntro()) &&
-							(seenEqual || seenShiftLeft || seenRightParen)) {
+							fToken == Symbols.TokenLBRACE && !looksLikeArrayInitializerIntro() && !looksLikeEnumDeclaration()) &&
+							continuationLineCandidate) {
 						fIndent = fPrefs.prefContinuationIndent;
 					} else {
 						fAlign= fScanner.findNonWhitespaceForwardInAnyPartition(lineOffset, bound);
@@ -1594,7 +1642,7 @@ public final class CIndenter {
 			switch (fToken) {
 			// scopes: skip them
 			case Symbols.TokenRPAREN:
-				seenRightParen = true;
+				continuationLineCandidate = true;
 				//$FALL-THROUGH$
 			case Symbols.TokenRBRACKET:
 			case Symbols.TokenRBRACE:
@@ -1619,15 +1667,29 @@ public final class CIndenter {
 				return fPosition;
 
 			case Symbols.TokenEQUAL:
-				seenEqual = true;
+			case Symbols.TokenSHIFTLEFT:
+				continuationLineCandidate = true;
 				break;
 
-			case Symbols.TokenSHIFTLEFT:
-				seenShiftLeft = true;
-				break;
+			case Symbols.TokenRETURN:
+			case Symbols.TokenUSING:
+				fIndent = fPrefs.prefContinuationIndent;
+				return fPosition;
+
+			case Symbols.TokenTYPEDEF:
+				switch (previous) {
+				case Symbols.TokenSTRUCT:
+				case Symbols.TokenUNION:
+				case Symbols.TokenCLASS:
+				case Symbols.TokenENUM:
+					break;
+				default:
+					fIndent = fPrefs.prefContinuationIndent;
+				}
+				return fPosition;
 
 			case Symbols.TokenEOF:
-				if (seenEqual || seenShiftLeft || seenRightParen) {
+				if (continuationLineCandidate) {
 					fIndent = fPrefs.prefContinuationIndent;
 				}
 				return 0;
@@ -1660,11 +1722,13 @@ public final class CIndenter {
 			nextToken();
 			switch (fToken) {
 				case Symbols.TokenIDENT:
+					fPosition = storedPosition;
 					if (skipScope(Symbols.TokenLESSTHAN, Symbols.TokenGREATERTHAN))
 						return true;
 					break;
 				case Symbols.TokenQUESTIONMARK:
 				case Symbols.TokenGREATERTHAN:
+					fPosition = storedPosition;
 					if (skipScope(Symbols.TokenLESSTHAN, Symbols.TokenGREATERTHAN))
 						return true;
 					break;
@@ -1751,6 +1815,8 @@ public final class CIndenter {
 					fIndent= fPrefs.prefArrayIndent;
 			} else if (isNamespace() || isLinkageSpec()) {
 				fIndent= fPrefs.prefNamespaceBodyIndent;
+			} else if (looksLikeEnumDeclaration()) {
+				fIndent = fPrefs.prefTypeIndent;
 			} else {
 				int typeDeclPos = matchTypeDeclaration();
 				if (typeDeclPos == CHeuristicScanner.NOT_FOUND) {
@@ -1839,6 +1905,7 @@ public final class CIndenter {
 			fPosition= pos;
 			return true;
 		}
+		fPosition= pos;
 		return false;
 	}
 
@@ -1849,18 +1916,19 @@ public final class CIndenter {
 	 * @return <code>true</code> if the next elements look like the start of a namespace declaration.
 	 */
 	private boolean isNamespace() {
+		int pos = fPosition;
+		nextToken();
 		if (fToken == Symbols.TokenNAMESPACE) {
+			fPosition = pos;
 			return true;		// Anonymous namespace
 		} else if (fToken == Symbols.TokenIDENT) {
-			int pos = fPosition;
-			int token = fToken;
 			nextToken();		// Get previous token
 			if (fToken == Symbols.TokenNAMESPACE) {
+				fPosition = pos;
 				return true;	// Named namespace
 			}
-			fToken = token;
-			fPosition = pos;
 		}
+		fPosition = pos;
 		return false;
 	}
 
@@ -1870,9 +1938,13 @@ public final class CIndenter {
 	 * @return <code>true</code> if the next elements look like the start of a linkage spec.
 	 */
 	private boolean isLinkageSpec() {
+		int pos = fPosition;
+		nextToken();
 		if (fToken == Symbols.TokenEXTERN) {
+			fPosition = pos;
 			return true;
 		}
+		fPosition = pos;
 		return false;
 	}
 
@@ -2112,6 +2184,7 @@ public final class CIndenter {
 		case Symbols.TokenGREATERTHAN:
 		case Symbols.TokenLESSTHAN:
 		case Symbols.TokenMINUS:
+		case Symbols.TokenPLUS:
 		case Symbols.TokenSHIFTRIGHT:
 		case Symbols.TokenSHIFTLEFT:
 		case Symbols.TokenDELETE:
@@ -2172,9 +2245,9 @@ public final class CIndenter {
 	}
 
 	/**
-	 * Returns <code>true</code> if the current tokens look like a method
-	 * call header (i.e. an identifier as opposed to a keyword taking parenthesized
-	 * parameters such as <code>if</code>).
+	 * Returns <code>true</code> if the current tokens look like beginning of a method
+	 * call (i.e. an identifier as opposed to a keyword taking parenthesized parameters
+	 * such as <code>if</code>).
 	 * <p>The heuristic calls <code>nextToken</code> and expects an identifier
 	 * (method name).
 	 *
@@ -2182,8 +2255,12 @@ public final class CIndenter {
 	 *         header.
 	 */
 	private boolean looksLikeMethodCall() {
-		// TODO add awareness for constructor calls with templates: new complex<float>()
 		nextToken();
+		if (fToken == Symbols.TokenGREATERTHAN) {
+			if (!skipScope())
+				return false;
+			nextToken();
+		}
 		return fToken == Symbols.TokenIDENT; // method name
 	}
 

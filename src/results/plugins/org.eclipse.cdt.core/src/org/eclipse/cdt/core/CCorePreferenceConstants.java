@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2009 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -120,7 +120,14 @@ public class CCorePreferenceConstants {
 	 * Default absolute maximum size of the index-db in megabytes.
 	 */
 	public static final String DEFAULT_MAX_INDEX_DB_CACHE_SIZE_MB = "64"; //$NON-NLS-1$
-	
+
+	/**
+	 * Boolean preference controlling whether paths of non-workspace files are stored in index in canonical
+	 * form or not. Canonicalization is performed by calling {@link java.io.File#getCanonicalPath()}.
+	 * @since 5.2
+	 */
+	public static final String FILE_PATH_CANONICALIZATION = CCorePlugin.PLUGIN_ID + ".path_canonicalization"; //$NON-NLS-1$
+
 	/**
 	 * Workspace-wide language mappings. 
 	 */
@@ -135,4 +142,10 @@ public class CCorePreferenceConstants {
 	 * Attempt to show source files for executable binaries.
 	 */
 	public static final String SHOW_SOURCE_FILES_IN_BINARIES = CCorePlugin.PLUGIN_ID + ".showSourceFilesInBinaries"; //$NON-NLS-1$
+	
+	/**
+	 * Show source roots at the top level of projects.
+	 * @since 5.2
+	 */
+	public static final String SHOW_SOURCE_ROOTS_AT_TOP_LEVEL_OF_PROJECT = CCorePlugin.PLUGIN_ID + ".showSourceRootsAtTopLevelOfProject"; //$NON-NLS-1$
 }

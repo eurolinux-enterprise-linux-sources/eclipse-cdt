@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2008 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -39,10 +39,12 @@ typedef struct _procInfo {
 	int uid; // quasi-unique process ID; we have to create it to avoid duplicated pid 
 	         // (actually this impossible from OS point of view but it is still possible
 			 // a clash of new created and already finished process with one and the same PID.
-	// 3 events connected to this process (see starter)
-	HANDLE eventBreak;
+	// 4 events connected to this process (see starter)
+	HANDLE eventBreak;			// signaled when Spawner.interrupt() is called; mildest of the terminate requests (SIGINT signal in UNIX world)
 	HANDLE eventWait;
-	HANDLE eventTerminate;
+	HANDLE eventTerminate;		// signaled when Spawner.terminate() is called; more forceful terminate request (SIGTERM signal in UNIX world)
+	HANDLE eventKill;			// signaled when Spawner.kill() is called; most forceful terminate request (SIGKILL signal in UNIX world)
+	HANDLE eventCtrlc;			// signaled when Spawner.interruptCTRLC() is called; like interrupt() but sends CTRL-C in all cases, even when inferior is a Cygwin program
 } procInfo_t, * pProcInfo_t;
 
 static int procCounter = 0; // Number of running processes
@@ -74,6 +76,7 @@ typedef enum {
 	SIG_INT,
 	SIG_KILL = 9,
 	SIG_TERM = 15,
+	CTRLC = 1000 // special, Windows only. Sends CTRL-C in all cases, even when inferior is a Cygwin program
 } signals;
 
 extern CRITICAL_SECTION cs;
@@ -99,7 +102,7 @@ static int nCounter = 0; // We use it to build unique synchronisation object nam
 
 extern "C"
 JNIEXPORT jint JNICALL Java_org_eclipse_cdt_utils_spawner_Spawner_exec2
-  (JNIEnv * env, jobject process, jobjectArray cmdarray, jobjectArray envp, jstring dir, jintArray channels, jstring slaveName, jint fdm) 
+  (JNIEnv * env, jobject process, jobjectArray cmdarray, jobjectArray envp, jstring dir, jintArray channels, jstring slaveName, jint fdm, jboolean console)
 {
 	return -1;
 }
@@ -146,6 +149,8 @@ JNIEXPORT jint JNICALL Java_org_eclipse_cdt_utils_spawner_Spawner_exec0
 	wchar_t eventBreakName[20];
 	wchar_t eventWaitName[20];
 	wchar_t eventTerminateName[20];
+	wchar_t eventKillName[20];
+	wchar_t eventCtrlcName[20];
 #ifdef DEBUG_MONITOR
 	wchar_t buffer[1000];
 #endif
@@ -217,14 +222,16 @@ JNIEXPORT jint JNICALL Java_org_eclipse_cdt_utils_spawner_Spawner_exec0
 	swprintf(eventBreakName, L"SABreak%p", pCurProcInfo);
 	swprintf(eventWaitName, L"SAWait%p", pCurProcInfo);
 	swprintf(eventTerminateName, L"SATerm%p", pCurProcInfo);
-	pCurProcInfo -> eventBreak = CreateEventW(NULL, TRUE, FALSE, eventBreakName);
-	ResetEvent(pCurProcInfo -> eventBreak);   
-	pCurProcInfo -> eventWait = CreateEventW(NULL, TRUE, FALSE, eventWaitName);
-	ResetEvent(pCurProcInfo -> eventWait);   
-	pCurProcInfo -> eventTerminate = CreateEventW(NULL, TRUE, FALSE, eventTerminateName);
-	ResetEvent(pCurProcInfo -> eventTerminate);   
+	swprintf(eventKillName, L"SAKill%p", pCurProcInfo);
+	swprintf(eventCtrlcName, L"SACtrlc%p", pCurProcInfo);
 
-	swprintf(szCmdLine, L"\"%sstarter.exe\" %i %i %s %s %s ", path, pid, nLocalCounter, eventBreakName, eventWaitName, eventTerminateName);
+	pCurProcInfo->eventBreak     = CreateEventW(NULL, FALSE, FALSE, eventBreakName);
+	pCurProcInfo->eventWait      = CreateEventW(NULL, TRUE,  FALSE, eventWaitName);
+	pCurProcInfo->eventTerminate = CreateEventW(NULL, FALSE, FALSE, eventTerminateName);
+	pCurProcInfo->eventKill      = CreateEventW(NULL, FALSE, FALSE, eventKillName);
+	pCurProcInfo->eventCtrlc     = CreateEventW(NULL, FALSE, FALSE, eventCtrlcName);
+
+	swprintf(szCmdLine, L"\"%sstarter.exe\" %i %i %s %s %s %s %s ", path, pid, nLocalCounter, eventBreakName, eventWaitName, eventTerminateName, eventKillName, eventCtrlcName);
 	nPos = wcslen(szCmdLine);
 
 	// Prepare command line
@@ -667,14 +674,26 @@ JNIEXPORT jint JNICALL Java_org_eclipse_cdt_utils_spawner_Spawner_raise
 			// Temporary do nothing
 			ret = 0;
 			break;
-		case SIG_KILL:
 		case SIG_TERM:
 #ifdef DEBUG_MONITOR
-			swprintf(buffer, _T("Spawner received KILL or TERM signal for process %i\n"), 
+			swprintf(buffer, _T("Spawner received TERM signal for process %i\n"),
 				pCurProcInfo -> pid);
 			OutputDebugStringW(buffer);
 #endif
 		    SetEvent(pCurProcInfo -> eventTerminate);
+#ifdef DEBUG_MONITOR
+			OutputDebugStringW(_T("Spawner signalled TERM event\n"));
+#endif
+			ret = 0;
+			break;
+
+		case SIG_KILL:
+#ifdef DEBUG_MONITOR
+			swprintf(buffer, _T("Spawner received KILL signal for process %i\n"),
+				pCurProcInfo -> pid);
+			OutputDebugStringW(buffer);
+#endif
+		    SetEvent(pCurProcInfo -> eventKill);
 #ifdef DEBUG_MONITOR
 			OutputDebugStringW(_T("Spawner signalled KILL event\n"));
 #endif
@@ -682,7 +701,12 @@ JNIEXPORT jint JNICALL Java_org_eclipse_cdt_utils_spawner_Spawner_raise
 			break;
 		case SIG_INT:
 		    ResetEvent(pCurProcInfo -> eventWait);
-			PulseEvent(pCurProcInfo -> eventBreak);
+			SetEvent(pCurProcInfo -> eventBreak);
+			ret = (WaitForSingleObject(pCurProcInfo -> eventWait, 100) == WAIT_OBJECT_0);
+			break;
+		case CTRLC:
+		    ResetEvent(pCurProcInfo -> eventWait);
+			SetEvent(pCurProcInfo -> eventCtrlc);
 			ret = (WaitForSingleObject(pCurProcInfo -> eventWait, 100) == WAIT_OBJECT_0);
 			break;
 		default:
@@ -839,6 +863,18 @@ void cleanUpProcBlock(pProcInfo_t pCurProcInfo)
 		{
 		CloseHandle(pCurProcInfo -> eventTerminate);
 		pCurProcInfo -> eventTerminate = 0;
+		}
+
+	if(0 != pCurProcInfo -> eventKill)
+		{
+		CloseHandle(pCurProcInfo -> eventKill);
+		pCurProcInfo -> eventKill = 0;
+		}
+
+	if(0 != pCurProcInfo -> eventCtrlc)
+		{
+		CloseHandle(pCurProcInfo -> eventCtrlc);
+		pCurProcInfo -> eventCtrlc = 0;
 		}
 
 	pCurProcInfo -> pid = 0;

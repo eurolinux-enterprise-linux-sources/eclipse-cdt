@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Symbian Software Systems and others.
+ * Copyright (c) 2007, 2010 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -40,7 +40,10 @@ public class URIRelativeLocationConverter implements IIndexLocationConverter {
 	}
 	
 	public IIndexFileLocation fromInternalFormat(String raw) {
-		URI uri= baseURI.resolve(URIUtil.toURI(raw).getRawPath().substring(1));
+		String rawPath = URIUtil.toURI(raw).getRawPath();
+		if (rawPath.length() > 0 && rawPath.charAt(0) == '/')
+			rawPath= rawPath.substring(1);
+		URI uri= baseURI.resolve(rawPath);
 		return new IndexFileLocation(uri, null);
 	}
 	

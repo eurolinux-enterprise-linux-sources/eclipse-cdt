@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -94,7 +94,7 @@ public class GCCPerFileBOPConsoleParser extends AbstractGCCBOPConsoleParser {
             return false;
         }
         // sanity check
-        if (filePath.indexOf(FILE_EXTENSIONS[extensionsIndex]) == -1) {
+        if (filePath==null || filePath.indexOf(FILE_EXTENSIONS[extensionsIndex]) == -1) {
             TraceUtil.outputTrace("Error identifying file name :2", tokens, TraceUtil.EOL); //$NON-NLS-1$
             return false;
         }
@@ -121,7 +121,7 @@ public class GCCPerFileBOPConsoleParser extends AbstractGCCBOPConsoleParser {
             
             IFile file= null;
             IPath baseDirectory= fUtil.getBaseDirectory();
-            if (baseDirectory.isPrefixOf(pFilePath)) {
+            if (baseDirectory.isPrefixOf(pFilePath) || baseDirectory.setDevice(null).isPrefixOf(pFilePath)) {
 				IPath relPath = pFilePath.removeFirstSegments(baseDirectory.segmentCount());
 				//Note: We add the scanner-config even if the resource doesn't actually
 				//exist below this project (which may happen when reading existing

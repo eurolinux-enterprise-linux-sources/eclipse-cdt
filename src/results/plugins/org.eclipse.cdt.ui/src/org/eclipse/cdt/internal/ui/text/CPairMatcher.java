@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2009 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -182,7 +182,7 @@ public class CPairMatcher extends DefaultCharacterPairMatcher {
 	 */
 	private boolean isTemplateParameterOpenBracket(int offset, IDocument document, CHeuristicScanner scanner) {
 		int prevToken= scanner.previousToken(offset - 1, Math.max(0, offset - ANGLE_BRACKETS_SEARCH_BOUND));
-		if (prevToken == Symbols.TokenIDENT) {
+		if (prevToken == Symbols.TokenIDENT || prevToken == Symbols.TokenTEMPLATE) {
 			return true;
 		}
 

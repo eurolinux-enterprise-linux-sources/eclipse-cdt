@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2005, 2009 IBM Corporation and others.
+ *  Copyright (c) 2005, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -11,6 +11,7 @@
  *     Markus Schorn (Wind River Systems)
  *     Anton Leherbauer (Wind River Systems)
  *     Sergey Prigogin (Google) 
+ *     Dmitry Kozlov (CodeSourcery)
  *******************************************************************************/
 package org.eclipse.cdt.internal.ui;
 
@@ -98,6 +99,8 @@ public class CPluginImages {
 	public static final String IMG_OBJS_TUNIT_RESOURCE_H= NAME_PREFIX + "ch_resource_obj.gif"; //$NON-NLS-1$
 	public static final String IMG_OBJS_TUNIT_RESOURCE_A= NAME_PREFIX + "asm_resource_obj.gif"; //$NON-NLS-1$
 	public static final String IMG_OBJS_SOURCE_ROOT=  NAME_PREFIX + "sroot_obj.gif"; // $NON-NLS-1$  //$NON-NLS-1$
+	public static final String IMG_OBJS_SOURCE2_ROOT=  NAME_PREFIX + "sroot2_obj.gif"; // $NON-NLS-1$  //$NON-NLS-1$
+	public static final String IMG_OBJS_FOLDER=  NAME_PREFIX + "fldr_obj.gif"; // $NON-NLS-1$  //$NON-NLS-1$
 	public static final String IMG_OBJS_CFOLDER=  NAME_PREFIX + "cfolder_obj.gif"; // $NON-NLS-1$  //$NON-NLS-1$
 	public static final String IMG_OBJS_CONFIG =  NAME_PREFIX + "config.gif"; // $NON-NLS-1$  //$NON-NLS-1$
 	public static final String IMG_OBJS_ARCHIVE= NAME_PREFIX + "ar_obj.gif"; //$NON-NLS-1$
@@ -114,11 +117,14 @@ public class CPluginImages {
 	public static final String IMG_OBJS_INCLUDES_CONTAINER = NAME_PREFIX + "includes_container.gif"; //$NON-NLS-1$
 	public static final String IMG_OBJS_INCLUDES_FOLDER = NAME_PREFIX + "hfolder_obj.gif"; //$NON-NLS-1$
 	public static final String IMG_OBJS_QUOTE_INCLUDES_FOLDER = NAME_PREFIX + "hfolder_quote_obj.gif"; //$NON-NLS-1$
+	public static final String IMG_OBJS_INCLUDES_FOLDER_SYSTEM = NAME_PREFIX + "fldr_sys_obj.gif"; //$NON-NLS-1$
 	public static final String IMG_OBJS_INCLUDES_FOLDER_WORKSPACE = NAME_PREFIX + "wsp_includefolder.gif"; //$NON-NLS-1$
 	public static final String IMG_OBJS_ORDER= NAME_PREFIX + "cp_order_obj.gif"; //$NON-NLS-1$
 	public static final String IMG_OBJS_EXCLUDSION_FILTER_ATTRIB= NAME_PREFIX + "exclusion_filter_attrib.gif"; //$NON-NLS-1$
 	public static final String IMG_OBJS_SOURCE_ATTACH_ATTRIB = NAME_PREFIX + "source_attach_attrib.gif"; //$NON-NLS-1$
 	public static final String IMG_OBJS_ARCHIVE_WSRC= NAME_PREFIX + "ar_src_obj.gif"; //$NON-NLS-1$
+	public static final String IMG_OBJS_IMPORT_SETTINGS = NAME_PREFIX + "import_settings_wiz.gif"; //$NON-NLS-1$
+	public static final String IMG_OBJS_EXPORT_SETTINGS = NAME_PREFIX + "export_settings_wiz.gif"; //$NON-NLS-1$
 
 	public static final String IMG_OBJS_PROJECT=NAME_PREFIX + "prj_obj.gif"; //$NON-NLS-1$
 
@@ -134,13 +140,15 @@ public class CPluginImages {
 
 	// build console
 	public static final String IMG_VIEW_BUILD = NAME_PREFIX + "buildconsole.gif"; //$NON-NLS-1$
-    public static final String IMG_VIEW_MENU = NAME_PREFIX + "view_menu.gif";   //$NON-NLS-1$
+	public static final String IMG_VIEW_MENU = NAME_PREFIX + "view_menu.gif";   //$NON-NLS-1$
+	public static final String IMG_SAVE_CONSOLE = NAME_PREFIX + "save_console.gif";   //$NON-NLS-1$
 
 	// unknown type
 	public static final String IMG_OBJS_UNKNOWN = NAME_PREFIX + "unknown_obj.gif"; //$NON-NLS-1$
 	
-    public static final ImageDescriptor DESC_BUILD_CONSOLE = createManaged(T_VIEW, IMG_VIEW_BUILD);
-    public static final ImageDescriptor IMG_VIEW_MENU_DESC = createManaged(T_VIEW, IMG_VIEW_MENU);
+	public static final ImageDescriptor DESC_BUILD_CONSOLE = createManaged(T_VIEW, IMG_VIEW_BUILD);
+	public static final ImageDescriptor IMG_VIEW_MENU_DESC = createManaged(T_VIEW, IMG_VIEW_MENU);
+	public static final ImageDescriptor IMG_SAVE_CONSOLE_DESC = createManaged(T_VIEW, IMG_SAVE_CONSOLE);
 
 	public static final ImageDescriptor DESC_OBJS_VARIABLE= createManaged(T_OBJ, IMG_OBJS_VARIABLE);
 	public static final ImageDescriptor DESC_OBJS_LOCAL_VARIABLE= createManaged(T_OBJ, IMG_OBJS_LOCAL_VARIABLE);
@@ -180,6 +188,8 @@ public class CPluginImages {
 	public static final ImageDescriptor DESC_OBJS_TUNIT_RESOURCE_H= createManaged(T_OBJ, IMG_OBJS_TUNIT_RESOURCE_H);
 	public static final ImageDescriptor DESC_OBJS_TUNIT_RESOURCE_A= createManaged(T_OBJ, IMG_OBJS_TUNIT_RESOURCE_A);
 	public static final ImageDescriptor DESC_OBJS_SOURCE_ROOT= createManaged(T_OBJ, IMG_OBJS_SOURCE_ROOT);
+	public static final ImageDescriptor DESC_OBJS_SOURCE2_ROOT= createManaged(T_OBJ, IMG_OBJS_SOURCE2_ROOT);
+	public static final ImageDescriptor DESC_OBJS_FOLDER= createManaged(T_OBJ, IMG_OBJS_FOLDER);
 	public static final ImageDescriptor DESC_OBJS_CFOLDER= createManaged(T_OBJ, IMG_OBJS_CFOLDER);
 	public static final ImageDescriptor DESC_OBJS_CONFIG = createManaged(T_OBJ, IMG_OBJS_CONFIG);
 	public static final ImageDescriptor DESC_OBJS_ARCHIVE= createManaged(T_OBJ, IMG_OBJS_ARCHIVE);
@@ -197,10 +207,13 @@ public class CPluginImages {
 	public static final ImageDescriptor DESC_OBJS_INCLUDES_CONTAINER= createManaged(T_OBJ, IMG_OBJS_INCLUDES_CONTAINER);
 	public static final ImageDescriptor DESC_OBJS_INCLUDES_FOLDER= createManaged(T_OBJ, IMG_OBJS_INCLUDES_FOLDER);
 	public static final ImageDescriptor DESC_OBJS_QUOTE_INCLUDES_FOLDER= createManaged(T_OBJ, IMG_OBJS_QUOTE_INCLUDES_FOLDER);
+	public static final ImageDescriptor DESC_OBJS_INCLUDES_FOLDER_SYSTEM  = createManaged(T_OBJ, IMG_OBJS_INCLUDES_FOLDER_SYSTEM);
 	public static final ImageDescriptor DESC_OBJS_INCLUDES_FOLDER_WORKSPACE= createManaged(T_OBJ, IMG_OBJS_INCLUDES_FOLDER_WORKSPACE);
 	public static final ImageDescriptor DESC_OBJS_ORDER= createManaged(T_OBJ, IMG_OBJS_ORDER);
 	public static final ImageDescriptor DESC_OBJS_EXCLUSION_FILTER_ATTRIB = createManaged(T_OBJ, IMG_OBJS_EXCLUDSION_FILTER_ATTRIB);
 	public static final ImageDescriptor DESC_OBJS_SOURCE_ATTACH_ATTRIB= createManaged(T_OBJ, IMG_OBJS_SOURCE_ATTACH_ATTRIB);
+	public static final ImageDescriptor DESC_OBJS_IMPORT_SETTINGS = createManaged(T_OBJ, IMG_OBJS_IMPORT_SETTINGS);
+	public static final ImageDescriptor DESC_OBJS_EXPORT_SETTINGS = createManaged(T_OBJ, IMG_OBJS_EXPORT_SETTINGS);
 	public static final ImageDescriptor DESC_OVR_PATH_INHERIT= create(T_OVR, "path_inherit_co.gif"); //$NON-NLS-1$
 	public static final ImageDescriptor DESC_OVR_FOCUS= create(T_OVR, "focus_ovr.gif"); //$NON-NLS-1$
 
@@ -279,7 +292,8 @@ public class CPluginImages {
     public static final ImageDescriptor DESC_OVR_READ_WRITE_ACCESS= create(T_OVR, "readwrite.gif"); //$NON-NLS-1$
     public static final ImageDescriptor DESC_OVR_WRITE_ACCESS= create(T_OVR, "write.gif"); //$NON-NLS-1$
 	public static final ImageDescriptor DESC_OVR_EXTERNAL_FILE= create(T_OVR, "external_file.gif"); //$NON-NLS-1$
-    
+	public static final ImageDescriptor DESC_OVR_SETTING= create(T_OVR, "setting_nav.gif"); //$NON-NLS-1$
+
 	public static final ImageDescriptor DESC_OVR_WARNING= create(T_OVR, "warning_co.gif"); //$NON-NLS-1$
 	public static final ImageDescriptor DESC_OVR_ERROR= create(T_OVR, "error_co.gif"); //$NON-NLS-1$
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -34,7 +34,7 @@ public class NumberFormatDetailPaneFactory implements IDetailPaneFactory {
     /* (non-Javadoc)
      * @see org.eclipse.debug.internal.ui.views.variables.IDetailsFactory#getDetailsTypes(org.eclipse.jface.viewers.IStructuredSelection)
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     public Set getDetailPaneTypes(IStructuredSelection selection) {
         Set<String> possibleIDs = new HashSet<String>(1);
         possibleIDs.add(NumberFormatDetailPane.ID);
@@ -45,7 +45,7 @@ public class NumberFormatDetailPaneFactory implements IDetailPaneFactory {
      * @see org.eclipse.debug.ui.IDetailPaneFactory#getDefaultDetailPane(java.util.Set, org.eclipse.jface.viewers.IStructuredSelection)
      */
     public String getDefaultDetailPane(IStructuredSelection selection) {
-        return NumberFormatDetailPane.ID;
+        return null; // Allow competing detail pane factories to override this one
     }
 
     /* (non-Javadoc)

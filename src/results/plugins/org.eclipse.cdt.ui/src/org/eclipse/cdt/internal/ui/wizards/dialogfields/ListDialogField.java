@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2009 IBM Corporation and others.
+ * Copyright (c) 2001, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -15,6 +15,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.eclipse.core.runtime.Assert;
+import org.eclipse.jface.layout.PixelConverter;
 import org.eclipse.jface.viewers.ColumnLayoutData;
 import org.eclipse.jface.viewers.ColumnWeightData;
 import org.eclipse.jface.viewers.DoubleClickEvent;
@@ -45,7 +46,6 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
 
-import org.eclipse.cdt.internal.ui.util.PixelConverter;
 import org.eclipse.cdt.internal.ui.util.SWTUtil;
 import org.eclipse.cdt.internal.ui.util.TableLayoutComposite;
 
@@ -193,7 +193,6 @@ public class ListDialogField<T> extends DialogField {
 	}
 	
 	
-	
 	// ------ adapter communication
 	
 	private void buttonPressed(int index) {
@@ -239,7 +238,7 @@ public class ListDialogField<T> extends DialogField {
 		Control list= getListControl(parent);
 		gd= new GridData();
 		gd.horizontalAlignment= GridData.FILL;
-		gd.grabExcessHorizontalSpace= false;
+		gd.grabExcessHorizontalSpace= true;
 		gd.verticalAlignment= GridData.FILL;
 		gd.grabExcessVerticalSpace= true;
 		gd.horizontalSpan= nColumns - 2;
@@ -645,7 +644,6 @@ public class ListDialogField<T> extends DialogField {
 		dialogFieldChanged();
 	}	
 
-
 	/**
 	 * Adds an element at a position.
 	 */	
@@ -692,7 +690,6 @@ public class ListDialogField<T> extends DialogField {
 	public int getSize() {
 		return fElements.size();
 	}
-	
 
 	public void selectElements(ISelection selection) {
 		fSelectionWhenEnabled= selection;
@@ -718,7 +715,6 @@ public class ListDialogField<T> extends DialogField {
 			selectElements(new StructuredSelection(element));
 		}
 	}
-	
 		
 	public void postSetSelection(final ISelection selection) {
 		if (isOkToUse(fTableControl)) {
@@ -786,7 +782,6 @@ public class ListDialogField<T> extends DialogField {
 		}
 		return reverse;
 	}
-	
 	
 	private void remove() {
 		removeElements(getSelectedElements());
@@ -872,9 +867,7 @@ public class ListDialogField<T> extends DialogField {
 		public void doubleClick(DoubleClickEvent event) {
 			doDoubleClick(event);
 		}
-
 	}
-	
 	
 	protected void doListSelected(SelectionChangedEvent event) {
 		updateButtonState();
@@ -888,7 +881,4 @@ public class ListDialogField<T> extends DialogField {
 			fListAdapter.doubleClicked(this);
 		}
 	}	
-
-
-
 }

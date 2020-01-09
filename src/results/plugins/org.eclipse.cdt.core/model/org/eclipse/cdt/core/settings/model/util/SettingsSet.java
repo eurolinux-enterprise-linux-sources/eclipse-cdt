@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -226,7 +226,7 @@ public class SettingsSet {
 	}
 	
 	public SettingLevel[] getLevels(){
-		return (SettingLevel[])fLevels.clone();
+		return fLevels.clone();
 	}
 	
 	public void adjustOverrideState(){
@@ -317,7 +317,7 @@ public class SettingsSet {
 		for(int i = 0; i < entries.length; i++){
 			entry = entries[i];
 			EntryNameKey key = new EntryNameKey(entry);
-			Object[] o = (Object[])map.get(key);
+			Object[] o = map.get(key);
 
 			
 			if(o != null && valueMatches(entry, o[1])){
@@ -336,7 +336,7 @@ public class SettingsSet {
 					Map<EntryNameKey, EntryInfo> clearedInfo = clearedInfos[levelNum];
 					Object customInfo = null;
 					if(clearedInfo != null){
-						EntryInfo info = (EntryInfo)clearedInfo.get(key);
+						EntryInfo info = clearedInfo.get(key);
 						if(info != null && entry.equalsByContents(info.getEntry()))
 							customInfo = info.getCustomInfo();
 					}

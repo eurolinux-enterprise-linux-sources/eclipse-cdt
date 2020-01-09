@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2008, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,6 +21,7 @@ import org.eclipse.core.runtime.IAdaptable;
 /**
  * Base implementation for all code reader factories.
  */
+@Deprecated
 public abstract class AbstractCodeReaderFactory implements ICodeReaderFactory, IAdaptable {
 
 	private final IIncludeFileResolutionHeuristics fHeuristics;
@@ -29,7 +30,7 @@ public abstract class AbstractCodeReaderFactory implements ICodeReaderFactory, I
 		fHeuristics= heuristics;
 	}
 	
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public Object getAdapter(Class adapter) {
 		if (adapter.isAssignableFrom(IIncludeFileResolutionHeuristics.class)) {
 			return fHeuristics;

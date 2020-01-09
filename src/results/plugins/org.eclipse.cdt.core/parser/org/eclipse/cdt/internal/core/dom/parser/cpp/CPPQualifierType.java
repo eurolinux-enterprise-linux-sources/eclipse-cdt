@@ -6,23 +6,21 @@
  *  http://www.eclipse.org/legal/epl-v10.html
  * 
  *  Contributors:
- *     IBM Corporation - initial API and implementation
+ *     Andrew Niefer (IBM Corporation) - initial API and implementation
  *     Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
 
 import org.eclipse.cdt.core.dom.ast.ASTTypeUtil;
-import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IQualifierType;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
+import org.eclipse.cdt.internal.core.dom.parser.ISerializableType;
 import org.eclipse.cdt.internal.core.dom.parser.ITypeContainer;
-import org.eclipse.cdt.internal.core.index.IIndexType;
+import org.eclipse.cdt.internal.core.dom.parser.ITypeMarshalBuffer;
+import org.eclipse.core.runtime.CoreException;
 
-/**
- * @author aniefer
- */
-public class CPPQualifierType implements IQualifierType, ITypeContainer {
+public class CPPQualifierType implements IQualifierType, ITypeContainer, ISerializableType {
     private final boolean isConst;
     private final boolean isVolatile;
     private IType type;
@@ -34,17 +32,14 @@ public class CPPQualifierType implements IQualifierType, ITypeContainer {
     }
     
     public boolean isSameType(IType o) {
-		if (o instanceof ITypedef || o instanceof IIndexType)
+		if (o instanceof ITypedef)
 			return o.isSameType(this);
 		if (!(o instanceof IQualifierType))
 			return false;
 
 		IQualifierType pt = (IQualifierType) o;
-		try {
-			if (isConst() == pt.isConst() && isVolatile() == pt.isVolatile())
-				return type.isSameType(pt.getType());
-		} catch (DOMException e) {
-		}
+		if (isConst() == pt.isConst() && isVolatile() == pt.isVolatile() && type != null)
+			return type.isSameType(pt.getType());
 		return false;
 	}
     
@@ -87,5 +82,19 @@ public class CPPQualifierType implements IQualifierType, ITypeContainer {
 	@Override
 	public String toString() {
 		return ASTTypeUtil.getType(this);
+	}
+
+	public void marshal(ITypeMarshalBuffer buffer) throws CoreException {
+		int firstByte= ITypeMarshalBuffer.CVQUALIFIER;
+		if (isConst()) firstByte |= ITypeMarshalBuffer.FLAG1;
+		if (isVolatile()) firstByte |= ITypeMarshalBuffer.FLAG2;
+		buffer.putByte((byte) firstByte);
+		buffer.marshalType(getType());
+	}
+	
+	public static IType unmarshal(int firstByte, ITypeMarshalBuffer buffer) throws CoreException {
+		IType nested= buffer.unmarshalType();
+		return new CPPQualifierType(nested, (firstByte & ITypeMarshalBuffer.FLAG1) != 0,
+				(firstByte & ITypeMarshalBuffer.FLAG2) != 0);
 	}
 }

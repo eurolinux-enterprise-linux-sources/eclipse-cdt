@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,6 +17,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.eclipse.cdt.debug.ui.CDebugUIPlugin;
 import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.ThreadSafe;
@@ -35,7 +36,6 @@ import org.eclipse.cdt.dsf.internal.ui.DsfUIPlugin;
 import org.eclipse.cdt.dsf.service.DsfSession;
 import org.eclipse.cdt.dsf.ui.viewmodel.AbstractVMAdapter;
 import org.eclipse.cdt.dsf.ui.viewmodel.IRootVMNode;
-import org.eclipse.cdt.dsf.ui.viewmodel.IVMModelProxy;
 import org.eclipse.cdt.dsf.ui.viewmodel.IVMNode;
 import org.eclipse.cdt.dsf.ui.viewmodel.datamodel.AbstractDMVMProvider;
 import org.eclipse.cdt.dsf.ui.viewmodel.update.AutomaticUpdatePolicy;
@@ -46,6 +46,7 @@ import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.IDebugEventSetListener;
 import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.ILaunchesListener2;
+import org.eclipse.debug.internal.ui.viewers.model.provisional.IModelDelta;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IPresentationContext;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.util.IPropertyChangeListener;
@@ -85,6 +86,15 @@ public class AbstractLaunchVMProvider extends AbstractDMVMProvider
 				handlePropertyChanged(store, event);
 			}};
         store.addPropertyChangeListener(fPreferencesListener);
+
+        final IPreferenceStore cStore= CDebugUIPlugin.getDefault().getPreferenceStore();
+       	getPresentationContext().setProperty(IDsfDebugUIConstants.DEBUG_VIEW_SHOW_FULL_PATH_PROPERTY, cStore.getBoolean(IDsfDebugUIConstants.DEBUG_VIEW_SHOW_FULL_PATH_PROPERTY));
+		cStore.addPropertyChangeListener(fPreferencesListener);
+ 
+        // Register the LaunchVM provider as a listener to debug and launch 
+        // events.  These events are used by the launch and processes nodes.
+        DebugPlugin.getDefault().addDebugEventListener(this);
+        DebugPlugin.getDefault().getLaunchManager().addLaunchListener(this);
     }
     
     @Override
@@ -98,8 +108,8 @@ public class AbstractLaunchVMProvider extends AbstractDMVMProvider
     public void handleDebugEvents(final DebugEvent[] events) {
         if (isDisposed()) return;
         
-        // We're in session's executor thread.  Re-dispach to VM Adapter 
-        // executor thread and then call root layout node.
+		// We're in session's executor thread. Re-dispatch to our executor thread
+		// and then call root layout node.
         try {
             getExecutor().execute(new Runnable() {
                 public void run() {
@@ -135,21 +145,13 @@ public class AbstractLaunchVMProvider extends AbstractDMVMProvider
 						    }
 						});
                     }
+                    if (rm != null) {
+                    	rm.done();
+                    }
+                    return;
                 }
             }
-            if (rm != null) {
-            	rm.done();
-            }
-            return;
-        }
-    	super.handleEvent(event, rm);
-    }
-
-    @Override
-    protected void handleEvent(IVMModelProxy proxyStrategy, final Object event, RequestMonitor rm) {
-    	super.handleEvent(proxyStrategy, event, rm);
-    	
-		if (event instanceof IRunControl.ISuspendedDMEvent) {
+        } else if (event instanceof IRunControl.ISuspendedDMEvent) {
     		final IExecutionDMContext exeContext= ((IRunControl.ISuspendedDMEvent) event).getDMContext();
     		ScheduledFuture<?> refreshStackFramesFuture = getRefreshFuture(exeContext);
     		// trigger delayed full stack frame update
@@ -158,24 +160,26 @@ public class AbstractLaunchVMProvider extends AbstractDMVMProvider
     			refreshStackFramesFuture.cancel(false);
     		}
 
-    		refreshStackFramesFuture = getSession().getExecutor().schedule(
-	            new DsfRunnable() { 
-	                public void run() {
-	                    if (getSession().isActive()) {
-	                        getExecutor().execute(new Runnable() {
-	                            public void run() {
-	                                // trigger full stack frame update
-	                                ScheduledFuture<?> future= fRefreshStackFramesFutures.get(exeContext);
-	                                if (future != null && !isDisposed()) {
-	                                    fRefreshStackFramesFutures.remove(exeContext);
-	                                    handleEvent(new FullStackRefreshEvent(exeContext), null);
-	                                }
-	                            }});
-	                    }
-	                }
-	            },
-			    FRAME_UPDATE_DELAY, TimeUnit.MILLISECONDS);
-			fRefreshStackFramesFutures.put(exeContext, refreshStackFramesFuture);
+    		try {
+        		refreshStackFramesFuture = getSession().getExecutor().schedule(
+    	            new DsfRunnable() { 
+    	                public void run() {
+    	                    if (getSession().isActive()) {
+    	                        getExecutor().execute(new Runnable() {
+    	                            public void run() {
+    	                                // trigger full stack frame update
+    	                                ScheduledFuture<?> future= fRefreshStackFramesFutures.get(exeContext);
+    	                                if (future != null && !isDisposed()) {
+    	                                    fRefreshStackFramesFutures.remove(exeContext);
+    	                                    handleEvent(new FullStackRefreshEvent(exeContext), null);
+    	                                }
+    	                            }});
+    	                    }
+    	                }
+    	            },
+    			    FRAME_UPDATE_DELAY, TimeUnit.MILLISECONDS);
+        		fRefreshStackFramesFutures.put(exeContext, refreshStackFramesFuture);
+    		} catch (RejectedExecutionException e) {}
     	} else if (event instanceof IRunControl.IResumedDMEvent) {
     		IExecutionDMContext exeContext= ((IRunControl.IResumedDMEvent) event).getDMContext();
     		ScheduledFuture<?> refreshStackFramesFuture= fRefreshStackFramesFutures.get(exeContext);
@@ -185,7 +189,8 @@ public class AbstractLaunchVMProvider extends AbstractDMVMProvider
     			fRefreshStackFramesFutures.remove(exeContext);
     		}
     	}
-		
+
+    	super.handleEvent(event, rm);
     }
 
     /**
@@ -209,6 +214,9 @@ public class AbstractLaunchVMProvider extends AbstractDMVMProvider
         final IPreferenceStore store= DsfUIPlugin.getDefault().getPreferenceStore();
         store.removePropertyChangeListener(fPreferencesListener);
 
+        final IPreferenceStore cStore= CDebugUIPlugin.getDefault().getPreferenceStore();
+        cStore.removePropertyChangeListener(fPreferencesListener);
+
         super.dispose();
     }
     
@@ -231,15 +239,15 @@ public class AbstractLaunchVMProvider extends AbstractDMVMProvider
     private void handleLaunchesEvent(final LaunchesEvent event) {
         if (isDisposed()) return;
         
-        // We're in session's executor thread.  Re-dispach to VM Adapter 
-        // executor thread and then call root layout node.
+		// We're in session's executor thread. Re-dispach to our executor thread
+		// and then call root layout node.
         try {
             getExecutor().execute(new Runnable() {
                 public void run() {
                     if (isDisposed()) return;
     
                     IRootVMNode rootLayoutNode = getRootVMNode();
-                    if (rootLayoutNode != null && rootLayoutNode.getDeltaFlags(event) != 0) {
+                    if (rootLayoutNode != null && rootLayoutNode.getDeltaFlags(event) != IModelDelta.NO_CHANGE) {
                         handleEvent(event);
                     }
                 }});
@@ -275,6 +283,8 @@ public class AbstractLaunchVMProvider extends AbstractDMVMProvider
 
 	protected void handlePropertyChanged(final IPreferenceStore store, final PropertyChangeEvent event) {
 		String property = event.getProperty();
+		boolean processEvent = false;
+		
 		if (IDsfDebugUIConstants.PREF_STACK_FRAME_LIMIT_ENABLE.equals(property)
 				|| IDsfDebugUIConstants.PREF_STACK_FRAME_LIMIT.equals(property)) {
 			if (store.getBoolean(IDsfDebugUIConstants.PREF_STACK_FRAME_LIMIT_ENABLE)) {
@@ -282,6 +292,13 @@ public class AbstractLaunchVMProvider extends AbstractDMVMProvider
 			} else {
 		    	getPresentationContext().setProperty(IDsfDebugUIConstants.PREF_STACK_FRAME_LIMIT, null);
 			}
+			processEvent = true;
+		} else if (IDsfDebugUIConstants.DEBUG_VIEW_SHOW_FULL_PATH_PROPERTY.equals(property)) {
+			getPresentationContext().setProperty(IDsfDebugUIConstants.DEBUG_VIEW_SHOW_FULL_PATH_PROPERTY, event.getNewValue());
+			processEvent = true;
+		}
+		
+		if (processEvent) {
 			getExecutor().execute(new DsfRunnable() {
 			    public void run() {
 			        handleEvent(event);

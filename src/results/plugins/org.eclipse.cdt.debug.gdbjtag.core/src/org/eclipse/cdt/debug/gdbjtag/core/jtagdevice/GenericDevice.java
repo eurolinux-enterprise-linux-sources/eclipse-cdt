@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 QNX Software Systems and others.
+ * Copyright (c) 2008, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,19 +18,19 @@ public class GenericDevice extends DefaultGDBJtagDeviceImpl {
 	/* (non-Javadoc)
 	 * @see org.eclipse.cdt.debug.gdbjtag.core.jtagdevice.DefaultGDBJtagDeviceImpl#doDelay(int, java.util.Collection)
 	 */
-	public void doDelay(int delay, Collection commands) {
+	public void doDelay(int delay, Collection <String>commands) {
 	}
 
 	/* (non-Javadoc)
 	 * @see org.eclipse.cdt.debug.gdbjtag.core.jtagdevice.DefaultGDBJtagDeviceImpl#doHalt(java.util.Collection)
 	 */
-	public void doHalt(Collection commands) {
+	public void doHalt(Collection<String> commands) {
 	}
 
 	/* (non-Javadoc)
 	 * @see org.eclipse.cdt.debug.gdbjtag.core.jtagdevice.DefaultGDBJtagDeviceImpl#doReset(java.util.Collection)
 	 */
-	public void doReset(Collection commands) {
+	public void doReset(Collection<String> commands) {
 	}
 
 }

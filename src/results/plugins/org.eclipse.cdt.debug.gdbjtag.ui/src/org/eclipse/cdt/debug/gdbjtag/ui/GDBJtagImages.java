@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 QNX Software Systems and others.
+ * Copyright (c) 2007, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,7 +14,6 @@ package org.eclipse.cdt.debug.gdbjtag.ui;
 import java.net.MalformedURLException;
 import java.net.URL;
 
-import org.eclipse.cdt.launch.internal.ui.LaunchUIPlugin;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.resource.ImageRegistry;
 import org.eclipse.swt.graphics.Image;
@@ -59,7 +58,7 @@ public class GDBJtagImages {
 		try {
 			return new URL(iconBaseURL, buffer.toString());
 		} catch (MalformedURLException e) {
-			LaunchUIPlugin.log(e);
+			Activator.log(e);
 			return null;
 		}
 	}

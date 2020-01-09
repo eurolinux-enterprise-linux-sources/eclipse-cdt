@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,13 +18,83 @@ package org.eclipse.cdt.core.dom.ast;
  * @noimplement This interface is not intended to be implemented by clients.
  */
 public interface IBasicType extends IType {
+	/**
+	 * @since 5.2
+	 */
+	enum Kind {
+		eUnspecified, eVoid, eChar, eWChar, eInt, eFloat, eDouble, eBoolean, eChar16, eChar32
+	}
+	
+	/**
+	 * @since 5.2
+	 */
+	final int IS_LONG     = 1;
+	/**
+	 * @since 5.2
+	 */
+	final int IS_SHORT    = 1 << 1;
+	/**
+	 * @since 5.2
+	 */
+	final int IS_SIGNED   = 1 << 2;
+	/**
+	 * @since 5.2
+	 */
+	final int IS_UNSIGNED = 1 << 3;
+	/**
+	 * @since 5.2
+	 */
+	final int IS_COMPLEX  = 1 << 4;	
+	/**
+	 * @since 5.2
+	 */
+	final int IS_IMAGINARY = 1 << 5;  
+	/**
+	 * @since 5.2
+	 */
+	final int IS_LONG_LONG = 1 << 6;  
+
 
 	/**
-	 * This returns the built-in type for the declaration. The type is
-	 * then refined by qualifiers for signed/unsigned and short/long.
-	 * The type could also be unspecified which usually means int.
-	 * 
+	 * This returns the kind of basic type you are looking at. The type is
+ 	 * then refined by qualifiers for signed/unsigned and short/long/long long.
+	 * @since 5.2
 	 */
+	Kind getKind();
+	
+	/**
+	 * This returns the combination of modifier bits for this type.
+	 * @since 5.2
+	 */
+	int getModifiers();
+	
+	public boolean isSigned();
+	public boolean isUnsigned();
+	public boolean isShort();
+	public boolean isLong();
+	/**
+	 * @since 5.2
+	 */
+	public boolean isLongLong();
+
+	/**
+	 * Is complex number? e.g. _Complex t;
+	 * @return true if it is a complex number, false otherwise
+	 * @since 5.2
+	 */
+	public boolean isComplex();
+	
+	/**
+	 * Is imaginary number? e.g. _Imaginr
+	 * @return true if it is an imaginary number, false otherwise
+	 * @since 5.2
+	 */
+	public boolean isImaginary();
+
+	/**
+	 * @deprecated, use the type-safe version getKind(), instead.
+	 */
+	@Deprecated
 	public int getType() throws DOMException;
 	
 	/**
@@ -33,15 +103,34 @@ public interface IBasicType extends IType {
 	@Deprecated
 	public IASTExpression getValue() throws DOMException;
 	
+	/**
+	 * @deprecated,  use the type-safe version getKind(), instead.
+	 */
+	@Deprecated
 	public static final int t_unspecified = IASTSimpleDeclSpecifier.t_unspecified;
+	/**
+	 * @deprecated,  use the type-safe version getKind(), instead.
+	 */
+	@Deprecated
 	public static final int t_void = IASTSimpleDeclSpecifier.t_void;
+	/**
+	 * @deprecated,  use the type-safe version getKind(), instead.
+	 */
+	@Deprecated
 	public static final int t_char = IASTSimpleDeclSpecifier.t_char;
+	/**
+	 * @deprecated,  use the type-safe version getKind(), instead.
+	 */
+	@Deprecated
 	public static final int t_int = IASTSimpleDeclSpecifier.t_int;
+	/**
+	 * @deprecated,  use the type-safe version getKind(), instead.
+	 */
+	@Deprecated
 	public static final int t_float = IASTSimpleDeclSpecifier.t_float;
+	/**
+	 * @deprecated,  use the type-safe version getKind(), instead.
+	 */
+	@Deprecated
 	public static final int t_double = IASTSimpleDeclSpecifier.t_double;
-	
-	public boolean isSigned() throws DOMException;
-	public boolean isUnsigned() throws DOMException;
-	public boolean isShort() throws DOMException;
-	public boolean isLong() throws DOMException;
 }

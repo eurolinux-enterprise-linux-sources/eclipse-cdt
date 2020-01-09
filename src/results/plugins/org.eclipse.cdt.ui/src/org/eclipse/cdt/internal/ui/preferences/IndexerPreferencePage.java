@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2008 QNX Software Systems and others.
+ * Copyright (c) 2005, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,7 +14,6 @@ package org.eclipse.cdt.internal.ui.preferences;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.NullProgressMonitor;
-import org.eclipse.core.runtime.Preferences;
 import org.eclipse.jface.preference.PreferencePage;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.GridData;
@@ -43,6 +42,7 @@ public class IndexerPreferencePage extends PreferencePage implements
 	
 	public IndexerPreferencePage(){
 		fOptionBlock = new IndexerBlock();
+		fOptionBlock.setContainer(this);
 		fStrategyBlock= new IndexerStrategyBlock(this);
 		fCacheBlock= new CacheSizeBlock(this);
 	}
@@ -88,7 +88,8 @@ public class IndexerPreferencePage extends PreferencePage implements
 		return null;
 	}
 
-	public Preferences getPreferences() {
+	@SuppressWarnings("deprecation")
+	public org.eclipse.core.runtime.Preferences getPreferences() {
 		throw new UnsupportedOperationException();
 	}
 

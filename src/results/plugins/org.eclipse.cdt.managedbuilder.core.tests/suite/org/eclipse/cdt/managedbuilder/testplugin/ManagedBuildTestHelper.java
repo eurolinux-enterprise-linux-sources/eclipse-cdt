@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 Intel Corporation and others.
+ * Copyright (c) 2004, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,7 @@
  *******************************************************************************/
 package org.eclipse.cdt.managedbuilder.testplugin;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileReader;
@@ -18,7 +19,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.zip.ZipFile;
 
 import junit.framework.Assert;
@@ -59,6 +63,7 @@ import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Path;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.ui.dialogs.IOverwriteQuery;
 import org.eclipse.ui.wizards.datatransfer.ImportOperation;
 import org.eclipse.ui.wizards.datatransfer.ZipFileStructureProvider;
@@ -70,7 +75,6 @@ public class ManagedBuildTestHelper {
 	private static final String rcbsToolInputTypeName = new String("Resource Custom Build Step Input Type");	//$NON-NLS-1$
 	private static final String rcbsToolOutputTypeId = new String("org.eclipse.cdt.managedbuilder.ui.rcbs.outputtype");	//$NON-NLS-1$
 	private static final String rcbsToolOutputTypeName = new String("Resource Custom Build Step Output Type");	//$NON-NLS-1$
-	private static final String PATH_SEPERATOR = ";";	//$NON-NLS-1$
 
 	
 	/* (non-Javadoc)
@@ -118,6 +122,17 @@ public class ManagedBuildTestHelper {
 		// Open the project if we have to
 		if (!project.isOpen()) {
 			project.open(new NullProgressMonitor());
+			// CDT opens the Project with BACKGROUND_REFRESH enabled which causes the 
+			// refresh manager to refresh the project 200ms later.  This Job interferes
+			// with the resource change handler firing see: bug 271264
+			try {
+				// CDT opens the Project with BACKGROUND_REFRESH enabled which causes the 
+				// refresh manager to refresh the project 200ms later.  This Job interferes
+				// with the resource change handler firing see: bug 271264
+				Job.getJobManager().join(ResourcesPlugin.FAMILY_AUTO_REFRESH, null);
+			} catch (Exception e) {
+				// Ignore
+			}
 		}
 				
 		return project;	
@@ -291,7 +306,6 @@ public class ManagedBuildTestHelper {
 				addManagedBuildNature(project);
 				
 				// Find the base project type definition
-				IProjectType[] projTypes = ManagedBuildManager.getDefinedProjectTypes();
 				IProjectType projType = ManagedBuildManager.getProjectType(projectTypeId);
 				Assert.assertNotNull(projType);
 				
@@ -301,6 +315,7 @@ public class ManagedBuildTestHelper {
 					newProject = ManagedBuildManager.createManagedProject(project, projType);
 				} catch (Exception e) {
 					Assert.fail("Failed to create managed project for: " + project.getName());
+					return;
 				}
 				Assert.assertEquals(newProject.getName(), projType.getName());
 				Assert.assertFalse(newProject.equals(projType));
@@ -332,6 +347,17 @@ public class ManagedBuildTestHelper {
 		} catch (CoreException e2) {
 			Assert.fail(e2.getLocalizedMessage());
 		}
+		// CDT opens the Project with BACKGROUND_REFRESH enabled which causes the 
+		// refresh manager to refresh the project 200ms later.  This Job interferes
+		// with the resource change handler firing see: bug 271264
+		try {
+			// CDT opens the Project with BACKGROUND_REFRESH enabled which causes the 
+			// refresh manager to refresh the project 200ms later.  This Job interferes
+			// with the resource change handler firing see: bug 271264
+			Job.getJobManager().join(ResourcesPlugin.FAMILY_AUTO_REFRESH, null);
+		} catch (Exception e) {
+			// Ignore
+		}
 
 		// Initialize the path entry container
 		IStatus initResult = ManagedBuildManager.initBuildInfoContainer(project);
@@ -344,6 +370,7 @@ public class ManagedBuildTestHelper {
 	static public void addManagedBuildNature (IProject project) {
 		// Create the buildinformation object for the project
 		IManagedBuildInfo info = ManagedBuildManager.createBuildInfo(project);
+		Assert.assertNotNull(info);
 //		info.setValid(true);
 		
 		// Add the managed build nature
@@ -362,6 +389,7 @@ public class ManagedBuildTestHelper {
 			desc.create(CCorePlugin.BUILD_SCANNER_INFO_UNIQ_ID, ManagedBuildManager.INTERFACE_IDENTITY);
 		} catch (CoreException e) {
 			Assert.fail("Test failed on adding managed builder as scanner info provider: " + e.getLocalizedMessage());
+			return;
 		}
 		try {
 			desc.saveProjectData();
@@ -369,7 +397,7 @@ public class ManagedBuildTestHelper {
 			Assert.fail("Test failed on saving the ICDescriptor data: " + e.getLocalizedMessage());		}
 	}
 	
-	static public boolean compareBenchmarks(final IProject project, IPath testDir, IPath[] files) {
+	static public boolean compareBenchmarks(final IProject project, IPath testLocationBase, IPath[] files, IPath benchmarkLocationBase) {
 		IWorkspace workspace = ResourcesPlugin.getWorkspace();
 		IWorkspaceRunnable runnable = new IWorkspaceRunnable() {
 			public void run(IProgressMonitor monitor) throws CoreException {
@@ -383,13 +411,18 @@ public class ManagedBuildTestHelper {
 			Assert.fail("File " + files[0].lastSegment() + " - project refresh failed.");
 		}
 		for (int i=0; i<files.length; i++) {
-			IPath testFile = testDir.append(files[i]);
-			IPath benchmarkFile = Path.fromOSString("Benchmarks/" + files[i]);
-			StringBuffer testBuffer = readContentsStripLineEnds(project, testFile);
-			StringBuffer benchmarkBuffer = readContentsStripLineEnds(project, benchmarkFile);
+			IPath testFileLocation = testLocationBase.append(files[i]);
+			IPath benchmarkFileLocation = benchmarkLocationBase.append("Benchmarks").append(files[i]);
+			if (isMakefile(testFileLocation)) {
+				if (compareMakefiles(testFileLocation, benchmarkFileLocation)) {
+					continue;
+				}
+			}
+			StringBuffer testBuffer = readContentsStripLineEnds(project, testFileLocation);
+			StringBuffer benchmarkBuffer = readContentsStripLineEnds(project, benchmarkFileLocation);
 			if (!testBuffer.toString().equals(benchmarkBuffer.toString())) {
 				StringBuffer buffer = new StringBuffer();
-				buffer.append("File ").append(testFile.lastSegment()).append(" does not match its benchmark.\n ");
+				buffer.append("File ").append(testFileLocation.lastSegment()).append(" does not match its benchmark.\n ");
 				buffer.append("expected:\n ");
 				buffer.append("\"").append(benchmarkBuffer).append("\"");
 				buffer.append("\n\n ");
@@ -398,8 +431,12 @@ public class ManagedBuildTestHelper {
 				buffer.append("\n\n ");
 				
 				buffer.append(">>>>>>>>>>>>>>>start diff: \n");
-				String location1 = getFileLocation(project, benchmarkFile);
-				String location2 = getFileLocation(project, testFile);
+				String location1 = benchmarkFileLocation.isAbsolute()
+					? benchmarkFileLocation.toString()
+					: getFileLocation(project, benchmarkFileLocation);
+				String location2 = testFileLocation.isAbsolute()
+					? testFileLocation.toString()
+					: getFileLocation(project, testFileLocation);
 				String diff = DiffUtil.getInstance().diff(location1, location2);
 				if(diff == null)
 					diff = "!diff failed!";
@@ -411,6 +448,189 @@ public class ManagedBuildTestHelper {
 			} 
 		}
 		return true;
+	}
+
+	private static boolean isMakefile(IPath file) {
+		String ext = file.getFileExtension();
+		if (ext==null) {
+			String name = file.lastSegment();
+			return name!=null && (
+					name.equals("makefile")
+					|| name.equals("Makefile")
+					|| name.equals("GNUmakefile")
+				);
+		}
+		return ext.equals("mk");
+	}
+
+	/**
+	 * Compare makefiles using a bunch of heuristics to avoid ordering mismatches
+	 * 
+	 * @param testFile - location of actual makefile
+	 * @param benchmarkFile - location of the benchmark file
+	 * @return {@code true} if matches, {@code false} otherwise 
+	 */
+	private static boolean compareMakefiles(IPath testFile, IPath benchmarkFile) {
+		final String ECHO_INVOKING_PATTERN = "	@echo 'Invoking: .* C\\+\\+ .*'";
+		final String IFNEQ_PATTERN = "ifneq \\(\\$\\(strip \\$\\(.*\\)\\),\\)";
+		final String INCLUDE_PATTERN = "-include \\$\\(.*\\)";
+		final String MACRO_PATTERN = "\\S* [:+]=.*";
+		final String EMPTY_MACRO_PATTERN = "\\S* :=";
+		final String WORKSPACE_DIR_STR = "${WorkspaceDirPath}";
+		ArrayList<String> testArray = mergeContinuationLines(getContents(testFile));
+		ArrayList<String> benchmarkArray = mergeContinuationLines(getContents(benchmarkFile));
+		
+		Set<String> testNotMatchingLines = new TreeSet<String>();
+		Set<String> benchNotMatchingLines = new TreeSet<String>();
+		Set<String> extraLines = new TreeSet<String>();
+		for (int i=0;i<benchmarkArray.size() || i<testArray.size();i++) {
+			if (!(i<benchmarkArray.size())) {
+				System.out.println(testFile.lastSegment()+": extra line =["+testArray.get(i)+ "] not in benchmark. File "+testFile);
+				System.out.println(testFile.lastSegment()+": benchmark file "+benchmarkFile);
+				extraLines.add(testArray.get(i));
+				continue;
+			}
+			if (!(i<testArray.size())) {
+				System.out.println(testFile.lastSegment()+": missing line =["+benchmarkArray.get(i)+ "] comparing to benchmark. File "+testFile);
+				System.out.println(testFile.lastSegment()+": benchmark file "+benchmarkFile);
+				extraLines.add(benchmarkArray.get(i));
+				continue;
+			}
+			String testLine = testArray.get(i);
+			String benchmarkLine = benchmarkArray.get(i);
+			if (!testLine.equals(benchmarkLine)) {
+				if (testLine.startsWith("	-$(RM) ")) {
+					// accommodate to arbitrary order of 'rm' parameters
+					final String DELIMITERS = "[ $]";
+					String[] testMacros = new TreeSet<String>(Arrays.asList(testLine.split(DELIMITERS))).toArray(new String[0]);
+					String[] benchMacros = new TreeSet<String>(Arrays.asList(benchmarkLine.split(DELIMITERS))).toArray(new String[0]);
+					if (testMacros.length!=benchMacros.length) {
+						return false;
+					}
+					for (int j=0;j<testMacros.length;j++) {
+						if (!testMacros[j].equals(benchMacros[j])) {
+							return false;
+						}
+					}
+				} else if (testLine.matches(ECHO_INVOKING_PATTERN) && benchmarkLine.matches(ECHO_INVOKING_PATTERN)) {
+					// accommodate for variable linker name (GCC vs. Cygwin)
+					continue;
+				} else if (testLine.matches(IFNEQ_PATTERN) && benchmarkLine.matches(IFNEQ_PATTERN)) {
+					// accommodate for variable order of different macro's blocks (see also INCLUDE_PATTERN)
+					// ifneq ($(strip $(CXX_DEPS)),)
+					// -include $(CXX_DEPS)
+					// endif
+					testNotMatchingLines.add(testLine);
+					benchNotMatchingLines.add(benchmarkLine);
+				} else if (testLine.matches(INCLUDE_PATTERN) && benchmarkLine.matches(INCLUDE_PATTERN)) {
+					// accommodate for variable order of different macro's blocks (see IFNEQ_PATTERN)
+					testNotMatchingLines.add(testLine);
+					benchNotMatchingLines.add(benchmarkLine);
+				} else if (testLine.matches(MACRO_PATTERN) && benchmarkLine.matches(MACRO_PATTERN)) {
+					// accommodate for variable order of macros
+					testNotMatchingLines.add(testLine);
+					benchNotMatchingLines.add(benchmarkLine);
+				} else if (benchmarkLine.contains(WORKSPACE_DIR_STR)) {
+					String[] benchmarkSubstrings = benchmarkLine.split(" ");
+					String[] testSubstrings = testLine.split(" ");
+					if (testSubstrings.length!=benchmarkSubstrings.length) {
+						System.out.println("Following lines do not match ("+testFile.lastSegment()+"):");
+						System.out.println("actual  : ["+testLine+"], file "+testFile);
+						System.out.println("expected: ["+benchmarkLine+"], file "+benchmarkFile);
+						return false;
+					}
+					
+					final IWorkspace workspace = ResourcesPlugin.getWorkspace();
+					final IWorkspaceRoot root = workspace.getRoot();
+					final String workspaceLocation = root.getLocation().toOSString();
+					final String platformFileSeparator = System.getProperty("file.separator", Character.toString(IPath.SEPARATOR)); //$NON-NLS-1$
+					
+					for (int j=0;j<testSubstrings.length;j++) {
+						String testSubstring = testSubstrings[j];
+						String benchmarkSubstring = benchmarkSubstrings[j];
+						if (benchmarkSubstring.contains(WORKSPACE_DIR_STR)) {
+							benchmarkSubstring = benchmarkSubstring
+								.replace("/", platformFileSeparator)
+								.replace(WORKSPACE_DIR_STR,workspaceLocation);
+						}
+						if (!testSubstring.equals(benchmarkSubstring)) {
+							System.out.println("Following lines do not match ("+testFile.lastSegment()+"):");
+							System.out.println("actual  : ["+testLine+"], file "+testFile);
+							System.out.println("expected: ["+benchmarkLine+"], file "+benchmarkFile);
+							System.out.println("substring actual : ["+testSubstring+"], file "+testFile);
+							System.out.println("substring expected: ["+benchmarkSubstring+"], file "+benchmarkFile);
+							return false;
+						}
+					}
+				} else {
+					System.out.println("Following lines do not match ("+testFile.lastSegment()+"):");
+					System.out.println("actual  : ["+testLine+"], file "+testFile);
+					System.out.println("expected: ["+benchmarkLine+"], file "+benchmarkFile);
+					return false;
+				}
+			}
+		}
+		if (testArray.size()!=benchmarkArray.size()) {
+			System.out.println("testArray.size="+testArray.size()+ " while benchmarkArray.size="+benchmarkArray.size());
+			// Ignore benign differences
+			for (String line : extraLines) {
+				if (line==null || line.length()==0) {
+					continue;
+				}
+				if (line.matches(EMPTY_MACRO_PATTERN)) {
+					continue;
+				}
+				return false;
+			}
+		}
+		
+		// Check if all collected lines match irrespective of order 
+		String[] testNotMatchingLinesArray = testNotMatchingLines.toArray(new String[0]);
+		String[] benchNotMatchingLinesArray = benchNotMatchingLines.toArray(new String[0]);
+		for (int i=0;i<testNotMatchingLinesArray.length;i++) {
+			if (! testNotMatchingLinesArray[i].equals(benchNotMatchingLinesArray[i])) {
+				System.out.println("Following line is missing ("+testFile.lastSegment()+"):");
+				if (testNotMatchingLinesArray[i].compareTo(benchNotMatchingLinesArray[i]) < 0) {
+					System.out.println("line ["+testNotMatchingLinesArray[i]+"], missing in file "+benchmarkFile);
+				} else {
+					System.out.println("line ["+benchNotMatchingLinesArray[i]+"], missing in file "+testFile);
+				}
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static ArrayList<String> getContents(IPath fullPath) {
+		ArrayList<String> lines = new ArrayList<String>();
+		try {
+			BufferedReader in = new BufferedReader(new FileReader(fullPath.toFile()));
+			String line;
+			do {
+				line = in.readLine();
+				if (line!=null) {
+					lines.add(line);
+				}
+			} while (line !=null);
+		} catch (IOException e) {
+			Assert.fail("File " + fullPath.toString() + " could not be read: " + e.getLocalizedMessage());
+		}
+		return lines;
+	}
+	
+	private static ArrayList<String> mergeContinuationLines(ArrayList<String> lines) {
+		for (int i=0;i<lines.size();) {
+			String line = lines.get(i);
+			if (line.endsWith("\\") && i+1<lines.size()) {
+				lines.set(i, line.substring(0, line.length()-1)+lines.get(i+1));
+				lines.remove(i+1);
+				// do not advance i and check the renewed line again
+				continue;
+			}
+			i++;
+		}
+		return lines;
 	}
 
 	static public boolean compareBenchmarks(final IProject project, IPath testDir, String[] fileNames) {
@@ -454,6 +674,13 @@ public class ManagedBuildTestHelper {
 	}
 	
 	static public boolean compareBenchmarks(IFile tFile, IFile bmFile) {
+		IPath tFileLocation = tFile.getLocation();
+		IPath bmFileLocation = bmFile.getLocation();
+		if (isMakefile(tFileLocation)) {
+			if (compareMakefiles(tFileLocation, bmFileLocation)) {
+				return true;
+			}
+		}
 		StringBuffer testBuffer = readContentsStripLineEnds(tFile);
 		StringBuffer benchmarkBuffer = readContentsStripLineEnds(bmFile);
 		if (!testBuffer.toString().equals(benchmarkBuffer.toString())) {
@@ -517,7 +744,10 @@ public class ManagedBuildTestHelper {
 	}
 	static public StringBuffer readContentsStripLineEnds(IProject project, IPath path) {
 		StringBuffer buff = new StringBuffer();
-		IPath fullPath = project.getLocation().append(path);
+		IPath fullPath = path;
+		if (!fullPath.isAbsolute()) {
+			fullPath = project.getLocation().append(path);
+		}
 		try {
 			FileReader input = null;
 			try {
@@ -559,47 +789,62 @@ public class ManagedBuildTestHelper {
 						Assert.fail("Temporary directory " + tmpSrcDirFile.toString() + " already exists.");
 					}
 				}
-				boolean succeed = tmpSrcDirFile.mkdir();
-				if (succeed) {
-					for (int i=0; i<files.length; i++) {
-						IPath file = files[i];
-						IPath srcFile = srcDir.append(file);
-						FileReader srcReader = null;
-						try {
-							srcReader = new FileReader(srcFile.toFile());
-						} catch (Exception e) {
-							Assert.fail("File " + file.toString() + " could not be read.");
-						}
-						if (file.segmentCount() > 1) {
-							IPath newDir = tmpSrcDir;
-							do {
-								IPath dir = file.uptoSegment(1);
-								newDir = newDir.append(dir);
-								file = file.removeFirstSegments(1);
-								succeed = newDir.toFile().mkdir();
-							} while (file.segmentCount() > 1);
-						}
-						IPath destFile = tmpSrcDir.append(files[i]);
-						FileWriter writer = null;
-						try {
-							writer = new FileWriter(destFile.toFile());
-						} catch (Exception e) {
-							Assert.fail("File " + files[i].toString() + " could not be written.");
-						}
-						try {
-							int c;
-							do {
-								c = srcReader.read();
-								if (c == -1) break;
-								writer.write(c);
-							} while (c != -1);
-							srcReader.close();
-							writer.close();
-						} catch (Exception e) {
-							Assert.fail("File " + file.toString() + " could not be copied.");
-						}
+				tmpSrcDirFile.mkdir();
+				if (!tmpSrcDirFile.exists()) {
+					Assert.fail("Can't create temporary directory " + tmpSrcDirFile.toString());
+				}
+				for (int i=0; i<files.length; i++) {
+					IPath file = files[i];
+					IPath srcFile = srcDir.append(file);
+					FileReader srcReader = null;
+					try {
+						srcReader = new FileReader(srcFile.toFile());
+					} catch (Exception e) {
+						Assert.fail("File " + file.toString() + " could not be read.");
+						return null;
+					}
+					if (file.segmentCount() > 1) {
+						IPath newDir = tmpSrcDir;
+						do {
+							IPath dir = file.uptoSegment(1);
+							newDir = newDir.append(dir);
+							file = file.removeFirstSegments(1);
+							newDir.toFile().mkdir();
+							if (!newDir.toFile().exists()) {
+								Assert.fail("Can't create temporary directory " + tmpSrcDirFile.toString());
+							}
+						} while (file.segmentCount() > 1);
+					}
+					IPath destFile = tmpSrcDir.append(files[i]);
+					FileWriter writer = null;
+					try {
+						writer = new FileWriter(destFile.toFile());
+					} catch (Exception e) {
+						Assert.fail("File " + files[i].toString() + " could not be written.");
+						return null;
+					}
+					try {
+						int c;
+						do {
+							c = srcReader.read();
+							if (c == -1) break;
+							writer.write(c);
+						} while (c != -1);
+						srcReader.close();
+						writer.close();
+					} catch (Exception e) {
+						Assert.fail("File " + file.toString() + " could not be copied.");
 					}
 				}
+			}
+		}
+		IWorkspace workspace = ResourcesPlugin.getWorkspace();
+		IWorkspaceRoot root = workspace.getRoot();
+		for (IFile rc : root.findFilesForLocation(tmpSrcDir)) {
+			try {
+				rc.refreshLocal(IFile.DEPTH_INFINITE, null);
+			} catch (CoreException e) {
+				// ignore exception
 			}
 		}
 		return tmpSrcDir;
@@ -615,17 +860,14 @@ public class ManagedBuildTestHelper {
 				Assert.fail("Temporary sub-directory cannot be the empty string.");				
 			} else {
 				File tmpSrcDirFile = tmpSrcDir.toFile();
-				if (!tmpSrcDirFile.exists()) {
-					Assert.fail("Temporary directory " + tmpSrcDirFile.toString() + " does not exist.");				
-				} else {
-					boolean succeed;
+				if (tmpSrcDirFile.exists()) {
 					for (int i=0; i<files.length; i++) {
 						// Delete the file
 						IPath thisFile = tmpSrcDir.append(files[i]);
-						succeed = thisFile.toFile().delete();
+						thisFile.toFile().delete();
 					}
 					// Delete the dir
-					succeed = tmpSrcDirFile.delete();
+					tmpSrcDirFile.delete();
 				}
 			}
 		}
@@ -670,16 +912,15 @@ public class ManagedBuildTestHelper {
 	}
 
 	static private void deleteDirectory(File dir) {
-		boolean b;
 		File[] toDelete = dir.listFiles();
 		for (int i=0; i<toDelete.length; i++) {
 			File fileToDelete = toDelete[i];
 			if (fileToDelete.isDirectory()) {
 				deleteDirectory(fileToDelete);
 			}
-			b = fileToDelete.delete();
+			fileToDelete.delete();
 		}
-		b = dir.delete();
+		dir.delete();
 	}
 	
 	public static ITool createRcbsTool(IConfiguration cfg, String file, String inputs, String outputs, String cmds){
@@ -737,7 +978,7 @@ public class ManagedBuildTestHelper {
 	}
 	
 	public static ITool[] getRcbsTools(IResourceConfiguration rcConfig){
-		List list = new ArrayList();
+		List<ITool> list = new ArrayList<ITool>();
 		ITool tools[] = rcConfig.getTools();
 		for (int i = 0; i < tools.length; i++) {
 			ITool tool = tools[i];
@@ -746,7 +987,7 @@ public class ManagedBuildTestHelper {
 			}
 		}
 		if(list.size() != 0)
-			return (ITool[])list.toArray(new ITool[list.size()]);
+			return list.toArray(new ITool[list.size()]);
 		return null;
 	}
 

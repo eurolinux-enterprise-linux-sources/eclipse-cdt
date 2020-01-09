@@ -2,7 +2,7 @@
 <feature
       id="org.eclipse.cdt.sdk"
       label="%featureName"
-      version="6.0.2.qualifier"
+      version="7.0.1.qualifier"
       provider-name="%providerName">
 
    <description>
@@ -18,7 +18,7 @@
    </license>
 
    <url>
-      <update label="%updateSiteName" url="http://download.eclipse.org/tools/cdt/releases/galileo"/>
+      <update label="%updateSiteName" url="http://download.eclipse.org/tools/cdt/releases/helios"/>
    </url>
 
    <includes
@@ -35,6 +35,10 @@
 
    <includes
          id="org.eclipse.cdt.gnu.dsf.source"
+         version="0.0.0"/>
+
+   <includes
+         id="org.eclipse.cdt.gdb.source"
          version="0.0.0"/>
 
    <includes

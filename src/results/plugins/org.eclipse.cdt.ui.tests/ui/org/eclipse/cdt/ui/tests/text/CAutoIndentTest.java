@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -48,11 +48,9 @@ import org.eclipse.cdt.internal.ui.text.CTextTools;
  * Testing the auto indent strategies.
  */
 public class CAutoIndentTest extends AbstractAutoEditTest {
-
 	private HashMap<String, String> fOptions;
 	private List<IStatus> fStatusLog;
 	private ILogListener fLogListener;
-
 	
 	/**
 	 * @param name
@@ -65,6 +63,7 @@ public class CAutoIndentTest extends AbstractAutoEditTest {
 		return new TestSuite(CAutoIndentTest.class);
 	}
 
+	@Override
 	protected void setUp() throws Exception {
 		super.setUp();
 //		Shell shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();  
@@ -84,11 +83,12 @@ public class CAutoIndentTest extends AbstractAutoEditTest {
 		if (plugin != null) {
 			plugin.getLog().addLogListener(fLogListener);
 		}
-}
+	}
 	
 	/*
 	 * @see junit.framework.TestCase#tearDown()
 	 */
+	@Override
 	protected void tearDown() throws Exception {
 		final Plugin plugin = CUIPlugin.getDefault();
 		if (plugin != null) {
@@ -499,7 +499,30 @@ public class CAutoIndentTest extends AbstractAutoEditTest {
 			store.setToDefault(PreferenceConstants.EDITOR_SMART_TAB);
 		}
 	}
+
+	public void testSmartIndentAfterArrayIndexOperator_Bug291821() throws Exception  {
+		AutoEditTester tester = createAutoEditTester();
+		
+		tester.type("int &Array::operator [](int subindex)\n"); //$NON-NLS-1$
+		assertEquals(1, tester.getCaretLine());
+		tester.type('{');
+		// Brace is not indented
+		assertEquals(1, tester.getCaretColumn());
+		tester.type('\n');
+		// The brace was closed automatically.
+		assertEquals("}", tester.getLine(1)); //$NON-NLS-1$
+	}
 	
+	public void testSkipToStatementStartWhitesmiths_Bug311018() throws Exception {
+		DefaultCodeFormatterOptions whitesmiths= DefaultCodeFormatterOptions.getWhitesmithsSettings();
+		CCorePlugin.setOptions(new HashMap<String, String>(whitesmiths.getMap()));
+		AutoEditTester tester = createAutoEditTester();
+		tester.type("if (i > 0)\n"); //$NON-NLS-1$
+		tester.type("{\n"); //$NON-NLS-1$
+		// start is indented to the brace
+		assertEquals("if (i > 0)\n    {\n    \n    }", tester.fDoc.get());
+	}
+
 	private void assertNoError() {
 		if (!fStatusLog.isEmpty()) {
 			fail(fStatusLog.get(0).toString());

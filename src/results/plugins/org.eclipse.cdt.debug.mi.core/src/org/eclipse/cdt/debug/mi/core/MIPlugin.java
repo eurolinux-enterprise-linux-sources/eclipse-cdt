@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -36,6 +36,7 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Plugin;
 import org.eclipse.core.runtime.Preferences;
 import org.eclipse.core.runtime.Status;
@@ -69,6 +70,12 @@ public class MIPlugin extends Plugin {
 
 	private static final int INTERNAL_ERROR = 42;
 
+	/**
+	 * Has tracing for this plug-in been turned on? 
+	 * @since 7.0
+	 */
+	public static final boolean DEBUG = "true".equals( //$NON-NLS-1$
+            Platform.getDebugOption("org.eclipse.cdt.debug.mi.core/debug")); //$NON-NLS-1$
 	/**
 	 * The singleton command factory manager.
 	 */
@@ -220,7 +227,7 @@ public class MIPlugin extends Plugin {
 		int launchTimeout = MIPlugin.getDefault().getPluginPreferences().getInt(IMIConstants.PREF_REQUEST_LAUNCH_TIMEOUT);		
 		MIProcess pgdb = new MIProcessAdapter(args, launchTimeout, monitor);
 
-		if (MIPlugin.getDefault().isDebugging()) {
+		if (MIPlugin.DEBUG) {
 			StringBuffer sb = new StringBuffer();
 			for (int i = 0; i < args.length; ++i) {
 				sb.append(args[i]);
@@ -287,7 +294,7 @@ public class MIPlugin extends Plugin {
 		int launchTimeout = MIPlugin.getDefault().getPluginPreferences().getInt(IMIConstants.PREF_REQUEST_LAUNCH_TIMEOUT);		
 		MIProcess pgdb = new MIProcessAdapter(args, launchTimeout, monitor);
 		
-		if (MIPlugin.getDefault().isDebugging()) {
+		if (MIPlugin.DEBUG) {
 			StringBuffer sb = new StringBuffer();
 			for (int i = 0; i < args.length; ++i) {
 				sb.append(args[i]);
@@ -452,7 +459,7 @@ public class MIPlugin extends Plugin {
 		try {
 			pgdb = factory.createMIProcess(args, launchTimeout, monitor);
 	
-			if (MIPlugin.getDefault().isDebugging()) {
+			if (MIPlugin.DEBUG) {
 				StringBuffer sb = new StringBuffer();
 				for (int i = 0; i < args.length; ++i) {
 					sb.append(args[i]);

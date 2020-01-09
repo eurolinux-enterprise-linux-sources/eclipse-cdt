@@ -1,21 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <feature
       id="org.eclipse.cdt.master"
-      label="CDT Master Feature"
-      version="6.0.1"
-      provider-name="Eclipse.org">
+      label="%featureName"
+      version="7.0.1"
+      provider-name="%providerName">
 
-   <description url="http://www.example.com/description">
-      [Enter Feature Description here.]
+   <description>
+      %description
    </description>
 
-   <copyright url="http://www.example.com/copyright">
-      [Enter Copyright Description here.]
+   <copyright>
+      %copyright
    </copyright>
 
-   <license url="http://www.example.com/license">
-      [Enter License Description here.]
+   <license url="%licenseURL">
+      %license
    </license>
+
+   <url>
+      <update label="%updateSiteName" url="http://download.eclipse.org/tools/cdt/releases/helios"/>
+   </url>
 
    <includes
          id="org.eclipse.cdt.platform"
@@ -23,6 +27,10 @@
 
    <includes
          id="org.eclipse.cdt.gnu.build"
+         version="0.0.0"/>
+
+   <includes
+         id="org.eclipse.cdt.gdb"
          version="0.0.0"/>
 
    <includes
@@ -58,10 +66,6 @@
          version="0.0.0"/>
 
    <includes
-         id="org.eclipse.cdt.testing"
-         version="0.0.0"/>
-
-   <includes
          id="org.eclipse.cdt.xlc.feature"
          version="0.0.0"/>
 
@@ -71,10 +75,6 @@
 
    <includes
          id="org.eclipse.cdt.util"
-         version="0.0.0"/>
-
-   <includes
-         id="org.eclipse.cdt.mylyn"
          version="0.0.0"/>
 
    <includes
@@ -99,6 +99,26 @@
 
    <includes
          id="org.eclipse.cdt.p2"
+         version="0.0.0"/>
+
+   <includes
+         id="org.eclipse.tm.tcf.feature"
+         version="0.0.0"/>
+
+   <includes
+         id="org.eclipse.cdt.debug.edc"
+         version="0.0.0"/>
+
+   <includes
+         id="org.eclipse.cdt.bupc"
+         version="0.0.0"/>
+
+   <includes
+         id="org.eclipse.cdt.codan.feature"
+         version="0.0.0"/>
+
+   <includes
+         id="org.eclipse.cdt.testing"
          version="0.0.0"/>
 
 </feature>

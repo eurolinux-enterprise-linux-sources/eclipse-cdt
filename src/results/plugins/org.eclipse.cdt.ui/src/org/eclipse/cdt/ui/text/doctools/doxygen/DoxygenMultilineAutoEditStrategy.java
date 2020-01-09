@@ -1,12 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2009 Symbian Software Systems and others.
+ * Copyright (c) 2008, 2010 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * Andrew Ferguson (Symbian) - Initial implementation
+ *     Andrew Ferguson (Symbian) - Initial implementation
+ *     Anton Leherbauer (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.ui.text.doctools.doxygen;
 
@@ -17,6 +18,7 @@ import org.eclipse.jface.text.IAutoEditStrategy;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.ITypedRegion;
+import org.eclipse.jface.text.TextUtilities;
 
 import org.eclipse.cdt.core.dom.ast.IASTArrayDeclarator;
 import org.eclipse.cdt.core.dom.ast.IASTCompositeTypeSpecifier;
@@ -32,7 +34,6 @@ import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTStandardFunctionDeclarator;
 import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier.IASTEnumerator;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTFunctionDeclarator;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateDeclaration;
 import org.eclipse.cdt.ui.text.doctools.DefaultMultilineCommentAutoEditStrategy;
@@ -46,10 +47,12 @@ import org.eclipse.cdt.ui.text.doctools.DefaultMultilineCommentAutoEditStrategy;
 public class DoxygenMultilineAutoEditStrategy extends DefaultMultilineCommentAutoEditStrategy {
 	private static final String SINGLELINE_COMMENT_PRECEDING = "//!< "; //$NON-NLS-1$
 	private static final String PARAM = "@param "; //$NON-NLS-1$
-	private static final String RETURN = "@return\n"; //$NON-NLS-1$
+	private static final String RETURN = "@return"; //$NON-NLS-1$
 
 	protected boolean documentPureVirtuals= true;
 	protected boolean documentDeclarations= true;
+	
+	private String fLineDelimiter;
 	
 	public DoxygenMultilineAutoEditStrategy() {
 	}
@@ -88,12 +91,22 @@ public class DoxygenMultilineAutoEditStrategy extends DefaultMultilineCommentAut
 		StringBuilder result= new StringBuilder();
 		for(int i=0; i<decls.length; i++) {
 			if(!isVoidParameter(decls[i])) {
-				result.append(PARAM+getParameterName(decls[i])+"\n"); //$NON-NLS-1$
+				result.append(PARAM).append(getParameterName(decls[i])).append(getLineDelimiter());
 			}
 		}
 		return result;
 	}
 	
+	/**
+	 * Get the default line delimiter for the currently customized document
+	 * which should be used for new lines.
+	 * 
+	 * @return the default line delimiter
+	 */
+	private String getLineDelimiter() {
+		return fLineDelimiter;
+	}
+
 	/**
 	 * @param decl
 	 * @return the name of the parameter
@@ -128,7 +141,7 @@ public class DoxygenMultilineAutoEditStrategy extends DefaultMultilineCommentAut
 	 * @return the comment content to describe the return
 	 */
 	protected StringBuilder documentFunctionReturn() {
-		return new StringBuilder(RETURN);
+		return new StringBuilder(RETURN).append(getLineDelimiter());
 	}
 
 	/**
@@ -154,6 +167,7 @@ public class DoxygenMultilineAutoEditStrategy extends DefaultMultilineCommentAut
 	 */
 	@Override
 	protected StringBuilder customizeAfterNewLineForDeclaration(IDocument doc, IASTDeclaration dec, ITypedRegion partition) {
+		fLineDelimiter = TextUtilities.getDefaultLineDelimiter(doc);
 
 		while(dec instanceof ICPPASTTemplateDeclaration) /* if? */
 			dec= ((ICPPASTTemplateDeclaration)dec).getDeclaration(); 
@@ -169,11 +183,16 @@ public class DoxygenMultilineAutoEditStrategy extends DefaultMultilineCommentAut
 			
 			if(sdec.getDeclSpecifier() instanceof IASTCompositeTypeSpecifier) {
 				return result;
-			} else if(sdec.getDeclSpecifier() instanceof ICPPASTDeclSpecifier) {
+			} else {
 				IASTDeclarator[] dcs= sdec.getDeclarators();
-				if(dcs.length == 1 && dcs[0] instanceof ICPPASTFunctionDeclarator) {
-					ICPPASTFunctionDeclarator fdecl= (ICPPASTFunctionDeclarator) dcs[0];
-					boolean shouldDocument= documentDeclarations || (documentPureVirtuals && fdecl.isPureVirtual());
+				if(dcs.length == 1 && dcs[0] instanceof IASTFunctionDeclarator) {
+					IASTFunctionDeclarator fdecl = (IASTFunctionDeclarator)dcs[0];
+					boolean shouldDocument= documentDeclarations;
+					if(documentPureVirtuals && dcs[0] instanceof ICPPASTFunctionDeclarator) {
+						ICPPASTFunctionDeclarator cppfdecl= (ICPPASTFunctionDeclarator) dcs[0];
+						shouldDocument = shouldDocument || cppfdecl.isPureVirtual();
+					}
+					
 					if(shouldDocument) {
 						return documentFunction(fdecl, sdec.getDeclSpecifier());
 					}

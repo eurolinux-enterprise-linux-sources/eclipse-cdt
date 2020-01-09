@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.jface.layout.PixelConverter;
 import org.eclipse.jface.wizard.IWizardPage;
 import org.eclipse.jface.wizard.Wizard;
 import org.eclipse.jface.wizard.WizardDialog;
@@ -27,10 +28,12 @@ import org.eclipse.cdt.core.model.IProjectEntry;
 import org.eclipse.cdt.ui.wizards.IPathEntryContainerPage;
 
 import org.eclipse.cdt.internal.ui.util.ExceptionHandler;
-import org.eclipse.cdt.internal.ui.util.PixelConverter;
 
 /**
+ * @deprecated as of CDT 4.0. This wizard was used in property pages
+ * for 3.X style projects.
  */
+@Deprecated
 public class CPathContainerWizard extends Wizard {
 
 	private IContainerDescriptor fPageDesc;

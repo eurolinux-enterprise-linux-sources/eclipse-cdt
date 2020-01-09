@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,6 +11,7 @@
 package org.eclipse.cdt.dsf.ui.viewmodel.update;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -205,7 +206,7 @@ public class AbstractCachingVMProvider extends AbstractVMProvider
         
         /**
          * Flag indicating that all the children of the given element are 
-         * alredy cached.
+         * already cached.
          */
         boolean fAllChildrenKnown = false;
         
@@ -228,6 +229,13 @@ public class AbstractCachingVMProvider extends AbstractVMProvider
          */
         Map<String, Object> fArchiveProperties = null;
 
+		/**
+		 * Ensure this cache entry has a map in which to hold the children
+		 * elements. If it doesn't, create one and give it an initial capacity
+		 * of 30% more than the number of children we know the parent currently
+		 * has (give it some room to grow). If we don't know the child count,
+		 * give the map some nominal initial capacity.
+		 */
         void ensureChildrenMap() {
             if (fChildren == null) {
                 Integer childrenCount = fChildrenCount;
@@ -272,6 +280,14 @@ public class AbstractCachingVMProvider extends AbstractVMProvider
                 return fElementTester.getUpdateFlags(key.fViewerInput, key.fPath);
             } 
             return 0;
+        }
+        
+        Collection<String> getPropertiesToFlush(ElementDataKey key, boolean isDirty) {
+            if (fRootElement.equals(key.fRootElement) && fElementTester instanceof IElementUpdateTesterExtension) {
+                return ((IElementUpdateTesterExtension)fElementTester).
+                getPropertiesToFlush(key.fViewerInput, key.fPath, isDirty);
+            } 
+            return null;
         }
         
         @Override
@@ -453,7 +469,7 @@ public class AbstractCachingVMProvider extends AbstractVMProvider
                         new ViewerDataRequestMonitor<Boolean>(getExecutor(), update) {
                             @Override
                             protected void handleCompleted() {
-                                // Update completed.  Write value to cache only if update successed 
+                                // Update completed.  Write value to cache only if update succeeded 
                                 // and the cache entry wasn't flushed in the mean time. 
                                 if(isSuccess()) {
                                     if (flushCounter == entry.fFlushCounter) {
@@ -618,6 +634,13 @@ public class AbstractCachingVMProvider extends AbstractVMProvider
             }
             
             if (childrenMissingFromCache.size() > 0) {
+                // Note: it is possible that entry.fAllChildrenKnown == true at this point.
+                // This can happen if the node's has children implementation returns true
+                // while the actual children update returns with no elements.  A node 
+                // may do this for optimization reasons.  I.e. sometimes it may be more
+                // efficient to ask the user to expand a node to see if it has any
+                // children.
+            	
                 // Some children were not found in the cache, create separate 
                 // proxy updates for the continuous ranges of missing children.
                 List<IChildrenUpdate> partialUpdates = new ArrayList<IChildrenUpdate>(2);
@@ -665,7 +688,7 @@ public class AbstractCachingVMProvider extends AbstractVMProvider
                 }
                 multiRm.setDoneCount(partialUpdates.size());
             } else {
-                // All children were found in cache.  Compelte the update.
+                // All children were found in cache.  Complete the update.
                 update.done();
             }
         }
@@ -710,7 +733,8 @@ public class AbstractCachingVMProvider extends AbstractVMProvider
             }
             else if (entry instanceof ElementDataEntry) {
                 ElementDataEntry elementDataEntry = (ElementDataEntry)entry;
-                int updateFlags = flushKey.getUpdateFlags((ElementDataKey)elementDataEntry.fKey);
+                ElementDataKey elementDataKey = (ElementDataKey)elementDataEntry.fKey;
+                int updateFlags = flushKey.getUpdateFlags(elementDataKey);
                 if ((updateFlags & IVMUpdatePolicy.FLUSH) != 0) {
                     if ((updateFlags & IVMUpdatePolicy.ARCHIVE) == IVMUpdatePolicy.ARCHIVE) {
                         // We are saving current data for change history, check if the data is valid.
@@ -743,6 +767,11 @@ public class AbstractCachingVMProvider extends AbstractVMProvider
                     elementDataEntry.fChildren = null;
                     elementDataEntry.fAllChildrenKnown = false;
                     elementDataEntry.fDirty = false;
+                } else if ((updateFlags & IVMUpdatePolicy.FLUSH_PARTIAL_PROPERTIES) != 0) {
+                    Collection<String> propertiesToFlush = flushKey.getPropertiesToFlush(elementDataKey, elementDataEntry.fDirty);
+                    if (propertiesToFlush != null && elementDataEntry.fProperties != null) {
+                        elementDataEntry.fProperties.keySet().removeAll(propertiesToFlush);
+                    }
                 } else if ((updateFlags & IVMUpdatePolicy.DIRTY) != 0) {
                     elementDataEntry.fDirty = true;
                     if (elementDataEntry.fProperties != null) {
@@ -872,15 +901,15 @@ public class AbstractCachingVMProvider extends AbstractVMProvider
         
         return proxy;
     }
-    
-    /**
-     * Called when a given all cache entries for the given root element have
-     * been removed from the cache.  In order to property track changed elements, 
-     * the caching VM provider does not immediately remove entries for a given root
-     * element, when the viewer root element changes.  Instead it keeps this root 
-     * element and keeps processing deltas for that root element until the 
-     * cache entries for this element are gone. 
-     */
+
+	/**
+	 * Called when all cache entries for the given root element have been
+	 * removed from the cache. In order to properly track changed elements, the
+	 * caching VM provider does not immediately forget about the proxy for a
+	 * given root element when the viewer root element changes. Instead it holds
+	 * on to the proxy and keeps processing deltas for that root element until
+	 * the cache entries for this element are gone.
+	 */
     protected void rootElementRemovedFromCache(Object rootElement) {
         fRootMarkers.remove(rootElement);
         

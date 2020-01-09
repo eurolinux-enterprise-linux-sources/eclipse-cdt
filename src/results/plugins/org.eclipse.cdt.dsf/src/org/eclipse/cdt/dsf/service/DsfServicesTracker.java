@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 Wind River Systems and others.
+ * Copyright (c) 2009, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -57,28 +57,33 @@ public class DsfServicesTracker {
         return ("(" + IDsfService.PROP_SESSION_ID + "=" + sessionId + ")").intern();   //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
     }
 
-    private static class ServiceKey 
+    final private static class ServiceKey 
     {
-        String fClassName;
-        String fFilter;
+        private final String fClassName;
+        private final String fFilter;
+        private final int fHashCode;
+        private final String fHashString;
+        
+        
         public ServiceKey(Class<?> clazz, String filter) {
             fClassName = clazz != null ? clazz.getName() : null;
             fFilter = filter;
+            fHashString =  'C' + (fClassName == null ? "" : fClassName) + //$NON-NLS-1$
+        				   'F' + (fFilter == null ? "" : fFilter); //$NON-NLS-1$
+            fHashCode = fHashString.hashCode();
         }
         
         @Override
         public boolean equals(Object other) {
-            // I guess this doesn't have to assume fFilter can be null, but oh well.
+        	// hashcodes are not guaranteed to be unique, but objects that are equal must have the same hashcode
+        	// thus we can optimize by first comparing hashcodes
             return other instanceof ServiceKey &&
-                   ((fClassName == null && ((ServiceKey)other).fClassName == null) || 
-                    (fClassName != null && fClassName.equals(((ServiceKey)other).fClassName))) &&
-                   ((fFilter == null && ((ServiceKey)other).fFilter == null) || 
-                    (fFilter != null && fFilter.equals(((ServiceKey)other).fFilter))); 
+            	((((ServiceKey)other).fHashCode == this.fHashCode) && (((ServiceKey)other).fHashString.equals(this.fHashString))); 
         }
         
         @Override
         public int hashCode() {
-            return (fClassName == null ? 0 : fClassName.hashCode()) + (fFilter == null ? 0 : fFilter.hashCode());
+        	return fHashCode;
         }
     }
     
@@ -158,7 +163,7 @@ public class DsfServicesTracker {
      * session-ID 
      * @return OSGI service reference object to the desired service, null if not found
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     public ServiceReference getServiceReference(Class serviceClass, String filter) {
         if (fDisposed) {
             return null;
@@ -260,9 +265,13 @@ public class DsfServicesTracker {
     }
 
     private void doDispose() {
-        fBundleContext.removeServiceListener(fListner);
-        for (Iterator<ServiceReference> itr = fServices.keySet().iterator(); itr.hasNext();) {
-            fBundleContext.ungetService(itr.next());
+        try {
+            fBundleContext.removeServiceListener(fListner);
+            for (Iterator<ServiceReference> itr = fServices.keySet().iterator(); itr.hasNext();) {
+                fBundleContext.ungetService(itr.next());
+            }
+        } catch (IllegalStateException e) {
+            // May be thrown during shutdown (bug 293049).
         }
         fServices.clear();
         fServiceReferences.clear();

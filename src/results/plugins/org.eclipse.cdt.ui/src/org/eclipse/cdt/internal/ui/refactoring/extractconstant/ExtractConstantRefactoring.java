@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Institute for Software, HSR Hochschule fuer Technik  
+ * Copyright (c) 2008, 2010 Institute for Software, HSR Hochschule fuer Technik  
  * Rapperswil, University of applied sciences and others
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
@@ -13,6 +13,8 @@ package org.eclipse.cdt.internal.ui.refactoring.extractconstant;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.ResourcesPlugin;
@@ -24,41 +26,43 @@ import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.SubMonitor;
 import org.eclipse.jface.text.Region;
 import org.eclipse.jface.viewers.ISelection;
+import org.eclipse.ltk.core.refactoring.RefactoringDescriptor;
 import org.eclipse.ltk.core.refactoring.RefactoringStatus;
 import org.eclipse.text.edits.TextEditGroup;
 
+import org.eclipse.cdt.core.dom.ast.ASTNodeFactoryFactory;
 import org.eclipse.cdt.core.dom.ast.IASTDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTDeclarator;
+import org.eclipse.cdt.core.dom.ast.IASTEqualsInitializer;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IASTFunctionDefinition;
-import org.eclipse.cdt.core.dom.ast.IASTInitializerExpression;
 import org.eclipse.cdt.core.dom.ast.IASTLiteralExpression;
 import org.eclipse.cdt.core.dom.ast.IASTMacroExpansionLocation;
-import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
-import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTUnaryExpression;
 import org.eclipse.cdt.core.dom.ast.IBinding;
+import org.eclipse.cdt.core.dom.ast.INodeFactory;
+import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.cpp.CPPASTVisitor;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTNamespaceDefinition;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTSimpleDeclSpecifier;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPNodeFactory;
 import org.eclipse.cdt.core.dom.rewrite.ASTRewrite;
+import org.eclipse.cdt.core.model.ICProject;
 
-import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTDeclarator;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTEqualsInitializer;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTIdExpression;
-import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTInitializerExpression;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTLiteralExpression;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTName;
-import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTNamespaceDefinition;
-import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTSimpleDeclSpecifier;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTSimpleDeclaration;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPMethod;
+import org.eclipse.cdt.internal.core.dom.rewrite.DeclarationGeneratorImpl;
 
 import org.eclipse.cdt.internal.ui.refactoring.AddDeclarationNodeToClassChange;
 import org.eclipse.cdt.internal.ui.refactoring.CRefactoring;
+import org.eclipse.cdt.internal.ui.refactoring.CRefactoringDescription;
 import org.eclipse.cdt.internal.ui.refactoring.MethodContext;
 import org.eclipse.cdt.internal.ui.refactoring.ModificationCollector;
 import org.eclipse.cdt.internal.ui.refactoring.utils.NodeHelper;
@@ -74,55 +78,70 @@ import org.eclipse.cdt.internal.ui.refactoring.utils.TranslationUnitHelper;
  */
 public class ExtractConstantRefactoring extends CRefactoring {
 	
+	public static final String ID = "org.eclipse.cdt.ui.refactoring.extractconstant.ExtractConstantRefactoring"; //$NON-NLS-1$
+	
 	private IASTLiteralExpression target = null;
 	private final ArrayList<IASTExpression> literalsToReplace = new ArrayList<IASTExpression>();
 	private final ExtractConstantInfo info;
 	
-	public ExtractConstantRefactoring(IFile file, ISelection selection, ExtractConstantInfo info){
-		super(file,selection, null);
+	
+	public ExtractConstantRefactoring(IFile file, ISelection selection, ExtractConstantInfo info, ICProject proj){
+		super(file,selection, null, proj);
 		this.info = info;
+		this.project = proj;
 		name = Messages.ExtractConstantRefactoring_ExtractConst; 
 	}
 
 	@Override
 	public RefactoringStatus checkInitialConditions(IProgressMonitor pm) throws CoreException, OperationCanceledException {
 		SubMonitor sm = SubMonitor.convert(pm, 9);
-		RefactoringStatus status = super.checkInitialConditions(sm.newChild(6));
-		if(status.hasError()) {
-			return status;
-		}
+		try {
+			lockIndex();
+			try {
+				RefactoringStatus status = super.checkInitialConditions(sm.newChild(6));
+				if(status.hasError()) {
+					return status;
+				}
 
-		Collection<IASTLiteralExpression> literalExpressionCollection = findAllLiterals();
-		if(literalExpressionCollection.isEmpty()){
-			initStatus.addFatalError(Messages.ExtractConstantRefactoring_LiteralMustBeSelected); 
-			return initStatus;
-		}
-		
-		sm.worked(1);
-		if(isProgressMonitorCanceld(sm, initStatus)) return initStatus;
-		
-		boolean oneMarked = region != null && isOneMarked(literalExpressionCollection, region);
-		if(!oneMarked){ 
-			//No or more than one marked
-			if(target == null){
-				//No Selection found;
-				initStatus.addFatalError(Messages.ExtractConstantRefactoring_NoLiteralSelected); 
-			} else {
-				//To many selection found
-				initStatus.addFatalError(Messages.ExtractConstantRefactoring_TooManyLiteralSelected); 
+				Collection<IASTLiteralExpression> literalExpressionCollection = findAllLiterals();
+				if(literalExpressionCollection.isEmpty()){
+					initStatus.addFatalError(Messages.ExtractConstantRefactoring_LiteralMustBeSelected); 
+					return initStatus;
+				}
+				sm.worked(1);
+				if(isProgressMonitorCanceld(sm, initStatus)) return initStatus;
+
+				boolean oneMarked = region != null && isOneMarked(literalExpressionCollection, region);
+				if(!oneMarked){ 
+					//No or more than one marked
+					if(target == null){
+						//No Selection found;
+						initStatus.addFatalError(Messages.ExtractConstantRefactoring_NoLiteralSelected); 
+					} else {
+						//To many selection found
+						initStatus.addFatalError(Messages.ExtractConstantRefactoring_TooManyLiteralSelected); 
+					}
+					return initStatus;
+				}
+				sm.worked(1);
+
+				if(isProgressMonitorCanceld(sm, initStatus)) return initStatus;
+
+				findAllNodesForReplacement(literalExpressionCollection);
+
+				info.addNamesToUsedNames(findAllDeclaredNames());
+				if(info.getName().length() == 0) {
+					info.setName(getDefaultName(target));
+				}
+				info.setMContext(NodeHelper.findMethodContext(target, getIndex()));
+				sm.done();
 			}
-			return initStatus;
+			finally {
+				unlockIndex();
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
-		sm.worked(1);
-
-		if(isProgressMonitorCanceld(sm, initStatus)) return initStatus;
-				
-		findAllNodesForReplacement(literalExpressionCollection);
-		
-		info.addNamesToUsedNames(findAllDeclaredNames());
-		info.setName(getDefaultName(target));
-		info.setMContext(NodeHelper.findMethodContext(target, getIndex()));
-		sm.done();
 		return initStatus;
 	}
 
@@ -254,53 +273,78 @@ public class ExtractConstantRefactoring extends CRefactoring {
 
 	@Override
 	protected void collectModifications(IProgressMonitor pm, ModificationCollector collector)
-		throws CoreException, OperationCanceledException{
-		
-		MethodContext context = info.getMContext();
-		Collection<IASTExpression> locLiteralsToReplace = new ArrayList<IASTExpression>();
+	throws CoreException, OperationCanceledException{
+		try {
+			lockIndex();
+			try {
+				MethodContext context = info.getMContext();
+				Collection<IASTExpression> locLiteralsToReplace = new ArrayList<IASTExpression>();
 
-		if(context.getType() == MethodContext.ContextType.METHOD){
-			
-			for (IASTExpression expression : literalsToReplace) {
-				MethodContext exprContext = NodeHelper.findMethodContext(expression, getIndex());
-				if(exprContext.getType() == MethodContext.ContextType.METHOD){
-					if(context.getMethodQName() != null) {
-						if( MethodContext.isSameClass(exprContext.getMethodQName(), context.getMethodQName())){
-							locLiteralsToReplace.add(expression);
+				if(context.getType() == MethodContext.ContextType.METHOD){
+
+					for (IASTExpression expression : literalsToReplace) {
+						MethodContext exprContext = NodeHelper.findMethodContext(expression, getIndex());
+						if(exprContext.getType() == MethodContext.ContextType.METHOD){
+							if(context.getMethodQName() != null) {
+								if( MethodContext.isSameClass(exprContext.getMethodQName(), context.getMethodQName())){
+									locLiteralsToReplace.add(expression);
+								}
+							}else {
+								if( MethodContext.isSameClass(exprContext.getMethodDeclarationName(), context.getMethodDeclarationName())){
+									locLiteralsToReplace.add(expression);
+								}
+							}
 						}
-					}else {
-						if( MethodContext.isSameClass(exprContext.getMethodDeclarationName(), context.getMethodDeclarationName())){
+					}
+
+				} else {
+
+					for (IASTExpression expression : literalsToReplace) {
+						IPath path = new Path(expression.getContainingFilename());
+						IFile expressionFile = ResourcesPlugin.getWorkspace().getRoot().getFileForLocation(path);
+						//expressionFile may be null if the file is NOT in the workspace
+						if( expressionFile != null && expressionFile.equals(file) ){
 							locLiteralsToReplace.add(expression);
 						}
 					}
+
+				}
+
+				//Create all Changes for literals
+				String constName = info.getName();
+				createLiteralToConstantChanges(constName, locLiteralsToReplace, collector);
+
+				if(context.getType() == MethodContext.ContextType.METHOD) {
+					ICPPASTCompositeTypeSpecifier classDefinition = (ICPPASTCompositeTypeSpecifier) context.getMethodDeclaration().getParent();
+					AddDeclarationNodeToClassChange.createChange(classDefinition, info.getVisibility(), getConstNodesClass(constName), true, collector);
+				} else {
+					IASTDeclaration nodes = getConstNodesGlobal(constName);
+					ASTRewrite rewriter = collector.rewriterForTranslationUnit(unit);
+					rewriter.insertBefore(unit, TranslationUnitHelper.getFirstNode(unit), nodes, new TextEditGroup(Messages.ExtractConstantRefactoring_CreateConstant));
 				}
 			}
-			
-		} else {
-			
-			for (IASTExpression expression : literalsToReplace) {
-				IPath path = new Path(expression.getContainingFilename());
-				IFile expressionFile = ResourcesPlugin.getWorkspace().getRoot().getFileForLocation(path);
-				//expressionFile may be null if the file is NOT in the workspace
-				if( expressionFile != null && expressionFile.equals(file) ){
-					locLiteralsToReplace.add(expression);
-				}
+			finally {
+				unlockIndex();
 			}
-			
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
-				
-		//Create all Changes for literals
-		String constName = info.getName();
-		createLiteralToConstantChanges(constName, locLiteralsToReplace, collector);
-		
-		if(context.getType() == MethodContext.ContextType.METHOD) {
-			ICPPASTCompositeTypeSpecifier classDefinition = (ICPPASTCompositeTypeSpecifier) context.getMethodDeclaration().getParent();
-			AddDeclarationNodeToClassChange.createChange(classDefinition, info.getVisibility(), getConstNodesClass(constName), true, collector);
-		} else {
-			IASTDeclaration nodes = getConstNodesGlobal(constName);
-			ASTRewrite rewriter = collector.rewriterForTranslationUnit(unit);
-			rewriter.insertBefore(unit, TranslationUnitHelper.getFirstNode(unit), nodes, new TextEditGroup(Messages.ExtractConstantRefactoring_CreateConstant));
-		}
+	}
+	
+	@Override
+	protected RefactoringDescriptor getRefactoringDescriptor() {
+		Map<String, String> arguments = getArgumentMap();
+		RefactoringDescriptor desc = new ExtractConstantRefactoringDescription( project.getProject().getName(), "Extract Constant Refactoring", "Create constant for " + target.getRawSignature(), arguments);  //$NON-NLS-1$//$NON-NLS-2$
+		return desc;
+	}
+
+	private Map<String, String> getArgumentMap() {
+		Map<String, String> arguments = new HashMap<String, String>();
+		arguments.put(CRefactoringDescription.FILE_NAME, file.getLocationURI().toString());
+		arguments.put(CRefactoringDescription.SELECTION, region.getOffset() + "," + region.getLength()); //$NON-NLS-1$
+		arguments.put(ExtractConstantRefactoringDescription.NAME, info.getName());
+		arguments.put(ExtractConstantRefactoringDescription.VISIBILITY, info.getVisibility().toString());
+		return arguments;
 	}
 
 	private void createLiteralToConstantChanges(String constName, Iterable<? extends IASTExpression> literals, ModificationCollector collector) {
@@ -314,47 +358,30 @@ public class ExtractConstantRefactoring extends CRefactoring {
 
 	private IASTSimpleDeclaration getConstNodes(String newName){
 		
-		ICPPASTSimpleDeclSpecifier declSpec = new CPPASTSimpleDeclSpecifier();	
+		ICPPNodeFactory factory = ASTNodeFactoryFactory.getDefaultCPPNodeFactory();
+		DeclarationGeneratorImpl generator = new DeclarationGeneratorImpl(factory);
+		
+		
+		IType type = target.getExpressionType();
+		
+		IASTDeclSpecifier declSpec = generator.createDeclSpecFromType(type);
 		declSpec.setConst(true);
 		
-		switch(target.getKind()){
-		case IASTLiteralExpression.lk_char_constant:
-			declSpec.setType(IASTSimpleDeclSpecifier.t_char);
-			break;
-		case IASTLiteralExpression.lk_float_constant:
-			declSpec.setType(IASTSimpleDeclSpecifier.t_float);
-			break;
-		case IASTLiteralExpression.lk_integer_constant:
-			declSpec.setType(IASTSimpleDeclSpecifier.t_int);
-			break;
-		case IASTLiteralExpression.lk_string_literal:
-			declSpec.setType(ICPPASTSimpleDeclSpecifier.t_wchar_t);
-			break;
-		case IASTLiteralExpression.lk_false: 
-			//Like lk_true a boolean type
-		case IASTLiteralExpression.lk_true:
-			declSpec.setType(ICPPASTSimpleDeclSpecifier.t_bool);
-			break;
-		case IASTLiteralExpression.lk_this:
-			break;
-		}
+		IASTDeclarator declarator = generator.createDeclaratorFromType(type, newName.toCharArray());
 
 		IASTSimpleDeclaration simple = new CPPASTSimpleDeclaration();
 		simple.setDeclSpecifier(declSpec);
 		
-		IASTDeclarator decl = new CPPASTDeclarator();
-		IASTName name = new CPPASTName(newName.toCharArray());
-		decl.setName(name);
-		IASTInitializerExpression init = new CPPASTInitializerExpression(); 
+		IASTEqualsInitializer init = new CPPASTEqualsInitializer(); 
 		if (target.getParent() instanceof IASTUnaryExpression) {
 			IASTUnaryExpression unary = (IASTUnaryExpression) target.getParent();
-			init.setExpression(unary);
+			init.setInitializerClause(unary);
 		} else {
 			CPPASTLiteralExpression expression = new CPPASTLiteralExpression(target.getKind(), target.getValue());
-			init.setExpression(expression);
+			init.setInitializerClause(expression);
 		}
-		decl.setInitializer(init);
-		simple.addDeclarator(decl);
+		declarator.setInitializer(init);
+		simple.addDeclarator(declarator);
 		
 		return simple;
 	}
@@ -362,9 +389,9 @@ public class ExtractConstantRefactoring extends CRefactoring {
 	private IASTDeclaration getConstNodesGlobal(String newName){
 		IASTSimpleDeclaration simple = getConstNodes(newName);
 
-		if(unit.getParserLanguage().isCPP()){
-			ICPPASTNamespaceDefinition namespace = new CPPASTNamespaceDefinition();
-			namespace.setName(new CPPASTName());
+		INodeFactory factory= unit.getASTNodeFactory();
+		if (factory instanceof ICPPNodeFactory) {
+			ICPPASTNamespaceDefinition namespace = ((ICPPNodeFactory) factory).newNamespaceDefinition(new CPPASTName());
 			namespace.addDeclaration(simple);
 			return namespace;
 		}

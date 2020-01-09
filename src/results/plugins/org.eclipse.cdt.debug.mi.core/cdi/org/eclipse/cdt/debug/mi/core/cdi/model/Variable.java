@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -162,8 +162,13 @@ public abstract class Variable extends VariableDescriptor implements ICDIVariabl
 		String qualName = "&(" + getQualifiedName() + ")"; //$NON-NLS-1$ //$NON-NLS-2$
 		VariableDescriptor desc = createDescriptor((Target)getTarget(), (Thread)getThread(), (StackFrame)getStackFrame(), getName(), qualName, getPosition(), getStackDepth());
 		Variable v = vm.createVariable( desc );
-		v.setFormat(ICDIFormat.HEXADECIMAL);
-		hexAddress = v.getValue().getValueString();		
+	    // make sure to avoid infinite recursion. see bug 323630
+	    if (v != this) {
+	        v.setFormat(ICDIFormat.HEXADECIMAL);
+	        hexAddress = v.getValue().getValueString();
+	    } else {
+	        hexAddress = ""; //$NON-NLS-1$
+	    }
 		return hexAddress;
 	}
 
@@ -256,12 +261,13 @@ public abstract class Variable extends VariableDescriptor implements ICDIVariabl
 				} else if (cpp && childName.equals(vars[i].getType())) {
 					// it is a base class (which is returned by GDB as a field)
 					// (type of a child is the name of a child)
+					String childNameForCast = childName.contains("::") ? "'" + childName + "'" : childName; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 					if (t instanceof ICDIPointerType) {
 						// fn -> casting to pointer base class
-						fn = "(" + childName + "*)" + fn;//$NON-NLS-1$ //$NON-NLS-2$
+						fn = "(struct " + childNameForCast + ")(*" + fn + ")";//$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 					} else {
 						// fn -> casting to base class
-						fn = "(" + childName + ")" + fn;//$NON-NLS-1$ //$NON-NLS-2$
+						fn = "(struct " + childNameForCast + ")" + fn;//$NON-NLS-1$ //$NON-NLS-2$
 					}
 				} else if (t instanceof ICDIArrayType) {
 					// For Array gdb varobj only return the index, override here.

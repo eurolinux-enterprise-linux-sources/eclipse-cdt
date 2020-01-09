@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -105,6 +105,10 @@ public class BaseUITestCase extends BaseTestCase {
 		return TestSourceReader.getContentsForTest(CTestPlugin.getDefault().getBundle(), "ui", getClass(), getName(), sections);
 	}
 	
+	public String getAboveComment() throws IOException {
+		return getContentsForTest(1)[0].toString();
+	}
+	
     protected IFile createFile(IContainer container, String fileName, String contents) throws Exception {
     	return TestSourceReader.createFile(container, new Path(fileName), contents);
     }
@@ -116,9 +120,12 @@ public class BaseUITestCase extends BaseTestCase {
 	protected void waitForIndexer(IIndex index, IFile file, int maxmillis) throws Exception {
 		boolean firstTime= true;
 		long endTime= System.currentTimeMillis() + maxmillis;
+		long sleep= 1;
 		while (firstTime || System.currentTimeMillis() < endTime) {
-			if (!firstTime) 
-				Thread.sleep(50);
+			if (!firstTime) {
+				Thread.sleep(sleep);
+				sleep= Math.min(250, sleep*2);
+			}
 			firstTime= false;
 			
 			if (CCorePlugin.getIndexManager().isIndexerSetupPostponed(CoreModel.getDefault().create(file.getProject())))
@@ -133,12 +140,11 @@ public class BaseUITestCase extends BaseTestCase {
 				if (pfile != null && pfile.getTimestamp() >= file.getLocalTimeStamp()) {
 					return;
 				}
-			}
-			finally {
+			} finally {
 				index.releaseReadLock();
 				int time= (int) (endTime- System.currentTimeMillis());
 				if (time > 0) {
-					CCorePlugin.getIndexManager().joinIndexer(time, NPM);
+					CCorePlugin.getIndexManager().joinIndexer(time, npm());
 				}
 			}
 		}
@@ -220,10 +226,9 @@ public class BaseUITestCase extends BaseTestCase {
 	
 	protected void closeAllEditors() {
 		IWorkbenchWindow[] windows= PlatformUI.getWorkbench().getWorkbenchWindows();
-		for (int i= 0; i < windows.length; i++) {
-			IWorkbenchPage[] pages= windows[i].getPages();
-			for (int j= 0; j < pages.length; j++) {
-				IWorkbenchPage page= pages[j];
+		for (IWorkbenchWindow window : windows) {
+			IWorkbenchPage[] pages= window.getPages();
+			for (IWorkbenchPage page : pages) {
 				page.closeAllEditors(false);
 			}
 		}
@@ -235,13 +240,11 @@ public class BaseUITestCase extends BaseTestCase {
 		runEventQueue(0);
 
 		IViewReference[] viewRefs= page.getViewReferences();
-		for (int i = 0; i < viewRefs.length; i++) {
-			IViewReference ref = viewRefs[i];
+		for (IViewReference ref : viewRefs) {
 			page.setPartState(ref, IWorkbenchPage.STATE_RESTORED);
 		}
 		IEditorReference[] editorRefs= page.getEditorReferences();
-		for (int i = 0; i < editorRefs.length; i++) {
-			IEditorReference ref = editorRefs[i];
+		for (IEditorReference ref : editorRefs) {
 			page.setPartState(ref, IWorkbenchPage.STATE_RESTORED);
 		}
 		runEventQueue(0);
@@ -273,8 +276,8 @@ public class BaseUITestCase extends BaseTestCase {
 		if (w instanceof Composite) {
 			Composite comp= (Composite) w;
 			Control[] children= comp.getChildren();
-			for (int i = 0; i < children.length; i++) {
-				findControls(children[i], clazz, result);
+			for (Control element : children) {
+				findControls(element, clazz, result);
 			}
 		}
 	}
@@ -283,7 +286,7 @@ public class BaseUITestCase extends BaseTestCase {
 		Tree tree= null;
 		TreeItem root= null;
 		StringBuilder cands= new StringBuilder();
-		for (int i=0; i<400; i++) {
+		for (int i= 0; i < 400; i++) {
 			cands.setLength(0);
 			Control[] trees= findControls(part.getSite().getShell(), Tree.class);
 			for (int j = 0; j < trees.length; j++) {
@@ -297,11 +300,9 @@ public class BaseUITestCase extends BaseTestCase {
 						cands.append('|');
 					}
 					cands.append(root.getText());
-				} 
-				catch (SWTException e) {
+				} catch (SWTException e) {
 					// in case widget was disposed, item may be replaced
-				}
-				catch (IllegalArgumentException e) {
+				} catch (IllegalArgumentException e) {
 					// item does not yet exist.
 				}
 			}
@@ -322,11 +323,9 @@ public class BaseUITestCase extends BaseTestCase {
 				if (label.equals(root.getText())) {
 					return root;
 				}
-			} 
-			catch (SWTException e) {
+			} catch (SWTException e) {
 				// in case widget was disposed, item may be replaced
-			}
-			catch (IllegalArgumentException e) {
+			} catch (IllegalArgumentException e) {
 				// item does not yet exist.
 			}
 		}
@@ -338,13 +337,19 @@ public class BaseUITestCase extends BaseTestCase {
 	final protected TreeItem checkTreeNode(Tree tree, int i0, int i1, String label) {
 		TreeItem item= null;
 		String itemText= null;
+		SWTException ex= null;
+		String firstItemText= null;
 		for (int millis=0; millis < 5000; millis= millis==0 ? 1 : millis*2) {
 			runEventQueue(millis);
 			TreeItem root= tree.getItem(i0);
+			if (!root.getExpanded()) {
+				expandTreeItem(root);
+			}
+			ex= null;
 			try {
 				TreeItem firstItem= root.getItem(0);
-				final String text= firstItem.getText();
-				if (text.length() > 0 && !text.equals("...")) {
+				firstItemText= firstItem.getText();
+				if (firstItemText.length() > 0 && !firstItemText.equals("...")) {
 					item= root.getItem(i1);
 					itemText= item.getText();
 					assertNotNull("Unexpected tree node " + itemText, label);
@@ -363,9 +368,13 @@ public class BaseUITestCase extends BaseTestCase {
 				return null;
 			} catch (SWTException e) {
 				// widget was disposed, try again.
+				ex= e;
 			}
 		}
-		assertEquals("Timeout expired waiting for tree node {" + i0 + "," + i1 + "}", label, itemText);
+		if (ex != null)
+			throw ex;
+		
+		assertEquals("Timeout expired waiting for tree node {" + i0 + "," + i1 + "}; firstItem=" + firstItemText, label, itemText);
 		return null;
 	}
 	

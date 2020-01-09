@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 BitMethods Inc and others.
+ * Copyright (c) 2004, 2010 BitMethods Inc and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,6 +8,7 @@
  * Contributors:
  * BitMethods Inc - Initial API and implementation
  * ARM Ltd. - basic tooltip support
+ * Miwako Tokugawa (Intel Corporation) - Fixed-location tooltip support
  *******************************************************************************/
 package org.eclipse.cdt.managedbuilder.ui.properties;
 
@@ -36,8 +37,10 @@ import org.eclipse.ui.PlatformUI;
 
 /**
  * Field editor that uses FileListControl for user input.
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
  */
-
 public class FileListControlFieldEditor extends FieldEditor {
 
 	// file list control
@@ -72,6 +75,7 @@ public class FileListControlFieldEditor extends FieldEditor {
 	 * @param name the name of the preference this field editor works on
 	 * @param labelText the label text of the field editor
 	 * @param tooltip the tooltip text of the field editor
+	 * @param contextId 
 	 * @param parent the parent of the field editor's control
 	 * @param type the browseType of the file list control
 	 */
@@ -139,6 +143,26 @@ public class FileListControlFieldEditor extends FieldEditor {
 	}
 
 	/**
+	 * Sets the filter-path for the underlying Browse dialog. Only applies when browseType is 'file' or 'dir'.
+	 * @param filterPath
+	 * 
+	 * @since 7.0
+	 */
+	public void setFilterPath(String filterPath) {
+		list.setFilterPath(filterPath);
+	}
+	
+	/**
+	 * Sets the filter-extensions for the underlying Browse dialog. Only applies when browseType is 'file'.
+	 * @param filterExtensions
+	 * 
+	 * @since 7.0
+	 */
+	public void setFilterExtensions(String[] filterExtensions) {
+		list.setFilterExtensions(filterExtensions);
+	}
+	
+	/**
 	 * Fills this field editor's basic controls into the given parent.
 	 */
 	@Override
@@ -146,19 +170,15 @@ public class FileListControlFieldEditor extends FieldEditor {
 		topLayout = new Composite(parent, SWT.NONE);
 		GridLayout layout = new GridLayout();
 		layout.numColumns = numColumns;
-		layout.marginWidth = 7;
-		layout.marginHeight = 5;
+		layout.marginWidth = 0;
+		layout.marginHeight = 0;
 		layout.makeColumnsEqualWidth = false;
 		topLayout.setLayout(layout);
 		GridData gddata = new GridData(GridData.FILL_BOTH);
 		gddata.horizontalSpan = 2;
 		topLayout.setLayoutData(gddata);
 		// file list control
-		list =
-			new FileListControl(
-				topLayout,
-				getLabelText(),
-				getType());
+		list = new FileListControl(topLayout, getLabelText(), getType(), false);
 		list.addChangeListener(new IFileListChangeListener(){
 
 			public void fileListChanged(FileListControl fileList, String oldValue[], String newValue[]) {

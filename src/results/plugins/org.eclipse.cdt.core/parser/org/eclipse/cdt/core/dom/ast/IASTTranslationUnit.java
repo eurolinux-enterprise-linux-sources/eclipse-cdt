@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -24,7 +24,7 @@ import org.eclipse.core.runtime.IAdaptable;
  * @noextend This interface is not intended to be extended by clients.
  * @noimplement This interface is not intended to be implemented by clients.
  */
-public interface IASTTranslationUnit extends IASTNode, IASTDeclarationListOwner, IAdaptable {
+public interface IASTTranslationUnit extends IASTDeclarationListOwner, IAdaptable {
 
 	/**
 	 * <code>OWNED_DECLARATION</code> represents the relationship between an <code>IASTTranslationUnit</code> and
@@ -110,14 +110,14 @@ public interface IASTTranslationUnit extends IASTNode, IASTDeclarationListOwner,
 
 	/**
 	 * Returns the list of references in this translation unit to the given
-	 * binding. This list contains the IName nodes that represent a use of
-	 * the binding. They may be part of the AST or pulled in from the index.
+	 * binding. This list contains the IASTName nodes that represent a use of
+	 * the binding. These are part of the AST no definitions are pulled in from 
+	 * the index.
 	 * 
 	 * @param binding
 	 * @return List of IASTName nodes representing uses of the binding
 	 */
 	public IASTName[] getReferences(IBinding binding);
-	
 	
 	/**
 	 * Returns an IASTNodeSelector object for finding nodes by file offsets.
@@ -230,8 +230,12 @@ public interface IASTTranslationUnit extends IASTNode, IASTDeclarationListOwner,
 	 * @param offset
 	 */
 	public String getContainingFilename(int offset);
-    
-    public ParserLanguage getParserLanguage();
+
+	/**
+	 * @deprecated don't use it.
+	 */
+    @Deprecated
+	public ParserLanguage getParserLanguage();
     
     /**
      * Returns the Index associated with this translation unit.
@@ -271,9 +275,7 @@ public interface IASTTranslationUnit extends IASTNode, IASTDeclarationListOwner,
 
 	/**
 	 * Returns the node factory that was used to build the AST.
-	 * 
-	 * @noreference This method is not intended to be referenced by clients.
-	 * @since 5.1
+	 * @since 5.2
 	 */
 	public INodeFactory getASTNodeFactory();
 

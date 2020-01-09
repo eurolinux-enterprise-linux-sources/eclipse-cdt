@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -111,8 +111,13 @@ public class CLIEventProcessor
             	// Process Events of type DsfMIConsoleStreamOutput here
             	MIConsoleStreamOutput exec = (MIConsoleStreamOutput) oobr;
 
-            	// Look for events with Pattern ^[New Thread 1077300144 (LWP 7973)
-            	Pattern pattern = Pattern.compile("(^\\[New Thread.*LWP\\s*)(\\d*)", Pattern.MULTILINE); //$NON-NLS-1$
+            	// Look for events that indicate a new thread:
+            	// Examples:
+            	//	[New Thread 1077300144 (LWP 7973)	// POSIX
+            	//	[New thread 4092.0x8c4]				// cygwin and mingw
+				// Since we currently don't use any of the information in the
+				// message, we'll use a simple regex pattern
+            	Pattern pattern = Pattern.compile("^\\[New [Tt]hread\\s+"); //$NON-NLS-1$
             	Matcher matcher = pattern.matcher(exec.getCString());
             	if (matcher.find()) {
             		String threadId = Integer.toString(++fLastThreadId);
@@ -156,16 +161,7 @@ public class CLIEventProcessor
     }
 
     private void processStateChanges(int token, String operation) {
-        // Get the command name.
-        int indx = operation.indexOf(' ');
-        if (indx != -1) {
-            operation = operation.substring(0, indx).trim();
-        } else {
-            operation = operation.trim();
-        }
-
         // Check the type of command
-
         int type = getSteppingOperationKind(operation);
         if (type != -1) {
             // if it was a step instruction set state running
@@ -237,8 +233,16 @@ public class CLIEventProcessor
     }
 
     private static int getSteppingOperationKind(String operation) {
+        // Get the command name.
+        int indx = operation.indexOf(' ');
+        if (indx != -1) {
+            operation = operation.substring(0, indx).trim();
+        } else {
+            operation = operation.trim();
+        }
+        
         int type = -1;
-        /* execution commands: n, next, s, step, si, stepi, u, until, finish,
+        /* execution commands: n, next, s, step, si, stepi, u, until, finish, return,
            c, continue, fg */
         if (operation.equals("n") || operation.equals("next")) { //$NON-NLS-1$ //$NON-NLS-2$
             type = MIRunningEvent.NEXT;
@@ -253,6 +257,8 @@ public class CLIEventProcessor
                 type = MIRunningEvent.UNTIL;
         } else if (operation.startsWith("fin") && "finish".indexOf(operation) != -1) { //$NON-NLS-1$ //$NON-NLS-2$
             type = MIRunningEvent.FINISH;
+		} else if (operation.startsWith("ret") && "return".indexOf(operation) != -1) { //$NON-NLS-1$ //$NON-NLS-2$
+			type = MIRunningEvent.RETURN;
         } else if (operation.equals("c") || operation.equals("fg") || //$NON-NLS-1$ //$NON-NLS-2$
                (operation.startsWith("cont") && "continue".indexOf(operation) != -1)) { //$NON-NLS-1$ //$NON-NLS-2$
             type = MIRunningEvent.CONTINUE;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Nokia and others.
+ * Copyright (c) 2007, 2009 Nokia and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -45,6 +45,11 @@ public class BreakpointProblems {
 
 	public static IMarker reportUnresolvedBreakpoint(ICBreakpoint breakpoint, String contextName, String contextID) throws CoreException {
 		IMarker marker = BreakpointProblems.reportBreakpointProblem(breakpoint, BreakpointMessages.getString("BreakpointProblems_Unresolved"), IMarker.SEVERITY_WARNING, UNRESOLVED, true, false, contextName, contextID); //$NON-NLS-1$
+		return marker;
+	}
+
+	public static IMarker reportUnsupportedTracepoint(ICBreakpoint breakpoint, String contextName, String contextID) throws CoreException {
+		IMarker marker = BreakpointProblems.reportBreakpointProblem(breakpoint, BreakpointMessages.getString("BreakpointProblems_UnsupportedTracepoint"), IMarker.SEVERITY_WARNING, UNRESOLVED, true, false, contextName, contextID); //$NON-NLS-1$
 		return marker;
 	}
 

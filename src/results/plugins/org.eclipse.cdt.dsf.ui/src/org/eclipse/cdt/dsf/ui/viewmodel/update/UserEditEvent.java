@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,10 +14,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * An event representing a user editing of the data in the viewer.  Typically, when 
- * a viewer is configured to be in a manual update mode, if user edits a value, the 
- * viewer should still update at least the value that the user editor.  This event
- * is used to accomplish that behavior.
+ * An event that indicates the user modified data in the viewer. Even when a
+ * viewer is configured to be in a manual update mode, the modification of an
+ * element by the user should at least cause an update of the modified element.
+ * This event is used to accomplish that behavior.
  * 
  * @since 1.0
  */

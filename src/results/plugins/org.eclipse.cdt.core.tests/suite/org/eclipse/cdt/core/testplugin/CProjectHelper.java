@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,7 +22,6 @@ import junit.framework.Assert;
 import org.eclipse.cdt.core.CCProjectNature;
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.CProjectNature;
-import org.eclipse.cdt.core.ICExtensionReference;
 import org.eclipse.cdt.core.model.CModelException;
 import org.eclipse.cdt.core.model.CoreModel;
 import org.eclipse.cdt.core.model.IArchive;
@@ -34,6 +33,7 @@ import org.eclipse.cdt.core.model.ICElement;
 import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.model.ISourceRoot;
 import org.eclipse.cdt.core.model.ITranslationUnit;
+import org.eclipse.cdt.core.settings.model.ICConfigExtensionReference;
 import org.eclipse.cdt.core.settings.model.ICConfigurationDescription;
 import org.eclipse.cdt.core.settings.model.ICProjectDescription;
 import org.eclipse.cdt.core.settings.model.ICProjectDescriptionManager;
@@ -119,7 +119,7 @@ public class CProjectHelper {
 	 * @throws CoreException 
 	 */
 	public static boolean addDefaultBinaryParser(IProject project) throws CoreException {
-		ICExtensionReference[] binaryParsers= CCorePlugin.getDefault().getBinaryParserExtensions(project);
+		ICConfigExtensionReference[] binaryParsers= CCorePlugin.getDefault().getDefaultBinaryParserExtensions(project);
 		if (binaryParsers == null || binaryParsers.length == 0) {
 			ICProjectDescription desc= CCorePlugin.getDefault().getProjectDescription(project);
 			if (desc == null) {
@@ -427,19 +427,18 @@ public class CProjectHelper {
 	}
 
 	/**
-	 * Returns the location of a newly created directory in the systems temp. area.
-	 * @return the location of a newly created directory in the systems temp. area
+	 * @return the location of a newly created directory in temporary area.
+	 *    Note that cleanup should be done with {@link ResourceHelper#cleanUp()}.
 	 * @throws IOException
+	 * @throws CoreException 
 	 */
-	public static File freshDir() throws IOException {
-		File tempDir = new File(System.getProperty("java.io.tmpdir")).getCanonicalFile();		
-		for(int i=0; i<Integer.MAX_VALUE; i++) {
-			File candidate = new File(tempDir, "__testData/"+i);
-			if(!candidate.exists()) {
-				candidate.mkdirs();
-				return candidate;
-			}
-		}
-		return null;
+	public static File freshDir() throws IOException, CoreException {
+		IPath folderPath = ResourceHelper.createTemporaryFolder();
+		File folder = new File(folderPath.toOSString());
+		Assert.assertTrue(folder.exists());
+		Assert.assertTrue(folder.isDirectory());
+		Assert.assertTrue(folder.canWrite());
+		
+		return folder;
 	}
 }

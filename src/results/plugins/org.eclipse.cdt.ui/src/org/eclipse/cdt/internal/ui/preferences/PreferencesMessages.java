@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2009 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -75,10 +75,14 @@ public final class PreferencesMessages extends NLS {
 	public static String CEditorColoringConfigurationBlock_ppOthers;
 	public static String CEditorColoringConfigurationBlock_ppHeaders;
 	public static String CEditorColoringConfigurationBlock_cCommentTaskTags;
+	public static String CEditorColoringConfigurationBlock_DoxygenTagRecognized;
+	public static String CEditorColoringConfigurationBlock_DoxygenSingleLineComment;
+	public static String CEditorColoringConfigurationBlock_DoxygenMultiLineComment;
 	public static String CEditorColoringConfigurationBlock_coloring_category_code;
 	public static String CEditorColoringConfigurationBlock_coloring_category_comments;
 	public static String CEditorColoringConfigurationBlock_coloring_category_preprocessor;
 	public static String CEditorColoringConfigurationBlock_coloring_category_assembly;
+	public static String CEditorColoringConfigurationBlock_coloring_category_doxygen;
 	public static String CEditorColoringConfigurationBlock_coloring_element;
 	public static String CEditorColoringConfigurationBlock_link;
 	public static String CEditorColoringConfigurationBlock_enable_semantic_highlighting;
@@ -133,11 +137,18 @@ public final class PreferencesMessages extends NLS {
 	public static String AppearancePreferencePage_showTUChildren_label;
 	public static String AppearancePreferencePage_cviewGroupIncludes_label;
 	public static String AppearancePreferencePage_cviewSeparateHeaderAndSource_label;
+	public static String AppearancePreferencePage_cviewGroupMacros_label;
 	public static String AppearancePreferencePage_outlineGroupIncludes_label;
 	public static String AppearancePreferencePage_outlineGroupMethods_label;
 	public static String AppearancePreferencePage_outlineGroupNamespaces_label;
+	public static String AppearancePreferencePage_outlineGroupMacros_label;
 	public static String AppearancePreferencePage_note;
 	public static String AppearancePreferencePage_preferenceOnlyForNewViews;
+	public static String AppearancePreferencePage_showSourceRootsAtTopOfProject_label;
+	public static String BuildLogPreferencePage_Browse;
+	public static String BuildLogPreferencePage_ChooseLogFile;
+	public static String BuildLogPreferencePage_EnableLogging;
+	public static String BuildLogPreferencePage_LogLocation;
 	public static String CEditorPreferencePage_folding_title;
 	public static String FoldingConfigurationBlock_enable;
 	public static String FoldingConfigurationBlock_combo_caption;

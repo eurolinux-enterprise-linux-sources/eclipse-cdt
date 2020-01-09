@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008  Intel Corporation and others.
+ * Copyright (c) 2007, 2010  Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -45,6 +45,10 @@ import org.eclipse.swt.widgets.Spinner;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Widget;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 	
 	private static final int TRI_STATES_SIZE = 4;
@@ -71,6 +75,7 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 	
 	protected final int cpuNumber = BuildProcessManager.checkCPUNumber(); 
 	
+	@Override
 	public void createControls(Composite parent) {
 		super.createControls(parent);
 		usercomp.setLayout(new GridLayout(1, false));
@@ -119,7 +124,8 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 		setupControl(b_parallelOpt, 2, GridData.BEGINNING);
 		((GridData)(b_parallelOpt.getLayoutData())).horizontalIndent = 15;
 		b_parallelOpt.addSelectionListener(new SelectionAdapter() {
-		    public void widgetSelected(SelectionEvent event) {
+			@Override
+			public void widgetSelected(SelectionEvent event) {
 				setParallelDef(b_parallelOpt.getSelection());
 				updateButtons();
 		 }});
@@ -129,7 +135,8 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 		setupControl(b_parallelNum, 1, GridData.BEGINNING);
 		((GridData)(b_parallelNum.getLayoutData())).horizontalIndent = 15;
 		b_parallelNum.addSelectionListener(new SelectionAdapter() {
-		    public void widgetSelected(SelectionEvent event) {
+			@Override
+			public void widgetSelected(SelectionEvent event) {
 				setParallelDef(!b_parallelNum.getSelection());
 				updateButtons();
 		 }});
@@ -138,6 +145,7 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 		setupControl(parallelProcesses, 1, GridData.BEGINNING);
 		parallelProcesses.setValues(cpuNumber, 1, 10000, 0, 1, 10);
 		parallelProcesses.addSelectionListener(new SelectionAdapter () {
+			@Override
 			public void widgetSelected(SelectionEvent e) {
 				setParallelNumber(parallelProcesses.getSelection());
 				updateButtons();
@@ -146,6 +154,7 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 		
 		// Workbench behaviour group
 		AccessibleListener makeTargetLabelAccessibleListener = new AccessibleAdapter() {
+			@Override
 			public void getName(AccessibleEvent e) {
 				e.result = Messages.getString("BuilderSettingsTab.16"); //$NON-NLS-1$
 			}
@@ -247,6 +256,7 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 	/**
 	 * sets widgets states
 	 */
+	@Override
 	protected void updateButtons() {
 		bldr = icfg.getEditableBuilder();
 		canModify = false;
@@ -342,9 +352,10 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 		b.setData(t); // to get know which text is affected
 		t.setData(b); // to get know which button to enable/disable
 		b.addSelectionListener(new SelectionAdapter() {
-	        public void widgetSelected(SelectionEvent event) {
-	        	buttonVarPressed(event);
-	        }});
+			@Override
+			public void widgetSelected(SelectionEvent event) {
+				buttonVarPressed(event);
+			}});
 		if (check != null) check.setData(t);
 		return t;
 	}
@@ -361,10 +372,11 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 		}
 	}
 	
-    public void checkPressed(SelectionEvent e) {
-    	checkPressed((Control)e.widget, true);
-    	updateButtons();
-    }
+	@Override
+	public void checkPressed(SelectionEvent e) {
+		checkPressed((Control)e.widget, true);
+		updateButtons();
+	}
 	
 	private void checkPressed(Control b, boolean needsUpdate) {	
 		if (b == null) return;
@@ -390,12 +402,14 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 	 * @param cfgd - 
 	 */
 	
+	@Override
 	public void updateData(ICResourceDescription cfgd) {
 		if (cfgd == null) return;
 		icfg = getCfg(cfgd.getConfiguration());
 		updateButtons();
 	}
 
+	@Override
 	public void performApply(ICResourceDescription src, ICResourceDescription dst) {
 		apply(src, dst, page.isMultiCfg());
 	}
@@ -449,15 +463,18 @@ public class BuildBehaviourTab extends AbstractCBuildPropertyTab {
 		}
 	}
 	// This page can be displayed for project only
+	@Override
 	public boolean canBeVisible() {
 		return page.isForProject() || page.isForPrefs();
 	}
 	
+	@Override
 	public void setVisible (boolean b) {
 		super.setVisible(b);
 	}
 
 	
+	@Override
 	protected void performDefaults() {
 		if (icfg instanceof IMultiConfiguration) {
 			IConfiguration[] cfs = (IConfiguration[])((IMultiConfiguration)icfg).getItems();

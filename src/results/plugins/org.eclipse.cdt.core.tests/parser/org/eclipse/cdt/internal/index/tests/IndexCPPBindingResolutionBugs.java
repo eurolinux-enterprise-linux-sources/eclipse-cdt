@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
 
 import junit.framework.TestSuite;
 
+import org.eclipse.cdt.core.dom.ast.ASTTypeUtil;
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IBinding;
@@ -25,6 +26,7 @@ import org.eclipse.cdt.core.dom.ast.IField;
 import org.eclipse.cdt.core.dom.ast.IFunction;
 import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IPointerType;
+import org.eclipse.cdt.core.dom.ast.IProblemBinding;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
@@ -40,6 +42,7 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPNamespace;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPNamespaceScope;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPPointerToMemberType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPSpecialization;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateArgument;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateDefinition;
@@ -64,13 +67,14 @@ public class IndexCPPBindingResolutionBugs extends IndexBindingResolutionTestBas
 		public SingleProject() {setStrategy(new SinglePDOMTestStrategy(true));}
 		public static TestSuite suite() {return suite(SingleProject.class);}
 	}
-	
+
 	public static class ProjectWithDepProj extends IndexCPPBindingResolutionBugs {
 		public ProjectWithDepProj() {setStrategy(new ReferencedProject(true));}
 		public static TestSuite suite() {return suite(ProjectWithDepProj.class);}
 	}
 	
 	public static void addTests(TestSuite suite) {		
+		suite.addTest(IndexCPPBindingResolutionBugsSingleProjectFirstAST.suite());
 		suite.addTest(SingleProject.suite());
 		suite.addTest(ProjectWithDepProj.suite());
 	}
@@ -87,6 +91,7 @@ public class IndexCPPBindingResolutionBugs extends IndexBindingResolutionTestBas
 	// #define FUNC() void bar()
 	// #define FUNC2(A) void baz()
 	
+
 	// #include "header.h"
 	//
 	// OBJ {}
@@ -95,9 +100,9 @@ public class IndexCPPBindingResolutionBugs extends IndexBindingResolutionTestBas
 	public void testBug208558() throws CoreException {
 		IIndex index= getIndex();
 		
-		IIndexMacro[] macrosA= index.findMacros("OBJ".toCharArray(), IndexFilter.ALL, NPM);
-		IIndexMacro[] macrosB= index.findMacros("FUNC".toCharArray(), IndexFilter.ALL, NPM);
-		IIndexMacro[] macrosC= index.findMacros("FUNC2".toCharArray(), IndexFilter.ALL, NPM);
+		IIndexMacro[] macrosA= index.findMacros("OBJ".toCharArray(), IndexFilter.ALL, npm());
+		IIndexMacro[] macrosB= index.findMacros("FUNC".toCharArray(), IndexFilter.ALL, npm());
+		IIndexMacro[] macrosC= index.findMacros("FUNC2".toCharArray(), IndexFilter.ALL, npm());
 		
 		assertEquals(1, macrosA.length);
 		assertEquals(1, macrosB.length);
@@ -124,12 +129,12 @@ public class IndexCPPBindingResolutionBugs extends IndexBindingResolutionTestBas
 		assertEquals(1, func2.getParameterList().length);
 		assertEquals("A", new String(func2.getParameterList()[0]));
 		
-		IIndexBinding[] bindings= index.findBindings(Pattern.compile(".*"), false, IndexFilter.ALL, NPM);
+		IIndexBinding[] bindings= index.findBindings(Pattern.compile(".*"), false, IndexFilter.ALL, npm());
 		assertEquals(3, bindings.length);
 		
-		IIndexBinding foo= index.findBindings("foo".toCharArray(), IndexFilter.ALL, NPM)[0];
-		IIndexBinding bar= index.findBindings("bar".toCharArray(), IndexFilter.ALL, NPM)[0];
-		IIndexBinding baz= index.findBindings("baz".toCharArray(), IndexFilter.ALL, NPM)[0];
+		IIndexBinding foo= index.findBindings("foo".toCharArray(), IndexFilter.ALL, npm())[0];
+		IIndexBinding bar= index.findBindings("bar".toCharArray(), IndexFilter.ALL, npm())[0];
+		IIndexBinding baz= index.findBindings("baz".toCharArray(), IndexFilter.ALL, npm())[0];
 		
 		assertEquals("foo", foo.getName());
 		assertEquals("bar", bar.getName());
@@ -1135,5 +1140,151 @@ public class IndexCPPBindingResolutionBugs extends IndexBindingResolutionTestBas
 		}
 		buf.append('}');
 		return buf.toString();
+	}
+	
+	//	class Derived;
+	//  class X {
+	//     Derived* d;
+	//  };
+	//  class Base {};
+	//  void useBase(Base* b);
+	
+	//  class Derived: Base {};
+	//	void test() {
+	//      X x;
+	//      useBase(x.d);
+	//	}
+	public void testLateDefinitionOfInheritance_Bug292749() throws Exception {
+    	getBindingFromASTName("useBase(x.d", 7, ICPPFunction.class);
+	}
+	
+	// namespace one {
+	//   void fx();
+	//   void fx(int);
+	//   void fx(int, int);
+	// }
+	// namespace two {
+	//   using one::fx;
+    // }
+	
+	// #include "header.h"
+	// void test() {
+	//    two::fx();
+	//    two::fx(1);
+	//    two::fx(1,1);
+	// }
+	public void testUsingDeclaration_Bug300019() throws Exception {
+    	getBindingFromASTName("fx();", 2, ICPPFunction.class);
+    	getBindingFromASTName("fx(1);", 2, ICPPFunction.class);
+    	getBindingFromASTName("fx(1,1);", 2, ICPPFunction.class);
+	}
+	
+	//	struct YetAnotherTest {
+	//	  void test();
+	//	  friend class InnerClass3;
+	//	  class InnerClass3 {
+	//	    void f() {
+	//	      member=0;
+	//	    }
+	//	    int member;
+	//	  };
+	//	  InnerClass3 arr[32];
+	//	};
+
+	//	#include "a.h"
+	//	void YetAnotherTest::test() {
+	//	  arr[0].member=0;
+	//	}
+	public void testElaboratedTypeSpecifier_Bug303739() throws Exception {
+    	getBindingFromASTName("member=0", -2, ICPPField.class);
+	}
+	
+	//	typedef int xxx::* MBR_PTR;
+	
+	//	void test() {	
+	//		MBR_PTR x;
+	//	}
+	public void testProblemInIndexBinding_Bug317146() throws Exception {
+    	ITypedef td= getBindingFromASTName("MBR_PTR", 0, ITypedef.class);
+    	ICPPPointerToMemberType ptrMbr= (ICPPPointerToMemberType) td.getType();
+    	IType t= ptrMbr.getMemberOfClass();
+    	assertInstance(t, IProblemBinding.class);
+	}
+
+	//	void f255(
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int);
+	//	void f256(
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int,
+	//     int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int);
+	
+	//	void test() {	
+	//     f255(
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+	//     f256(
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	//          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+	//	}
+	public void testFunctionsWithManyParameters_Bug319186() throws Exception {
+		getBindingFromASTName("f255", 0);
+		getBindingFromASTName("f256", 0);
+	}		
+	
+	// void f(char16_t x);
+	// void f(char32_t x);
+	
+	// 	void test() {
+	//     char16_t c16;
+	//     char32_t c32;
+	//     f(c16); f(c32);
+	// }
+
+	public void testChar16_Bug319186() throws Exception {
+		IFunction f= getBindingFromASTName("f(c16)", 1);
+		assertEquals("char16_t", ASTTypeUtil.getType(f.getType().getParameterTypes()[0]));
+		
+		f= getBindingFromASTName("f(c32)", 1);
+		assertEquals("char32_t", ASTTypeUtil.getType(f.getType().getParameterTypes()[0]));
 	}
 }

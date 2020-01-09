@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,6 +21,9 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.cdt.core.model.ITranslationUnit;
+import org.eclipse.cdt.debug.internal.core.sourcelookup.CSourceNotFoundElement;
+import org.eclipse.cdt.debug.internal.ui.sourcelookup.CSourceNotFoundEditorInput;
+import org.eclipse.cdt.debug.ui.ICDebugUIConstants;
 import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.DsfExecutor;
 import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
@@ -29,9 +32,9 @@ import org.eclipse.cdt.dsf.concurrent.ThreadSafe;
 import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.datamodel.IDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl;
-import org.eclipse.cdt.dsf.debug.service.IStack;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IExecutionDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.StateChangeReason;
+import org.eclipse.cdt.dsf.debug.service.IStack;
 import org.eclipse.cdt.dsf.debug.service.IStack.IFrameDMContext;
 import org.eclipse.cdt.dsf.debug.service.IStack.IFrameDMData;
 import org.eclipse.cdt.dsf.debug.sourcelookup.DsfSourceLookupParticipant;
@@ -55,9 +58,7 @@ import org.eclipse.debug.core.sourcelookup.ISourceLookupDirector;
 import org.eclipse.debug.core.sourcelookup.ISourceLookupParticipant;
 import org.eclipse.debug.core.sourcelookup.containers.LocalFileStorage;
 import org.eclipse.debug.ui.DebugUITools;
-import org.eclipse.debug.ui.IDebugUIConstants;
 import org.eclipse.debug.ui.ISourcePresentation;
-import org.eclipse.debug.ui.sourcelookup.CommonSourceNotFoundEditorInput;
 import org.eclipse.debug.ui.sourcelookup.ISourceDisplay;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
@@ -183,7 +184,7 @@ public class DsfSourceDisplayAdapter implements ISourceDisplay, ISteppingControl
 			return Status.OK_STATUS;
 		}
         
-        private SourceLookupResult performLookup() {
+		private SourceLookupResult performLookup() {
             IDMContext dmc = fFrameData.fDmc;
 			SourceLookupResult result = new SourceLookupResult(dmc , null, null, null);
             String editorId = null;
@@ -191,8 +192,8 @@ public class DsfSourceDisplayAdapter implements ISourceDisplay, ISteppingControl
             Object sourceElement = fSourceLookup.getSourceElement(dmc);
 
             if (sourceElement == null) {
-                editorInput = new CommonSourceNotFoundEditorInput(dmc);
-                editorId = IDebugUIConstants.ID_COMMON_SOURCE_NOT_FOUND_EDITOR;
+				editorInput = new CSourceNotFoundEditorInput(new CSourceNotFoundElement(dmc, fSourceLookup.getLaunchConfiguration(), fFrameData.fFile));
+				editorId = ICDebugUIConstants.CSOURCENOTFOUND_EDITOR_ID;
             } else {
 				ISourcePresentation presentation= null;
 				if (fSourceLookup instanceof ISourcePresentation) {
@@ -217,8 +218,8 @@ public class DsfSourceDisplayAdapter implements ISourceDisplay, ISteppingControl
 	            		editorInput = new FileStoreEditorInput(fileStore);
 	            		editorId = getEditorIdForFilename(fileStore.getName());
 	            	} catch (CoreException e) {
-	                    editorInput = new CommonSourceNotFoundEditorInput(dmc);
-	                    editorId = IDebugUIConstants.ID_COMMON_SOURCE_NOT_FOUND_EDITOR;
+						editorInput = new CSourceNotFoundEditorInput(new CSourceNotFoundElement(dmc, fSourceLookup.getLaunchConfiguration(), fFrameData.fFile));
+						editorId = ICDebugUIConstants.CSOURCENOTFOUND_EDITOR_ID;
 	            	}
 	            } else if (sourceElement instanceof LocalFileStorage) {
 	            	File file = ((LocalFileStorage)sourceElement).getFile();
@@ -591,10 +592,9 @@ public class DsfSourceDisplayAdapter implements ISourceDisplay, ISteppingControl
         final IInstructionPointerPresentation ipPresentation = (IInstructionPointerPresentation) session.getModelAdapter(IInstructionPointerPresentation.class);
 		fIPManager = new InstructionPointerManager(ipPresentation);
         
-		
-		fExecutor.execute(new DsfRunnable() { public void run() {
-			fSession.addServiceEventListener(DsfSourceDisplayAdapter.this, null);
-		}});
+        fExecutor.execute(new DsfRunnable() { public void run() {
+        	fSession.addServiceEventListener(DsfSourceDisplayAdapter.this, null);
+        }});
 
         fController = controller;
 		if (fController != null) {
@@ -619,13 +619,15 @@ public class DsfSourceDisplayAdapter implements ISourceDisplay, ISteppingControl
 			fController.removeSteppingControlParticipant(this);
 			fController = null;
 		}
+		
 		try {
 			fExecutor.execute(new DsfRunnable() { public void run() {
 				fSession.removeServiceEventListener(DsfSourceDisplayAdapter.this);
 			}});
 		} catch (RejectedExecutionException e) {
-			// Session is shutdown
+            // Session is shut down.
 		}
+		
         fServicesTracker.dispose();
         fSourceLookup.removeParticipants(new ISourceLookupParticipant[] {fSourceLookupParticipant});
         
@@ -645,16 +647,22 @@ public class DsfSourceDisplayAdapter implements ISourceDisplay, ISteppingControl
 	/* (non-Javadoc)
 	 * @see org.eclipse.debug.ui.contexts.ISourceDisplayAdapter#displaySource(java.lang.Object, org.eclipse.ui.IWorkbenchPage, boolean)
 	 */
-    public void displaySource(Object context, final IWorkbenchPage page, final boolean force) {
+	public void displaySource(Object context, final IWorkbenchPage page,
+			final boolean force) {
 		fStepCount = 0;
 
-        if (!(context instanceof IDMVMContext)) return;
-        final IDMContext dmc = ((IDMVMContext)context).getDMContext();
+		IFrameDMContext displayFrame = null;
+		if (context instanceof IDMVMContext) {
+			IDMContext dmc = ((IDMVMContext) context).getDMContext();
+			if (dmc instanceof IFrameDMContext)
+				displayFrame = (IFrameDMContext) dmc;
+		} else if (context instanceof IFrameDMContext)
+			displayFrame = (IFrameDMContext) context;
 
-        // Quick test.  DMC is checked again in source lookup participant, but 
-        // it's much quicker to test here. 
-        if (!(dmc instanceof IFrameDMContext)) return;
-        doDisplaySource((IFrameDMContext) dmc, page, force, false);
+		// Quick test. DMC is checked again in source lookup participant, but
+		// it's much quicker to test here.
+		if (displayFrame != null)
+			doDisplaySource(displayFrame, page, force, false);
 	}
 
 	private void doDisplaySource(final IFrameDMContext context, final IWorkbenchPage page, final boolean force, final boolean eventTriggered) {
@@ -687,6 +695,15 @@ public class DsfSourceDisplayAdapter implements ISourceDisplay, ISteppingControl
 							startLookupJob(frameData, page, eventTriggered);
 						}
 					}
+					@Override
+					protected void handleFailure() {
+					    doneStepping(context);
+					}
+                    
+                    @Override
+                    protected void handleRejectedExecutionException() {
+                        doneStepping(context);
+                    }
     			});
         }});
 	}

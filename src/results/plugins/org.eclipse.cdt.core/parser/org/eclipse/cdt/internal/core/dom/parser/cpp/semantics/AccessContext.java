@@ -7,6 +7,7 @@
  *
  * Contributors:
  * 	   Sergey Prigogin (Google) - initial API and implementation
+ *	   Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.dom.parser.cpp.semantics;
 
@@ -270,10 +271,10 @@ public class AccessContext {
 				continue;
 			}
 			if (binding instanceof ICPPFunction || binding instanceof ICPPClassType) {
-				accessibilityContext = (IBinding[]) ArrayUtil.append(IBinding.class, accessibilityContext, binding);
+				accessibilityContext = ArrayUtil.append(accessibilityContext, binding);
 			}
 		}
-		return (IBinding[]) ArrayUtil.trim(IBinding.class, accessibilityContext);
+		return ArrayUtil.trim(accessibilityContext);
 	}
 
 	/**

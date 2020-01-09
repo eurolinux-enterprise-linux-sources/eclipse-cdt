@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,6 +22,7 @@ import org.eclipse.jface.action.IToolBarManager;
 import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.action.Separator;
 import org.eclipse.jface.text.ITextSelection;
+import org.eclipse.jface.util.LocalSelectionTransfer;
 import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.jface.viewers.DoubleClickEvent;
 import org.eclipse.jface.viewers.IDoubleClickListener;
@@ -55,7 +56,6 @@ import org.eclipse.ui.part.ShowInContext;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.eclipse.ui.views.contentoutline.IContentOutlinePage;
-import org.eclipse.ui.views.navigator.LocalSelectionTransfer;
 
 import org.eclipse.cdt.core.model.CModelException;
 import org.eclipse.cdt.core.model.ICElement;
@@ -187,9 +187,9 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 		AbstractCModelOutlinePage fOutLinePage;
 
 		public IncludeGroupingAction(AbstractCModelOutlinePage outlinePage) {
-			super(ActionMessages.getString("IncludesGroupingAction.label")); //$NON-NLS-1$
-			setDescription(ActionMessages.getString("IncludesGroupingAction.description")); //$NON-NLS-1$
-			setToolTipText(ActionMessages.getString("IncludesGroupingAction.tooltip")); //$NON-NLS-1$
+			super(ActionMessages.IncludesGroupingAction_label);
+			setDescription(ActionMessages.IncludesGroupingAction_description);
+			setToolTipText(ActionMessages.IncludesGroupingAction_tooltip);
 			CPluginImages.setImageDescriptors(this, CPluginImages.T_LCL, CPluginImages.IMG_MENU_GROUP_INCLUDE);
 
 			boolean enabled= isIncludesGroupingEnabled();
@@ -211,6 +211,40 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 
 	}
 
+	/**
+	 * This action toggles macro grouping
+	 * 
+	 * @since 5.2
+	 */
+	protected static class MacroGroupingAction extends Action {
+
+		public MacroGroupingAction(AbstractCModelOutlinePage outlinePage) {
+			super(ActionMessages.MacroGroupingAction_label);
+			setDescription(ActionMessages.MacroGroupingAction_description);
+			setToolTipText(ActionMessages.MacroGroupingAction_tooltip);
+			CPluginImages.setImageDescriptors(this, CPluginImages.T_LCL, CPluginImages.IMG_ACTION_HIDE_MACROS);
+			this.setImageDescriptor(CPluginImages.DESC_OBJS_MACRO);
+			this.setDisabledImageDescriptor(CPluginImages.DESC_OBJS_MACRO);
+			
+
+			boolean enabled= isMacroGroupingEnabled();
+			setChecked(enabled);
+		}
+
+		/**
+		 * Runs the action.
+		 */
+		@Override
+		public void run() {
+			PreferenceConstants.getPreferenceStore().setValue(PreferenceConstants.OUTLINE_GROUP_MACROS, isChecked());
+		}
+
+		public boolean isMacroGroupingEnabled () {
+			return PreferenceConstants.getPreferenceStore().getBoolean(PreferenceConstants.OUTLINE_GROUP_MACROS);
+		}
+
+	}
+	
 	/**
 	 * This action toggles whether this C Outline page links
 	 * its selection to the active editor.
@@ -248,11 +282,11 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 	protected String fContextMenuId;
 	private Menu fMenu;
 	protected OpenIncludeAction fOpenIncludeAction;
-	private IncludeGroupingAction fIncludeGroupingAction;
 	private ToggleLinkingAction fToggleLinkingAction;
 	private ActionGroup fMemberFilterActionGroup;
 	private ActionGroup fSelectionSearchGroup;
 	private ActionGroup fRefactoringActionGroup;
+	private ActionGroup fSourceActionGroup;
 	private ActionGroup fOpenViewActionGroup;
 	/**
 	 * Custom filter action group.
@@ -280,7 +314,7 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 	/*
 	 * @see org.eclipse.core.runtime.IAdaptable#getAdapter(java.lang.Class)
 	 */
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	public Object getAdapter(Class key) {
 		if (key == IShowInSource.class) {
 			return getShowInSource();
@@ -403,6 +437,10 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 			fSelectionSearchGroup.fillContextMenu(menu);
 			menu.add(new Separator(IWorkbenchActionConstants.MB_ADDITIONS));
 		}
+		
+		if (fSourceActionGroup != null) {
+			fSourceActionGroup.fillContextMenu(menu);
+		}
 	
 		if (fRefactoringActionGroup != null) {
 			fRefactoringActionGroup.fillContextMenu(menu);
@@ -464,6 +502,7 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 	
 		fSelectionSearchGroup = createSearchActionGroup();
 		fOpenViewActionGroup = createOpenViewActionGroup();
+		fSourceActionGroup = createSourceActionGroup();
 		fRefactoringActionGroup= createRefactoringActionGroup();
 		// Custom filter group
 		fCustomFiltersActionGroup= createCustomFiltersActionGroup();
@@ -557,8 +596,10 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 		
 		fToggleLinkingAction= new ToggleLinkingAction();
 		menu.add(fToggleLinkingAction);
-		fIncludeGroupingAction= new IncludeGroupingAction(this);
-		menu.add(fIncludeGroupingAction);
+		
+		menu.add(new Separator("group.layout")); //$NON-NLS-1$
+		menu.add(new IncludeGroupingAction(this));
+		menu.add(new MacroGroupingAction(this));
 	}
 
 	/**
@@ -585,6 +626,15 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 	 */
 	protected ActionGroup createRefactoringActionGroup() {
 		// default: no refactoring actions
+		return null;
+	}
+	
+	/**
+	 * @return an ActionGroup contributing source actions or
+	 *         <code>null</code> if source actions are not supported
+	 */
+	protected ActionGroup createSourceActionGroup() {
+		// default: no source actions
 		return null;
 	}
 
@@ -627,6 +677,11 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 		if (fRefactoringActionGroup != null) {
 			fRefactoringActionGroup.setContext(new ActionContext(selection));
 			fRefactoringActionGroup.updateActionBars();
+		}
+		
+		if (fSourceActionGroup != null) {
+			fSourceActionGroup.setContext(new ActionContext(selection));
+			fSourceActionGroup.updateActionBars();
 		}
 	}
 
@@ -688,7 +743,7 @@ public abstract class AbstractCModelOutlinePage extends Page implements IContent
 	private void initDragAndDrop() {
 		int ops= DND.DROP_COPY | DND.DROP_MOVE | DND.DROP_LINK;
 		Transfer[] transfers= new Transfer[] {
-			LocalSelectionTransfer.getInstance()
+			LocalSelectionTransfer.getTransfer()
 		};
 		
 		// Drop Adapter

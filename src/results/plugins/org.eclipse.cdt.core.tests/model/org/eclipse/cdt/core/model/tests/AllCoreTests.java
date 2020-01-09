@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2009 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -46,12 +46,12 @@ public class AllCoreTests {
         suite.addTest(CModelBuilderInactiveCodeTest.suite());
         suite.addTest(FlagTests.suite());
         suite.addTest(ArchiveTests.suite());
+        suite.addTest(BinaryTests.suite());
         suite.addTest(TranslationUnitTests.suite());
 		suite.addTest(DeclaratorsTests.suite());
 		suite.addTest(MacroTests.suite());
 //		suite.addTest(FailedMacroTests.suite());
 		suite.addTest(CPathEntryTest.suite());
-//		suite.addTest(CConfigurationDescriptionReferenceTests.suite());
 		//the CProjectDescriptionTests now groups all New Project Model related tests
 		//which includes the CConfigurationDescriptionReferenceTests
 		suite.addTest(AllCProjectDescriptionTests.suite());
@@ -59,6 +59,7 @@ public class AllCoreTests {
 		suite.addTest(ASTCacheTests.suite());
 		suite.addTest(AsmModelBuilderTest.suite());
 		suite.addTest(CModelBuilderBugsTest.suite());
+		suite.addTest(Bug311189.suite());
         return suite;
 
     }

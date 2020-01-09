@@ -12,18 +12,20 @@
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
 
 import org.eclipse.cdt.core.dom.ast.ASTTypeUtil;
-import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTPointer;
 import org.eclipse.cdt.core.dom.ast.IPointerType;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPPointerToMemberType;
+import org.eclipse.cdt.internal.core.dom.parser.ISerializableType;
 import org.eclipse.cdt.internal.core.dom.parser.ITypeContainer;
+import org.eclipse.cdt.internal.core.dom.parser.ITypeMarshalBuffer;
+import org.eclipse.core.runtime.CoreException;
 
 /**
  * Pointers in c++
  */
-public class CPPPointerType implements IPointerType, ITypeContainer {
+public class CPPPointerType implements IPointerType, ITypeContainer, ISerializableType {
 	protected IType type = null;
 	private boolean isConst = false;
 	private boolean isVolatile = false;
@@ -71,10 +73,7 @@ public class CPPPointerType implements IPointerType, ITypeContainer {
 	    
 	    IPointerType pt = (IPointerType) o;
 	    if (isConst == pt.isConst() && isVolatile == pt.isVolatile()) {
-			try {
-				return type.isSameType(pt.getType());
-			} catch (DOMException e) {
-			}
+			return type.isSameType(pt.getType());
 	    }
 	    return false;
 	}
@@ -109,5 +108,20 @@ public class CPPPointerType implements IPointerType, ITypeContainer {
 	@Override
 	public String toString() {
 		return ASTTypeUtil.getType(this);
+	}
+
+	public void marshal(ITypeMarshalBuffer buffer) throws CoreException {
+		int firstByte= ITypeMarshalBuffer.POINTER;
+		if (isConst()) firstByte |= ITypeMarshalBuffer.FLAG1;
+		if (isVolatile()) firstByte |= ITypeMarshalBuffer.FLAG2;
+		buffer.putByte((byte) firstByte);
+		final IType nestedType = getType();
+		buffer.marshalType(nestedType);
+	}
+	
+	public static IType unmarshal(int firstByte, ITypeMarshalBuffer buffer) throws CoreException {
+		IType nested= buffer.unmarshalType();
+		return new CPPPointerType(nested, (firstByte & ITypeMarshalBuffer.FLAG1) != 0,
+				(firstByte & ITypeMarshalBuffer.FLAG2) != 0);
 	}
 }

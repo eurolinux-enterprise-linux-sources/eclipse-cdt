@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,13 +13,17 @@ package org.eclipse.cdt.internal.core.dom.parser.cpp;
 
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTDeclarator;
+import org.eclipse.cdt.core.dom.ast.IASTEqualsInitializer;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IASTInitializer;
-import org.eclipse.cdt.core.dom.ast.IASTInitializerExpression;
+import org.eclipse.cdt.core.dom.ast.IASTInitializerClause;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.IValue;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTInitializerList;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTParameterDeclaration;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameterPackType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateArgument;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateNonTypeParameter;
 import org.eclipse.cdt.internal.core.dom.parser.Value;
@@ -38,6 +42,15 @@ public class CPPTemplateNonTypeParameter extends CPPTemplateParameter implements
 	}
 
 	public IASTExpression getDefault() {
+		IASTInitializerClause def= getDefaultClause();
+		if (def instanceof IASTExpression) {
+			return (IASTExpression) def;
+		}
+		
+		return null;
+	}
+	
+	public IASTInitializerClause getDefaultClause() {
 		IASTName[] nds = getDeclarations();
 		if (nds == null || nds.length == 0)
 		    return null;
@@ -49,8 +62,9 @@ public class CPPTemplateNonTypeParameter extends CPPTemplateParameter implements
 				if (parent instanceof IASTDeclarator) {
 					IASTDeclarator dtor = (IASTDeclarator) parent;
 					IASTInitializer initializer = dtor.getInitializer();
-					if (initializer instanceof IASTInitializerExpression)
-						return ((IASTInitializerExpression) initializer).getExpression();
+					if (initializer instanceof IASTEqualsInitializer) {
+						return ((IASTEqualsInitializer) initializer).getInitializerClause();
+					}
 				}
 			}
 		}
@@ -58,7 +72,23 @@ public class CPPTemplateNonTypeParameter extends CPPTemplateParameter implements
 	}
 	
 	public ICPPTemplateArgument getDefaultValue() {
-		IASTExpression d= getDefault();
+		IASTInitializerClause dc= getDefault();
+		IASTExpression d= null;
+		if (dc instanceof IASTExpression) {
+			d= (IASTExpression) dc;
+		} else if (dc instanceof ICPPASTInitializerList) {
+			ICPPASTInitializerList list= (ICPPASTInitializerList) dc;
+			switch(list.getSize()) {
+			case 0:
+				return new CPPTemplateArgument(Value.create(0), getType());
+			case 1:
+				dc= list.getClauses()[0];
+				if (dc instanceof IASTExpression) {
+					d= (IASTExpression) dc;
+				}
+			}
+		}
+		
 		if (d == null)
 			return null;
 		
@@ -68,12 +98,21 @@ public class CPPTemplateNonTypeParameter extends CPPTemplateParameter implements
 	}
 
 	public IType getType() {
-		if( type == null ){
-			IASTName name = getPrimaryDeclaration();
-		    IASTDeclarator dtor = (IASTDeclarator) name.getParent();
-		    type = CPPVisitor.createType( dtor );
+		if (type == null) {
+			IASTNode parent= getPrimaryDeclaration().getParent();
+			while (parent != null) {
+				if (parent instanceof ICPPASTParameterDeclaration) {
+					type= CPPVisitor.createParameterType((ICPPASTParameterDeclaration) parent, true);
+					break;
+				}
+				parent= parent.getParent();
+			}
 		}
 		return type;
+	}
+
+	public boolean isParameterPack() {
+		return getType() instanceof ICPPParameterPackType;
 	}
 
 	public boolean isStatic() throws DOMException {

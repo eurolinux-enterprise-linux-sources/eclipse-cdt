@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.2"?><!--
+    Copyright (c) 2010 Wind River Systems, Inc. and others.
+    All rights reserved. This program and the accompanying materials
+    are made available under the terms of the Eclipse Public License v1.0
+    which accompanies this distribution, and is available at
+    http://www.eclipse.org/legal/epl-v10.html
+   
+    Contributors:
+        Wind River Systems - initial API and implementation
+ -->
+
+<plugin>
+
+   <extension-point id="launch_context" name="TCF Launch Context" schema="schema/launch_context.exsd"/>
+
+   <extension point="org.eclipse.tm.tcf.startup"/>
+
+   <extension
+        id="org.eclipse.tm.tcf.debug.ui.adapters"
+        point="org.eclipse.core.runtime.adapters">
+      <factory 
+         class="org.eclipse.tm.internal.tcf.debug.ui.adapters.TCFLaunchAdapterFactory" 
+         adaptableType="org.eclipse.tm.internal.tcf.debug.model.TCFLaunch">
+         <adapter type="org.eclipse.debug.internal.ui.viewers.model.provisional.IElementContentProvider"/>
+         <adapter type="org.eclipse.debug.internal.ui.viewers.model.provisional.IElementLabelProvider"/>
+         <adapter type="org.eclipse.debug.internal.ui.viewers.model.provisional.IModelProxyFactory"/>
+         <adapter type="org.eclipse.debug.ui.contexts.ISuspendTrigger"/>
+      </factory>
+      <factory
+         class="org.eclipse.tm.internal.tcf.debug.ui.adapters.TCFNodeAdapterFactory"
+         adaptableType="org.eclipse.tm.internal.tcf.debug.ui.model.TCFNode">
+         <adapter type="org.eclipse.debug.ui.actions.IToggleBreakpointsTarget"/>
+         <adapter type="org.eclipse.debug.ui.actions.IToggleBreakpointsTargetExtension"/>
+      </factory>
+   </extension>
+   
+   <extension point="org.eclipse.debug.ui.debugModelPresentations">
+      <debugModelPresentation 
+         class = "org.eclipse.tm.internal.tcf.debug.ui.model.TCFModelPresentation"
+         id = "org.eclipse.tm.tcf.debug">
+      </debugModelPresentation>
+   </extension>
+   
+   <extension point="org.eclipse.debug.ui.launchConfigurationTypeImages">
+      <launchConfigurationTypeImage
+            icon="icons/tcf.gif"
+            configTypeID="org.eclipse.tm.tcf.debug.LaunchConfigurationType"
+            id="org.eclipse.tm.tcf.debug.LaunchConfigurationTypeImage">
+      </launchConfigurationTypeImage>
+   </extension>
+   
+   <extension point="org.eclipse.debug.ui.launchConfigurationTabGroups">
+      <launchConfigurationTabGroup
+            type="org.eclipse.tm.tcf.debug.LaunchConfigurationType"
+            description="Run or debug a program using Target Communication Framework"
+            class="org.eclipse.tm.internal.tcf.debug.ui.launch.TCFTabGroup"
+            id="org.eclipse.tm.tcf.debug.LaunchConfigurationTabGroup">
+      </launchConfigurationTabGroup>
+   </extension>
+   
+   <extension point="org.eclipse.core.expressions.propertyTesters">
+      <propertyTester
+      		namespace="org.eclipse.tm.tcf.launch"
+            properties="isExecutable"
+            type="org.eclipse.core.runtime.IAdaptable"
+            class="org.eclipse.tm.internal.tcf.debug.ui.launch.TCFPropertyTester"
+            id="org.eclipse.tm.tcf.launch.PropertyTester">
+      </propertyTester>
+   </extension>
+
+   <extension point="org.eclipse.debug.ui.launchShortcuts">
+      <shortcut
+         label="TCF Application"
+         icon="icons/tcf.gif"
+         helpContextId="org.eclipse.tm.tcf.debug.ui.shortcut_tcf_application"
+         modes="run, debug"
+         class="org.eclipse.tm.internal.tcf.debug.ui.launch.TCFLaunchShortcut"
+         description="Launch an application using Target Communication Framework (TCF)"
+         id="org.eclipse.tm.tcf.debug.ui.TCFShortcut">
+         <description
+            description="Runs an application using Target Communication Framework (TCF)"
+            mode="run">
+         </description>
+         <description
+            description="Debugs an application using Target Communication Framework (TCF)"
+            mode="debug">
+         </description>
+         <contextualLaunch>
+            <enablement>
+               <with variable="selection">
+                  <count value="1"/>
+                  <iterate>
+                     <test
+                        forcePluginActivation="true"
+                        property="org.eclipse.tm.tcf.launch.isExecutable"/>
+                  </iterate>
+               </with>
+            </enablement>
+         </contextualLaunch>
+         <configurationType
+            id="org.eclipse.tm.tcf.debug.LaunchConfigurationType">
+         </configurationType>
+      </shortcut>
+   </extension>
+
+   <extension
+         point="org.eclipse.ui.contexts">
+      <context
+            name="Debugging using Target Communication Framework"
+            description="Debugging using Target Communication Framework"
+            id="org.eclipse.tm.tcf.debug.ui.debugging"
+            parentId="org.eclipse.debug.ui.debugging">
+      </context>
+   </extension>
+
+   <extension
+         point="org.eclipse.ui.views">
+      <view
+            name="TCF Trace"
+            icon="icons/tcf.gif"
+            category="org.eclipse.debug.ui"
+            class="org.eclipse.tm.internal.tcf.debug.ui.trace.TraceView"
+            id="org.eclipse.tm.tcf.TraceView">
+      </view>
+   </extension>
+
+   <extension
+         point="org.eclipse.ui.perspectiveExtensions">
+      <perspectiveExtension
+            targetID="org.eclipse.debug.ui.DebugPerspective">
+         <view
+               relative="org.eclipse.ui.console.ConsoleView"
+               relationship="stack"
+               visible="false"
+               id="org.eclipse.tm.tcf.TraceView">
+         </view>
+      </perspectiveExtension>
+   </extension>
+   
+   <extension point="org.eclipse.ui.editors.annotationTypes">
+      <type
+         name="org.eclipse.tm.tcf.debug.top_frame">
+      </type>
+      <type
+         name="org.eclipse.tm.tcf.debug.stack_frame">
+      </type>
+   </extension>  
+   
+   <extension point="org.eclipse.ui.editors.markerAnnotationSpecification">
+      <specification
+         annotationImageProvider="org.eclipse.tm.internal.tcf.debug.ui.model.TCFAnnotationImageProvider"
+         annotationType="org.eclipse.tm.tcf.debug.top_frame"
+         colorPreferenceKey="currentIPColor"
+         colorPreferenceValue="198,219,174"
+         highlightPreferenceKey="currentIPHighlight"
+         highlightPreferenceValue="true"
+         label="%debugCurrentInstructionPointer"
+         overviewRulerPreferenceKey="currentIPOverviewRuler"
+         overviewRulerPreferenceValue="true"
+         presentationLayer="6"
+         textPreferenceKey="currentIPIndication"
+         textPreferenceValue="false"
+         verticalRulerPreferenceKey="currentIPVerticalRuler"
+         verticalRulerPreferenceValue="true">
+      </specification>
+      <specification
+         annotationImageProvider="org.eclipse.tm.internal.tcf.debug.ui.model.TCFAnnotationImageProvider"
+         annotationType="org.eclipse.tm.tcf.debug.stack_frame"
+         colorPreferenceKey="secondaryIPColor"
+         colorPreferenceValue="219,235,204"
+         highlightPreferenceKey="secondaryIPHighlight"
+         highlightPreferenceValue="true"
+         label="%debugCallStack"
+         overviewRulerPreferenceKey="secondaryIPOverviewRuler"
+         overviewRulerPreferenceValue="true"
+         presentationLayer="6"
+         textPreferenceKey="secondaryIPIndication"
+         textPreferenceValue="false"
+         verticalRulerPreferenceKey="secondaryIPVerticalRuler"
+         verticalRulerPreferenceValue="true">
+      </specification>
+   </extension>
+
+   <extension point="org.eclipse.debug.ui.detailPaneFactories">
+      <detailFactories
+             class="org.eclipse.tm.internal.tcf.debug.ui.model.TCFDetailPaneFactory"
+             id="org.eclipse.tm.tcf.debug.DetailPaneFactory">
+         <enablement>
+            <with variable="selection">
+               <iterate>
+                  <or>
+                     <instanceof value="org.eclipse.tm.internal.tcf.debug.ui.model.TCFNode"/>
+                  </or>
+               </iterate>
+            </with>
+         </enablement>                   
+      </detailFactories>
+   </extension>
+    
+   <extension point="org.eclipse.ui.viewActions">
+      <!-- Debug View menu contributions -->
+      <viewContribution
+            id="org.eclipse.tm.tcf.debug.ui.DebugView"
+            targetID="org.eclipse.debug.ui.DebugView">
+         <action
+            id="org.eclipse.tm.tcf.debug.ui.actions.Signals"
+            class="org.eclipse.tm.internal.tcf.debug.ui.commands.SignalsCommand"
+            icon="icons/signals.gif"
+            label="%SignalsCommand.label"
+            toolbarPath="additions">
+         </action>
+      </viewContribution>
+   </extension>
+   
+   <extension point="org.eclipse.ui.popupMenus">
+      <!-- TCFLaunch popup menu contributions -->
+      <objectContribution
+            id="org.eclipse.tm.tcf.debug.ui.TCFLaunch"
+            objectClass="org.eclipse.tm.internal.tcf.debug.model.TCFLaunch">
+         <action
+            id="org.eclipse.tm.tcf.debug.ui.actions.Signals"
+            class="org.eclipse.tm.internal.tcf.debug.ui.commands.SignalsCommand"
+            icon="icons/signals.gif"
+            label="%SignalsCommand.label"
+            menubarPath="additions">
+         </action>
+      </objectContribution>
+
+      <!-- TCFNode popup menu contributions -->
+      <objectContribution
+            id="org.eclipse.tm.tcf.debug.ui.TCFNode"
+            objectClass="org.eclipse.tm.internal.tcf.debug.ui.model.TCFNode">
+         <action
+            id="org.eclipse.tm.tcf.debug.ui.actions.Signals"
+            class="org.eclipse.tm.internal.tcf.debug.ui.commands.SignalsCommand"
+            icon="icons/signals.gif"
+            label="%SignalsCommand.label"
+            menubarPath="additions">
+         </action>
+      </objectContribution>
+      
+      <objectContribution
+            id="org.eclipse.tm.tcf.debug.ui.CastToType"
+            objectClass="org.eclipse.tm.internal.tcf.debug.ui.model.ICastToType">
+         <action
+               label="%RestoreDefaultTypeAction.label"
+               helpContextId="restore_default_type_action_context"
+               tooltip="%RestoreDefaultTypeAction.tooltip"
+               class="org.eclipse.tm.internal.tcf.debug.ui.commands.RestoreDefaultTypeCommand"
+               menubarPath="variableGroup"
+               enablesFor="1"
+               id="org.eclipse.tm.tcf.debug.ui.commands.RestoreDefaultType">
+            <enablement>
+               <pluginState
+                     value="activated"
+                     id="org.eclipse.tm.tcf.debug.ui">
+               </pluginState>
+            </enablement>
+         </action>
+         <action
+               label="%CastToTypeAction.label"
+               icon="icons/casttotype_co.gif"
+               helpContextId="cast_to_type_action_context"
+               tooltip="%CastToTypeAction.tooltip"
+               class="org.eclipse.tm.internal.tcf.debug.ui.commands.CastToTypeCommand"
+               menubarPath="variableGroup"
+               enablesFor="1"
+               id="org.eclipse.tm.tcf.debug.ui.commands.CastToType">
+            <enablement>
+               <pluginState
+                     value="activated"
+                     id="org.eclipse.tm.tcf.debug.ui">
+               </pluginState>
+            </enablement>
+         </action>
+         <action
+               label="%CastToArrayAction.label"
+               icon="icons/showasarray_co.gif"
+               helpContextId="cast_to_array_action_context"
+               tooltip="%CastToArrayAction.tooltip"
+               class="org.eclipse.tm.internal.tcf.debug.ui.commands.CastToArrayCommand"
+               menubarPath="variableGroup"
+               enablesFor="1"
+               id="org.eclipse.tm.tcf.debug.ui.commands.CastToArray">
+            <enablement>
+               <pluginState
+                     value="activated"
+                     id="org.eclipse.tm.tcf.debug.ui">
+               </pluginState>
+            </enablement>
+         </action>
+      </objectContribution>
+   </extension>
+   
+</plugin>

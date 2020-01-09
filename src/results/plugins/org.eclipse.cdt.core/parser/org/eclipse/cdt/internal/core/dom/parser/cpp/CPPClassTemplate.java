@@ -44,18 +44,17 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateArgument;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateParameter;
 import org.eclipse.cdt.core.index.IIndex;
+import org.eclipse.cdt.core.index.IIndexBinding;
 import org.eclipse.cdt.core.parser.util.ArrayUtil;
 import org.eclipse.cdt.core.parser.util.CharArrayUtils;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPTemplates;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
-import org.eclipse.cdt.internal.core.index.IIndexType;
 
 /**
  * Represents a class template.
  */
-public class CPPClassTemplate extends CPPTemplateDefinition implements
-		ICPPClassTemplate, ICPPClassType, ICPPInternalClassTemplate,
-		ICPPInternalClassTypeMixinHost {
+public class CPPClassTemplate extends CPPTemplateDefinition implements ICPPClassTemplate,
+		ICPPInternalClassTemplate, ICPPInternalClassTypeMixinHost {
 
 	private ICPPClassTemplate fIndexBinding= null;
 	private boolean checkedIndex= false;
@@ -212,7 +211,7 @@ public class CPPClassTemplate extends CPPTemplateDefinition implements
 	public boolean isSameType(IType type) {
 		if (type == this)
 			return true;
-		if (type instanceof ITypedef || type instanceof IIndexType)
+		if (type instanceof ITypedef || type instanceof IIndexBinding)
 			return type.isSameType(this);
 		return false;
 	}
@@ -278,7 +277,7 @@ public class CPPClassTemplate extends CPPTemplateDefinition implements
 		return false;
 	}
 
-	public ICPPDeferredClassInstance asDeferredInstance() throws DOMException {
+	public final ICPPDeferredClassInstance asDeferredInstance() throws DOMException {
 		if (fDeferredInstance == null) {
 			fDeferredInstance= createDeferredInstance();
 		}

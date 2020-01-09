@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -26,10 +26,8 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTConstructorChainInitializer;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTNamedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTQualifiedName;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateId;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTypenameExpression;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTUsingDeclaration;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPBinding;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPScope;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier.ICPPASTBaseSpecifier;
 import org.eclipse.cdt.core.index.IIndexFileSet;
 import org.eclipse.cdt.core.parser.util.CharArrayObjectMap;
@@ -39,7 +37,7 @@ import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPSemantics;
  * Models the scope represented by an unknown binding such (e.g.: template type parameter). Used within
  * the context of templates, only.
  */
-public class CPPUnknownScope implements ICPPScope, ICPPInternalUnknownScope {
+public class CPPUnknownScope implements ICPPInternalUnknownScope {
     private final ICPPUnknownBinding binding;
     private final IASTName scopeName;
     private CharArrayObjectMap map;
@@ -118,8 +116,7 @@ public class CPPUnknownScope implements ICPPScope, ICPPInternalUnknownScope {
     		}
     		if (!type) {
     			if (parent instanceof ICPPASTBaseSpecifier ||
-    				parent instanceof ICPPASTConstructorChainInitializer ||
-    				parent instanceof ICPPASTTypenameExpression) {
+    				parent instanceof ICPPASTConstructorChainInitializer) {
     					type= true;
     			} else if (parent instanceof ICPPASTNamedTypeSpecifier) {
     				ICPPASTNamedTypeSpecifier nts= (ICPPASTNamedTypeSpecifier) parent;

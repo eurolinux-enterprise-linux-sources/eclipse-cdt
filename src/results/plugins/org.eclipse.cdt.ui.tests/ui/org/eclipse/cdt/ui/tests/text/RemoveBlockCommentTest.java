@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,6 +20,8 @@ import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.formatter.DefaultCodeFormatterConstants;
 import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.testplugin.CProjectHelper;
+import org.eclipse.cdt.ui.testplugin.EditorTestHelper;
+import org.eclipse.cdt.ui.testplugin.ResourceTestHelper;
 import org.eclipse.cdt.ui.tests.BaseUITestCase;
 import org.eclipse.cdt.ui.tests.text.AddBlockCommentTest.LinePosition;
 
@@ -79,15 +81,14 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	protected void assertFormatterResult(
 			LinePosition startLinePosition,
 			LinePosition endLinePosition) throws Exception {
-
 		StringBuffer[] contents= getContentsForTest(2);
 		String before = contents[0].toString();
 		String after  = contents[1].toString();
 		
 		fDocument.set(before);
 
-		SourceRange range = new SourceRange( startLinePosition.getOffset(),
-				endLinePosition.getOffset()-startLinePosition.getOffset() );
+		SourceRange range = new SourceRange(startLinePosition.getOffset(),
+				endLinePosition.getOffset() - startLinePosition.getOffset());
 		fEditor.setSelection(range, true);
 		
 		IAction commentAction= fEditor.getAction("RemoveBlockComment");
@@ -115,11 +116,10 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 			LinePosition endLinePosition,
 			String before,
 			String after) throws Exception {
-		
 		fDocument.set(before);
 		
-		SourceRange range = new SourceRange( startLinePosition.getOffset(),
-				endLinePosition.getOffset()-startLinePosition.getOffset() );
+		SourceRange range = new SourceRange(startLinePosition.getOffset(),
+				endLinePosition.getOffset() - startLinePosition.getOffset());
 		fEditor.setSelection(range, true);
 		
 		IAction commentAction= fEditor.getAction("RemoveBlockComment");
@@ -130,33 +130,32 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 		String expected= after;
 		assertEquals(expected, fDocument.get());
 	}
-
 	
 	//int i, /*j,*/ k;
 	
 	//int i, j, k;
 	public void testUncommentPlain() throws Exception {
-		LinePosition startSelection = new LinePosition(1,10,fDocument);
-		LinePosition endSelection   = new LinePosition(1,11,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 10, fDocument);
+		LinePosition endSelection   = new LinePosition(1, 11, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	//int /*j,*/ k;
 	
 	//int j, k;
 	public void testRightBorderIn() throws Exception {
-		LinePosition startSelection = new LinePosition(1,10,fDocument);
-		LinePosition endSelection   = new LinePosition(1,11,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 10, fDocument);
+		LinePosition endSelection   = new LinePosition(1, 11, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	//int /*j,*/ k;
 	
 	//int /*j,*/ k;
 	public void testRightBorderOut() throws Exception {
-		LinePosition startSelection = new LinePosition(1,11,fDocument);
-		LinePosition endSelection   = new LinePosition(1,12,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 11, fDocument);
+		LinePosition endSelection   = new LinePosition(1, 12, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	//123456789-123
 	
@@ -164,18 +163,18 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	
 	//int j, k;
 	public void testLeftBorderIn() throws Exception {
-		LinePosition startSelection = new LinePosition(1,5,fDocument);
-		LinePosition endSelection   = new LinePosition(1,6,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 5, fDocument);
+		LinePosition endSelection   = new LinePosition(1, 6, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	//int /*j,*/ k;
 	
 	//int /*j,*/ k;
 	public void testLeftBorderOut() throws Exception {
-		LinePosition startSelection = new LinePosition(1,4,fDocument);
-		LinePosition endSelection   = new LinePosition(1,5,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 4, fDocument);
+		LinePosition endSelection   = new LinePosition(1, 5, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	//int /*i,
@@ -186,9 +185,9 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//    j,
 	//    k;
 	public void testUncommentPartialLines1() throws Exception {
-		LinePosition startSelection = new LinePosition(1,7,fDocument);
-		LinePosition endSelection   = new LinePosition(2,2,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 7, fDocument);
+		LinePosition endSelection   = new LinePosition(2, 2, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	//int i,
@@ -199,9 +198,9 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//    j,
 	//    k;
 	public void testUncommentPartialLines2() throws Exception {
-		LinePosition startSelection = new LinePosition(2,1,fDocument);
-		LinePosition endSelection   = new LinePosition(3,8,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(2, 1, fDocument);
+		LinePosition endSelection   = new LinePosition(3, 8, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 
 	//int i;
@@ -212,9 +211,9 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//int j;
 	//int k;
 	public void testUncommentExactlyOneLineNoLoopingPlease() throws Exception {
-		LinePosition startSelection = new LinePosition(2,1,fDocument);
-		LinePosition endSelection   = new LinePosition(3,1,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(2, 1, fDocument);
+		LinePosition endSelection   = new LinePosition(3, 1, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	//int i;
@@ -229,18 +228,18 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//int k;
 	//int l;
 	public void testUncommentTwoOrMoreLines() throws Exception {
-		LinePosition startSelection = new LinePosition(2,1,fDocument);
-		LinePosition endSelection   = new LinePosition(4,1,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(2, 1, fDocument);
+		LinePosition endSelection   = new LinePosition(4, 1, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	///*const*/ int i;
 	
 	//const int i;
 	public void testUncommentFirstCharacterInFile() throws Exception {
-		LinePosition startSelection = new LinePosition(1,1,fDocument);
-		LinePosition endSelection   = new LinePosition(1,6,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 1, fDocument);
+		LinePosition endSelection   = new LinePosition(1, 6, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	///*#include <x>*/
@@ -249,9 +248,9 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//#include <x>
 	//#include <y>
 	public void testUncommentPreprocessorFirstLine() throws Exception {
-		LinePosition startSelection = new LinePosition(1,1,fDocument);
-		LinePosition endSelection   = new LinePosition(1,6,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 1, fDocument);
+		LinePosition endSelection   = new LinePosition(1, 6, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	//int i; /*// comment*/
@@ -260,9 +259,9 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//int i; // comment
 	//int j;
 	public void testUncommentCppComment() throws Exception {
-		LinePosition startSelection = new LinePosition(1,10,fDocument);
-		LinePosition endSelection   = new LinePosition(1,12,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 10, fDocument);
+		LinePosition endSelection   = new LinePosition(1, 12, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 
 	//#include <x>
@@ -273,9 +272,9 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//#include <y>
 	//#include <z>
 	public void testUncommentSpecialPartition() throws Exception {
-		LinePosition startSelection = new LinePosition(2,1,fDocument);
-		LinePosition endSelection   = new LinePosition(3,1,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(2, 1, fDocument);
+		LinePosition endSelection   = new LinePosition(3, 1, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	//#include <x>
@@ -290,9 +289,9 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//      <y>
 	//#include <z>
 	public void testUncommentSpecialPartitionExtra() throws Exception {
-		LinePosition startSelection = new LinePosition(3,8,fDocument);
-		LinePosition endSelection   = new LinePosition(3,10,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(3, 8, fDocument);
+		LinePosition endSelection   = new LinePosition(3, 10, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	///*int i;*/
@@ -303,9 +302,9 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//int j;
 	//int k;
 	public void testUncommentConnectedComments() throws Exception {
-		LinePosition startSelection = new LinePosition(1,5,fDocument);
-		LinePosition endSelection   = new LinePosition(2,5,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(1, 5, fDocument);
+		LinePosition endSelection   = new LinePosition(2, 5, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	//
@@ -316,9 +315,9 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 	//
 	//
 	public void testUncommentEndOfFile() throws Exception {
-		LinePosition startSelection = new LinePosition(3,1,fDocument);
-		LinePosition endSelection   = new LinePosition(5,2,fDocument);
-		assertFormatterResult(startSelection,endSelection);
+		LinePosition startSelection = new LinePosition(3, 1, fDocument);
+		LinePosition endSelection   = new LinePosition(5, 2, fDocument);
+		assertFormatterResult(startSelection, endSelection);
 	}
 	
 	public void testMixedEOLs() throws Exception {
@@ -332,9 +331,8 @@ public class RemoveBlockCommentTest extends BaseUITestCase {
 			  "int i;\r\n"
 			+ "int j;\n"
 			+ "int k;";
-		LinePosition startSelection = new LinePosition(2,1,fDocument);
-		LinePosition endSelection   = new LinePosition(3,1,fDocument);
-		assertFormatterResult(startSelection,endSelection,before,after);
+		LinePosition startSelection = new LinePosition(2, 1, fDocument);
+		LinePosition endSelection   = new LinePosition(3, 1, fDocument);
+		assertFormatterResult(startSelection, endSelection, before, after);
 	}
-	
 }

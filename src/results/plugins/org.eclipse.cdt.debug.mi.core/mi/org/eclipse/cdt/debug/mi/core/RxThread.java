@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,7 +17,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.StringTokenizer;
 
 import org.eclipse.cdt.debug.mi.core.command.CLICommand;
 import org.eclipse.cdt.debug.mi.core.command.Command;
@@ -66,7 +68,7 @@ import org.eclipse.cdt.debug.mi.core.output.MIValue;
 public class RxThread extends Thread {
 
 	final MISession session;
-	List oobList;
+	LinkedList<MIStreamRecord> fStreamRecords = new LinkedList<MIStreamRecord>();
 	CLIProcessor cli;
 	int prompt = 1; // 1 --> Primary prompt "(gdb)"; 2 --> Secondary Prompt ">"
 	boolean fEnableConsole = true;
@@ -75,7 +77,6 @@ public class RxThread extends Thread {
 		super("MI RX Thread"); //$NON-NLS-1$
 		session = s;
 		cli = new CLIProcessor(session);
-		oobList = new ArrayList();
 	}
 
 	/*
@@ -88,7 +89,7 @@ public class RxThread extends Thread {
 			String line;
 			while ((line = reader.readLine()) != null) {
 				// TRACING: print the output.
-				if (MIPlugin.getDefault().isDebugging()) {
+				if (MIPlugin.DEBUG) {
 					MIPlugin.getDefault().debugLog(line);
 				}
 				
@@ -168,7 +169,7 @@ public class RxThread extends Thread {
 	void processMIOutput(String buffer) {
 		MIOutput response = session.parse(buffer);
 		if (response != null) {
-			List list = new ArrayList();
+			List<MIEvent> list = new ArrayList<MIEvent>();
 			CommandQueue rxQueue = session.getRxQueue();
 
 			MIResultRecord rr = response.getMIResultRecord();
@@ -176,10 +177,9 @@ public class RxThread extends Thread {
 				int id = rr.getToken();
 				Command cmd = rxQueue.removeCommand(id);
 
-				// Clear the accumulate oobList on each new Result Command
-				// response.
-				MIOOBRecord[] oobRecords = new MIOOBRecord[oobList.size()];
-				oobList.toArray(oobRecords);
+				// Get a snapshot of the accumulated stream records. We clear
+				// the collection below (with each new Result Command response).
+				MIStreamRecord[] streamRecords = fStreamRecords.toArray(new MIStreamRecord[fStreamRecords.size()]);
 
 				// Check if the state changed.
 				String state = rr.getResultClass();
@@ -219,7 +219,7 @@ public class RxThread extends Thread {
 				} else if ("error".equals(state)) { //$NON-NLS-1$
 					if (session.getMIInferior().isRunning()) {
 						session.getMIInferior().setSuspended();
-						MIEvent event = new MIErrorEvent(session, rr, oobRecords);
+						MIEvent event = new MIErrorEvent(session, rr, streamRecords);
 						list.add(event);
 					}
 				} else if ("done".equals(state) && cmd instanceof CLICommand) { //$NON-NLS-1$
@@ -231,12 +231,12 @@ public class RxThread extends Thread {
 				}
 
 				// Set the accumulate console Stream
-				response.setMIOOBRecords(oobRecords);
+				response.setMIOOBRecords(streamRecords);
 
 				// Notify the waiting command.
 				// Notify any command waiting for a ResultRecord.
 				if (cmd != null) {
-					// Process the Command line to recognise patterns we may need to fire event.
+					// Process the Command line to recognize patterns we may need to fire event.
 					if (cmd instanceof CLICommand) {
 						cli.processSettingChanges((CLICommand)cmd);
 					} else if (cmd instanceof MIInterpreterExecConsole) {
@@ -249,8 +249,8 @@ public class RxThread extends Thread {
 					}
 				}
 
-				// Clear the accumulate oobList on each new Result Command response.
-				oobList.clear();
+				// Clear the accumulated stream records on each new Result Command response.
+				fStreamRecords.clear();
 
 			} else {
 
@@ -259,9 +259,13 @@ public class RxThread extends Thread {
 				for (int i = 0; i < oobs.length; i++) {
 					processMIOOBRecord(oobs[i], list);
 				}
+				// If not waiting for any command results, ensure the stream list doesn't
+				// get too large. See Bug 302927 for more
+				if (rxQueue.isEmpty() && fStreamRecords.size() > 20)
+					fStreamRecords.removeFirst();
 			}
 
-			MIEvent[] events = (MIEvent[]) list.toArray(new MIEvent[list.size()]);
+			MIEvent[] events = list.toArray(new MIEvent[list.size()]);
 			session.fireEvents(events);
 		} // if response != null
 	}
@@ -269,16 +273,16 @@ public class RxThread extends Thread {
 	/**
 	 * Dispatch a thread to deal with the listeners.
 	 */
-	void processMIOOBRecord(MIOOBRecord oob, List list) {
+	void processMIOOBRecord(MIOOBRecord oob, List<MIEvent> list) {
 		if (oob instanceof MIAsyncRecord) {
 			processMIOOBRecord((MIAsyncRecord) oob, list);
-			oobList.clear();
+			fStreamRecords.clear();
 		} else if (oob instanceof MIStreamRecord) {
 			processMIOOBRecord((MIStreamRecord) oob);
 		}
 	}
 
-	void processMIOOBRecord(MIAsyncRecord async, List list) {
+	void processMIOOBRecord(MIAsyncRecord async, List<MIEvent> list) {
 		if (async instanceof MIExecAsyncOutput) {
 			MIExecAsyncOutput exec = (MIExecAsyncOutput) async;
 			// Change of state.
@@ -299,14 +303,13 @@ public class RxThread extends Thread {
 					}
 				}
 
-				// GDB does not have reason when stopping on shared, hopefully
-				// this will be fix in newer version meanwhile, we will use a hack
-				// to cope.  On most platform we can detect by looking at the
-				// console stream for phrase:
-				// 	~"Stopped due to shared library event\n"
-				//
-				// Althought it is a _real_ bad idea to do this, we do not have
-				// any other alternatives.
+				// GDB does not provide reason when stopping on a shared library
+				// event or because of a catchpoint (in gdb < 7.0).
+				// Hopefully this will be fixed in a future version. Meanwhile,
+				// we will use a hack to cope. On most platform we can detect by
+				// looking at the console stream for phrase. Although it is a
+				// _real_ bad idea to do this, we do not have any other
+				// alternatives.
 				if (list.isEmpty()) {
 					String[] logs = getStreamRecords();
 					for (int i = 0; i < logs.length; i++) {
@@ -314,6 +317,20 @@ public class RxThread extends Thread {
 							session.getMIInferior().setSuspended();
 							MIEvent e = new MISharedLibEvent(session, exec);
 							list.add(e);
+						}
+						else if (logs[i].startsWith("Catchpoint ")) { //$NON-NLS-1$
+							session.getMIInferior().setSuspended();
+
+							// Example: "Catchpoint 1 (exception caught)"
+							StringTokenizer tokenizer = new StringTokenizer(logs[i]);
+							tokenizer.nextToken(); // "Catchpoint"
+							try {
+								int bkptNumber = Integer.parseInt(tokenizer.nextToken()); // 1
+								list.add(new MIBreakpointHitEvent(session, exec, bkptNumber));
+							}
+							catch (NumberFormatException exc) {
+								assert false : "unexpected catchpoint stream record format: " + logs[i]; //$NON-NLS-1$
+							}
 						}
 					}
 				}
@@ -352,7 +369,7 @@ public class RxThread extends Thread {
 			}
 			// Accumulate the Console Stream Output response for parsing.
 			// Some commands will put valuable info  in the Console Stream.
-			oobList.add(stream);
+			fStreamRecords.add(stream);
 		} else if (stream instanceof MITargetStreamOutput) {
 			OutputStream target = session.getMIInferior().getPipedOutputStream();
 			if (target != null) {
@@ -369,7 +386,7 @@ public class RxThread extends Thread {
 			// Accumulate the Target Stream Output response for parsing.
 			// Some commands, e.g. 'monitor' will put valuable info  in the Console Stream.
 			// This fixes bug 119370.
-			oobList.add(stream);
+			fStreamRecords.add(stream);
 		} else if (stream instanceof MILogStreamOutput) {
 			// This is meant for the gdb console.
 			OutputStream log = session.getLogPipe();
@@ -386,14 +403,14 @@ public class RxThread extends Thread {
 			}
 			// Accumulate the Log Stream Output response for parsing.
 			// Some commands will put valuable info  in the Log Stream.
-			oobList.add(stream);
+			fStreamRecords.add(stream);
 		}
 	}
 
 	/**
 	 * Check for any info that we can gather form the console.
 	 */
-	void processMIOOBRecord(MIResultRecord rr, List list) {
+	void processMIOOBRecord(MIResultRecord rr, List<MIEvent> list) {
 		MIResult[] results = rr.getMIResults();
 		for (int i = 0; i < results.length; i++) {
 			String var = results[i].getVariable();
@@ -526,17 +543,14 @@ public class RxThread extends Thread {
 	}
 
 	String[] getStreamRecords() {
-		List streamRecords = new ArrayList();
-		MIOOBRecord[] oobRecords = (MIOOBRecord[]) oobList.toArray(new MIOOBRecord[0]);
-		for (int i = 0; i < oobRecords.length; i++) {
-			if (oobRecords[i] instanceof MIStreamRecord) {
-				String s = ((MIStreamRecord) oobRecords[i]).getString().trim();
-				if (s != null && s.length() > 0) {
-					streamRecords.add(s);
-				}
+		List<String> streamRecords = new ArrayList<String>(fStreamRecords.size());
+		for (MIStreamRecord rec : fStreamRecords) {
+			String str = rec.getString().trim();
+			if (str.length() > 0) {
+				streamRecords.add(str);
 			}
 		}
-		return (String[]) streamRecords.toArray(new String[0]);
+		return streamRecords.toArray(new String[streamRecords.size()]);
 	}
 
 }

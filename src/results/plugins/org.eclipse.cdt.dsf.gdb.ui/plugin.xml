@@ -19,13 +19,21 @@
         <associatedDelegate delegate="org.eclipse.cdt.dsf.gdb.launch.localCLaunch"/>
         <placement after="org.eclipse.cdt.dsf.gdb.launch.mainTab"/>
       </tab>
+      <tab 
+            id="org.eclipse.cdt.dsf.gdb.launch.localApplicationLaunch.environmentTab"
+            group="org.eclipse.cdt.launch.applicationLaunchTabGroup"
+            name="%launchTab.environment.name"
+            class="org.eclipse.debug.ui.EnvironmentTab">
+         <associatedDelegate delegate="org.eclipse.cdt.dsf.gdb.launch.localCLaunch"/>
+         <placement after="org.eclipse.cdt.dsf.gdb.launch.argumentsTab"/>
+      </tab>
       <tab
             id="org.eclipse.cdt.dsf.gdb.launch.localApplicationLaunch.debuggerTab"
             group="org.eclipse.cdt.launch.applicationLaunchTabGroup"
             name="%launchTab.debugger.name"
             class="org.eclipse.cdt.dsf.gdb.internal.ui.launching.LocalApplicationCDebuggerTab">
         <associatedDelegate delegate="org.eclipse.cdt.dsf.gdb.launch.localCLaunch"/>
-        <placement after="org.eclipse.cdt.dsf.gdb.launch.argumentsTab"/>
+        <placement after="org.eclipse.debug.ui.environmentTab"/>
       </tab>
       <tab
             id="org.eclipse.cdt.dsf.gdb.launch.localApplicationLaunch.sourceLookupTab"
@@ -143,16 +151,6 @@
          <placement after="org.eclipse.debug.ui.sourceLookupTab"/>
       </tab>
    </extension>
-   
-    <extension
-         point="org.eclipse.debug.ui.launchConfigurationTabGroups">
-      <launchConfigurationTabGroup
-            class="org.eclipse.cdt.dsf.gdb.internal.ui.launching.GdbRemoteRunLaunchConfigurationTabGroup"
-            id="org.eclipse.cdt.dsf.gdb.launch.remoteRunLaunchTabGroup"
-            type="org.eclipse.cdt.dsf.gdb.launch.remoteCLaunch">
-      </launchConfigurationTabGroup>
-   </extension>
-   
    <extension point="org.eclipse.core.runtime.adapters">
       <factory 
         	class="org.eclipse.cdt.dsf.gdb.internal.ui.GdbAdapterFactory" 
@@ -162,11 +160,6 @@
          <adapter type="org.eclipse.debug.ui.contexts.ISuspendTrigger"/>
          <adapter type="org.eclipse.debug.internal.ui.viewers.model.provisional.IColumnPresentationFactory"/>
 	  </factory>         
-      <factory 
-	       	class="org.eclipse.cdt.dsf.gdb.internal.ui.GdbRunToLineAdapterFactory" 
-	        adaptableType="org.eclipse.cdt.dsf.ui.viewmodel.IVMContext">
-         <adapter type="org.eclipse.debug.core.model.ISuspendResume"/>
-	  </factory>
    </extension>	
    
    <extension point="org.eclipse.debug.ui.memoryRenderings">
@@ -183,10 +176,22 @@
    <extension point="org.eclipse.ui.propertyPages">
          <page class="org.eclipse.cdt.dsf.gdb.internal.ui.breakpoints.CBreakpointGdbThreadFilterPage"
             id="org.eclipse.cdt.dsf.gdb.breakpoint.filtering"
-            name="Filter">
+            name="%breakpoints.property.filter">
          <filter name="debugModelId" value="org.eclipse.cdt.dsf.gdb"/>
          <enabledWhen>
-            <adapt type="org.eclipse.cdt.debug.core.model.ICBreakpoint"/>
+            <and>
+               <adapt type="org.eclipse.cdt.debug.core.model.ICBreakpoint"/>
+               <not>
+                  <adapt type="org.eclipse.cdt.debug.core.model.ICTracepoint"/>
+               </not>
+            </and>
+         </enabledWhen>
+      </page>
+      <page class="org.eclipse.cdt.dsf.gdb.internal.ui.breakpoints.GDBTracepointPropertyPage"
+            id="org.eclipse.cdt.dsf.gdb.tracepoint.common"
+            name="%tracepoints.property.common">
+         <enabledWhen>
+            <adapt type="org.eclipse.cdt.debug.core.model.ICTracepoint"/>
          </enabledWhen>
       </page>
    </extension>
@@ -204,19 +209,6 @@
             id="org.eclipse.cdt.dsf.gdb.ui.coreFilePrompter"
             plugin="org.eclipse.cdt.dsf.gdb.ui">
       </statusHandler>
-   </extension>
-   <extension
-         point="org.eclipse.cdt.debug.ui.CDebuggerPage">
-      <debuggerPage
-            class="org.eclipse.cdt.dsf.gdb.internal.ui.launching.GdbDebuggerPage"
-            debuggerID="org.eclipse.cdt.dsf.gdb.GdbDebugger"
-            id="org.eclipse.cdt.dsf.gdb.ui.GdbDebuggerPage">
-      </debuggerPage>
-      <debuggerPage
-            class="org.eclipse.cdt.dsf.gdb.internal.ui.launching.GdbServerDebuggerPage"
-            debuggerID="org.eclipse.cdt.dsf.gdb.GdbServerDebugger"
-            id="org.eclipse.cdt.dsf.gdb.ui.GdbServerDebuggerPage">
-      </debuggerPage>
    </extension>
    <extension
          point="org.eclipse.ui.popupMenus">
@@ -267,324 +259,7 @@
       </viewContribution>
    </extension>
    <extension
-         point="org.eclipse.ui.actionSets">
-      <actionSet
-            description="%actionSet.reverse.description"
-            id="org.eclipse.cdt.dsf.gdb.ui.reverseDebuggingActionSet"
-            label="%actionSet.reverse.label"
-            visible="false">
-      </actionSet>
-   </extension>
-   <extension
-         point="org.eclipse.ui.commands">
-      <category
-            description="%command.reverseCategory.description"
-            id="org.eclipse.cdt.dsf.gdb.ui.reverseDebuggingCategory"
-            name="%command.reverseCategory.name">
-      </category>
-      <command
-            categoryId="org.eclipse.cdt.dsf.gdb.ui.reverseDebuggingCategory"
-            description="%command.reverseToggle.description"
-            id="org.eclipse.cdt.dsf.gdb.ui.commands.reverseToggle"
-            name="%command.reverseToggle.name">
-      </command>
-      <command
-            categoryId="org.eclipse.cdt.dsf.gdb.ui.reverseDebuggingCategory"
-            description="%command.reverseResume.description"
-            id="org.eclipse.cdt.dsf.gdb.ui.commands.reverseResume"
-            name="%command.reverseResume.name">
-      </command>
-      <command
-            categoryId="org.eclipse.cdt.dsf.gdb.ui.reverseDebuggingCategory"
-            description="%command.reverseStepInto.description"
-            id="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepInto"
-            name="%command.reverseStepInto.name">
-      </command>
-      <command
-            categoryId="org.eclipse.cdt.dsf.gdb.ui.reverseDebuggingCategory"
-            description="%command.reverseStepOver.description"
-            id="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepOver"
-            name="%command.reverseStepOver.name">
-      </command>
-      <command
-            categoryId="org.eclipse.cdt.dsf.gdb.ui.reverseDebuggingCategory"
-            description="%command.uncall.description"
-            id="org.eclipse.cdt.dsf.gdb.ui.commands.uncall"
-            name="%command.uncall.name">
-      </command>
-   </extension>
-   <extension
-         point="org.eclipse.ui.menus">
-      <menuContribution
-            locationURI="toolbar:org.eclipse.debug.ui.DebugView?after=additions">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseToggle"
-               icon="icons/full/obj16/reversetoggle.gif"
-               id="org.eclipse.cdt.dsf.gdb.ui.button.reverseToggle"
-               label="%command.reverseToggle.label"
-               style="toggle">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingActionSetActive">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="toolbar:org.eclipse.debug.ui.DebugView?after=threadGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseResume"
-               icon="icons/full/obj16/reverseresume.gif"
-               label="%command.reverseResume.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="toolbar:org.eclipse.debug.ui.DebugView?after=stepIntoGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepInto"
-               icon="icons/full/obj16/reversestepinto.gif"
-               label="%command.reverseStepInto.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="toolbar:org.eclipse.debug.ui.DebugView?after=stepOverGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepOver"
-               icon="icons/full/obj16/reversestepover.gif"
-               label="%command.reverseStepOver.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="toolbar:org.eclipse.debug.ui.DebugView?after=stepReturnGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.uncall"
-               icon="icons/full/obj16/uncall.gif"
-               label="%command.uncall.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="menu:org.eclipse.ui.run?before=stepGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseToggle"
-               icon="icons/full/obj16/reversetoggle.gif"
-               id="org.eclipse.cdt.dsf.gdb.ui.button.reverseToggle"
-               label="%command.reverseToggle.label"
-               style="toggle">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingActionSetActive">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="menu:org.eclipse.ui.run?after=stepGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseResume"
-               icon="icons/full/obj16/reverseresume.gif"
-               label="%command.reverseResume.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="menu:org.eclipse.ui.run?before=stepIntoGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepInto"
-               icon="icons/full/obj16/reversestepinto.gif"
-               label="%command.reverseStepInto.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="menu:org.eclipse.ui.run?before=stepOverGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepOver"
-               icon="icons/full/obj16/reversestepover.gif"
-               label="%command.reverseStepOver.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="menu:org.eclipse.ui.run?before=stepReturnGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.uncall"
-               icon="icons/full/obj16/uncall.gif"
-               label="%command.uncall.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="popup:org.eclipse.debug.ui.DebugView?before=stepGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseToggle"
-               icon="icons/full/obj16/reversetoggle.gif"
-               id="org.eclipse.cdt.dsf.gdb.ui.button.reverseToggle"
-               label="%command.reverseToggle.label"
-               style="toggle">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingActionSetActive">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="popup:org.eclipse.debug.ui.DebugView?after=threadGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseResume"
-               icon="icons/full/obj16/reverseresume.gif"
-               label="%command.reverseResume.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="popup:org.eclipse.debug.ui.DebugView?before=stepIntoGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepInto"
-               icon="icons/full/obj16/reversestepinto.gif"
-               label="%command.reverseStepInto.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="popup:org.eclipse.debug.ui.DebugView?before=stepOverGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepOver"
-               icon="icons/full/obj16/reversestepover.gif"
-               label="%command.reverseStepOver.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-      <menuContribution
-            locationURI="popup:org.eclipse.debug.ui.DebugView?before=stepReturnGroup">
-         <command
-               commandId="org.eclipse.cdt.dsf.gdb.ui.commands.uncall"
-               icon="icons/full/obj16/uncall.gif"
-               label="%command.uncall.label"
-               style="push">
-            <visibleWhen
-                  checkEnabled="false">
-               <reference
-                     definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-               </reference>
-            </visibleWhen>
-         </command>
-      </menuContribution>
-   </extension>
-   <extension
-         point="org.eclipse.ui.bindings">
-      <key
-            commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseResume"
-            contextId="org.eclipse.cdt.debug.ui.debugging"
-            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
-            sequence="SHIFT+F8">
-      </key>
-      <key
-            commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepInto"
-            contextId="org.eclipse.cdt.debug.ui.debugging"
-            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
-            sequence="SHIFT+F5">
-      </key>
-      <key
-            commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepOver"
-            contextId="org.eclipse.cdt.debug.ui.debugging"
-            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
-            sequence="SHIFT+F6">
-      </key>
-      <key
-            commandId="org.eclipse.cdt.dsf.gdb.ui.commands.uncall"
-            contextId="org.eclipse.cdt.debug.ui.debugging"
-            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
-            sequence="SHIFT+F7">
-      </key>
-   </extension>
-   <extension
          point="org.eclipse.core.expressions.definitions">
-      <definition
-            id="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingActionSetActive">
-         <with
-               variable="activeContexts">
-            <iterate
-                  operator="or">
-               <equals
-                     value="org.eclipse.cdt.dsf.gdb.ui.reverseDebuggingActionSet">
-               </equals>
-            </iterate>
-         </with>
-      </definition>
       <definition
             id="org.eclipse.cdt.dsf.gdb.ui.testIsGdbUIPluginActive">
          <with
@@ -596,94 +271,20 @@
             </test>
          </with>
       </definition>
-      <definition
-            id="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingEnabled">
-         <and>
-            <reference
-                  definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsGdbUIPluginActive">
-            </reference>
-            <reference
-                  definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsReverseDebuggingActionSetActive">
-            </reference>
-            <or>
-               <with
-                     variable="activePart">
-                  <test
-                        property="org.eclipse.cdt.dsf.gdb.ui.isReverseDebuggingEnabled">
-                  </test>
-               </with>
-               <with
-                     variable="selection">
-                  <test
-                        property="org.eclipse.cdt.dsf.gdb.ui.isReverseDebuggingEnabled">
-                  </test>
-               </with>
-            </or>
-         </and>
-      </definition>
-      
-   </extension>
-   <extension
-         point="org.eclipse.ui.handlers">
-      <handler
-            class="org.eclipse.cdt.dsf.gdb.internal.ui.actions.ReverseToggleCommandHandler"
-            commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseToggle">
-         <enabledWhen>
-            <reference
-                  definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsGdbUIPluginActive">
-            </reference>
-         </enabledWhen>
-      </handler>
-      <handler
-            class="org.eclipse.cdt.dsf.gdb.internal.ui.actions.ReverseResumeCommandHandler"
-            commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseResume">
-         <enabledWhen>
-            <reference
-                  definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsGdbUIPluginActive">
-            </reference>
-         </enabledWhen>
-      </handler>
-      <handler
-            class="org.eclipse.cdt.dsf.gdb.internal.ui.actions.ReverseStepIntoCommandHandler"
-            commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepInto">
-         <enabledWhen>
-            <reference
-                  definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsGdbUIPluginActive">
-            </reference>
-         </enabledWhen>
-      </handler>
-      <handler
-            class="org.eclipse.cdt.dsf.gdb.internal.ui.actions.ReverseStepOverCommandHandler"
-            commandId="org.eclipse.cdt.dsf.gdb.ui.commands.reverseStepOver">
-         <enabledWhen>
-            <reference
-                  definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsGdbUIPluginActive">
-            </reference>
-         </enabledWhen>
-      </handler>
-      <handler
-            class="org.eclipse.cdt.dsf.gdb.internal.ui.actions.UncallCommandHandler"
-            commandId="org.eclipse.cdt.dsf.gdb.ui.commands.uncall">
-         <enabledWhen>
-            <reference
-                  definitionId="org.eclipse.cdt.dsf.gdb.ui.testIsGdbUIPluginActive">
-            </reference>
-         </enabledWhen>
-      </handler>
    </extension>
    <extension
          point="org.eclipse.core.expressions.propertyTesters">
       <propertyTester
             class="org.eclipse.cdt.dsf.gdb.internal.ui.actions.ReverseDebuggingPropertyTester"
             id="org.eclipse.cdt.dsf.gdb.ui.selectionReverseDebuggingTester"
-            namespace="org.eclipse.cdt.dsf.gdb.ui"
+            namespace="org.eclipse.cdt.debug.ui"
             properties="isReverseDebuggingEnabled"
             type="org.eclipse.cdt.dsf.ui.viewmodel.datamodel.IDMVMContext">
       </propertyTester>
       <propertyTester
             class="org.eclipse.cdt.dsf.gdb.internal.ui.actions.ReverseDebuggingPropertyTester"
             id="org.eclipse.cdt.dsf.gdb.ui.partReverseDebuggingTester"
-            namespace="org.eclipse.cdt.dsf.gdb.ui"
+            namespace="org.eclipse.cdt.debug.ui"
             properties="isReverseDebuggingEnabled"
             type="org.eclipse.ui.IWorkbenchPart">
       </propertyTester>
@@ -691,7 +292,7 @@
    <extension
          point="org.eclipse.ui.preferencePages">
       <page   
-            category="org.eclipse.cdt.dsf.debug.ui.preferences"
+            category="org.eclipse.cdt.debug.ui.CDebugPreferencePage"
             class="org.eclipse.cdt.dsf.gdb.internal.ui.preferences.GdbDebugPreferencePage"
             id="org.eclipse.cdt.dsf.gdb.ui.preferences"
             name="%gdbPreferencePage.name">
@@ -702,6 +303,161 @@
       <initializer
             class="org.eclipse.cdt.dsf.gdb.internal.ui.preferences.GdbPreferenceInitializer">
       </initializer>
+   </extension>
+
+   <extension
+         point="org.eclipse.debug.ui.contextViewBindings">
+   </extension>
+   <extension
+         point="org.eclipse.debug.ui.debugModelContextBindings">
+      <modelContextBinding
+            contextId="org.eclipse.cdt.debug.ui.debugging"
+            debugModelId="org.eclipse.cdt.dsf.gdb">
+      </modelContextBinding>
+   </extension>
+   <extension
+         point="org.eclipse.ui.views">
+      <view
+            category="org.eclipse.debug.ui"
+            class="org.eclipse.cdt.dsf.gdb.internal.ui.tracepoints.TraceControlView"
+            icon="icons/full/view16/tracecontrol_view.gif"
+            id="org.eclipse.cdt.dsf.gdb.ui.tracecontrol.view"
+            name="%view.traceControl.name">
+      </view>
+   </extension>
+   <extension
+         point="org.eclipse.ui.perspectiveExtensions">
+      <perspectiveExtension
+            targetID="org.eclipse.debug.ui.DebugPerspective">
+         <view
+               relative="org.eclipse.ui.views.ContentOutline"
+               visible="false"
+               relationship="stack"
+               id="org.eclipse.cdt.dsf.gdb.ui.tracecontrol.view">
+         </view>
+         <viewShortcut
+               id="org.eclipse.cdt.dsf.gdb.ui.tracecontrol.view">
+         </viewShortcut>
+      </perspectiveExtension>
+   </extension>
+   <extension
+       point="org.eclipse.ui.commands">
+      <command
+          description="%command.nextTraceRecord.description"
+          id="org.eclipse.cdt.dsf.gdb.ui.command.selectNextTraceRecord"
+          name="%command.nextTraceRecord.name">
+      </command>
+      <command
+          description="%command.prevTraceRecord.description"
+          id="org.eclipse.cdt.dsf.gdb.ui.command.selectPreviousTraceRecord"
+          name="%command.prevTraceRecord.name">
+      </command>
+   </extension>
+   <extension
+         point="org.eclipse.ui.handlers">
+      <handler
+            class="org.eclipse.cdt.dsf.gdb.internal.ui.commands.SelectNextTraceRecordCommandHandler"
+            commandId="org.eclipse.cdt.dsf.gdb.ui.command.selectNextTraceRecord">
+      </handler>
+      <handler
+            class="org.eclipse.cdt.dsf.gdb.internal.ui.commands.SelectPrevTraceRecordCommandHandler"
+            commandId="org.eclipse.cdt.dsf.gdb.ui.command.selectPreviousTraceRecord">
+      </handler>
+   </extension>
+   <extension
+         point="org.eclipse.ui.menus">
+         <menuContribution
+            locationURI="toolbar:org.eclipse.cdt.dsf.gdb.ui.tracecontrol.view?after=additions">
+         <command
+               commandId="org.eclipse.cdt.debug.ui.command.startTracing"
+               icon="icons/full/obj16/starttracing.gif"
+               label="%toolbar.startTracing.name"
+               style="push">
+         </command>
+         <command
+               commandId="org.eclipse.cdt.debug.ui.command.stopTracing"
+               icon="icons/full/obj16/stoptracing.gif"
+               label="%toolbar.stopTracing.name"
+               style="push">
+         </command>
+         <command
+               commandId="org.eclipse.cdt.dsf.gdb.ui.command.selectNextTraceRecord"
+               icon="icons/full/obj16/next_trace_record_nav.gif"
+               label="%toolbar.nextTraceRecord.label"
+               style="push">
+         </command>
+         <command
+               commandId="org.eclipse.cdt.dsf.gdb.ui.command.selectPreviousTraceRecord"
+               icon="icons/full/obj16/prev_trace_record_nav.gif"
+               label="%toolbar.prevTraceRecord.label"
+               style="push">
+         </command>
+      </menuContribution>
+         <menuContribution
+               locationURI="menu:org.eclipse.cdt.dsf.gdb.ui.tracecontrol.view?after=additions">
+            <command
+                  commandId="org.eclipse.cdt.debug.ui.command.saveTraceData"
+                  icon="icons/full/obj16/savetrace.gif"
+                  label="%toolbar.saveTracing.name"
+                  style="push">
+            </command>
+         </menuContribution>
+   </extension>
+   <extension
+         point="org.eclipse.cdt.debug.ui.BreakpointActionPage">
+      <actionPage
+            actionType="org.eclipse.cdt.dsf.gdb.tracepointactions.CollectAction"
+            class="org.eclipse.cdt.dsf.gdb.internal.ui.tracepointactions.CollectActionPage"
+            id="org.eclipse.cdt.dsf.gdb.ui.tracepointactions.CollectActionPage">
+      </actionPage>
+   </extension>
+   <extension
+         point="org.eclipse.cdt.debug.ui.BreakpointActionPage">
+      <actionPage
+            actionType="org.eclipse.cdt.dsf.gdb.tracepointactions.EvaluateAction"
+            class="org.eclipse.cdt.dsf.gdb.internal.ui.tracepointactions.EvaluateActionPage"
+            id="org.eclipse.cdt.dsf.gdb.ui.tracepointactions.EvaluateActionPage">
+      </actionPage>
+   </extension>
+   <extension
+         point="org.eclipse.cdt.debug.ui.BreakpointActionPage">
+      <actionPage
+            actionType="org.eclipse.cdt.dsf.gdb.tracepointactions.WhileSteppingAction"
+            class="org.eclipse.cdt.dsf.gdb.internal.ui.tracepointactions.WhileSteppingActionPage"
+            id="org.eclipse.cdt.dsf.gdb.ui.tracepointactions.WhileSteppingActionPage">
+      </actionPage>
+   </extension>
+   <extension
+         point="org.eclipse.ui.propertyPages">
+      <page
+            class="org.eclipse.cdt.dsf.gdb.internal.ui.tracepointactions.TracepointActionsPropertyPage"
+            id="org.eclipse.cdt.dsf.gdb.ui.tracepointactions.tracepointActions"
+            name="%tracepoints.action.page.label">
+         <enabledWhen>
+               <adapt type="org.eclipse.cdt.debug.core.model.ICTracepoint"/>
+         </enabledWhen>
+      </page>
+   </extension>
+   <extension
+         point="org.eclipse.ui.preferencePages">
+       <page
+             category="org.eclipse.cdt.debug.ui.CDebugPreferencePage"
+             class="org.eclipse.cdt.dsf.gdb.internal.ui.tracepointactions.TracepointActionsPreferencePage"
+             id="org.eclipse.cdt.dsf.gdb.ui.preferences.TracepointActionsPreferencePage"
+             name="%tracepointActionsPrefPage.name">
+      </page> 
+   </extension>
+    <extension
+         point="org.eclipse.ui.console.consolePageParticipants">
+      <consolePageParticipant
+            class="org.eclipse.cdt.dsf.gdb.internal.ui.console.ConsolePageParticipant"
+            id="org.eclipse.cdt.dsf.gdb.ui.dsfGdbConsolePageParticipant">
+         <enablement>
+            <instanceof
+                  value="org.eclipse.ui.console.IOConsole">
+            </instanceof>
+         </enablement>
+      </consolePageParticipant>
    </extension>
    
 </plugin>

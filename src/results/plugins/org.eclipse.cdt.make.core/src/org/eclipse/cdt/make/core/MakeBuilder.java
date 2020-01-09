@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,6 +8,9 @@
  * Contributors:
  *     QNX Software Systems - Initial API and implementation
  *     Tianchao Li (tianchao.li@gmail.com) - arbitrary build directory (bug #136136)
+ *     Dmitry Kozlov (CodeSourcery) - Build error highlighting and navigation
+ *                                    Save build output  (bug 294106)
+ *     Andrew Gvozdev (Quoin Inc)   - Saving build output implemented in different way (bug 306222)
  *******************************************************************************/
 package org.eclipse.cdt.make.core;
 
@@ -16,9 +19,10 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.Map.Entry;
 
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.CommandLauncher;
@@ -53,6 +57,10 @@ import org.eclipse.core.runtime.SubProgressMonitor;
 import org.eclipse.core.runtime.jobs.ISchedulingRule;
 import org.eclipse.core.runtime.jobs.Job;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class MakeBuilder extends ACBuilder {
 
 	public final static String BUILDER_ID = MakeCorePlugin.getUniqueIdentifier() + ".makeBuilder"; //$NON-NLS-1$
@@ -64,7 +72,12 @@ public class MakeBuilder extends ACBuilder {
 	 * @see IncrementalProjectBuilder#build
 	 */
 	@Override
-	protected IProject[] build(int kind, Map args, IProgressMonitor monitor) throws CoreException {
+	protected IProject[] build(int kind, @SuppressWarnings("rawtypes") Map args0, IProgressMonitor monitor) throws CoreException {
+		@SuppressWarnings("unchecked")
+		Map<String, String> args = args0;
+		if (DEBUG_EVENTS)
+			printEvent(kind, args);
+
 		boolean bPerformBuild = true;
 		IMakeBuilderInfo info = MakeCorePlugin.createBuildInfo(args, MakeBuilder.BUILDER_ID);
 		if (!shouldBuild(kind, info)) {
@@ -91,9 +104,12 @@ public class MakeBuilder extends ACBuilder {
 		return getProject().getReferencedProjects();
 	}
 
-	
+
 	@Override
 	protected void clean(IProgressMonitor monitor) throws CoreException {
+		if (DEBUG_EVENTS)
+			printEvent(IncrementalProjectBuilder.CLEAN_BUILD, null);
+
 		final IMakeBuilderInfo info = MakeCorePlugin.createBuildInfo(getProject(), BUILDER_ID);
 		if (shouldBuild(CLEAN_BUILD, info)) {
 			IResourceRuleFactory ruleFactory= ResourcesPlugin.getWorkspace().getRuleFactory();
@@ -117,17 +133,15 @@ public class MakeBuilder extends ACBuilder {
 					IStatus returnStatus = Status.OK_STATUS;
 					return returnStatus;
 				}
-				
-				
+
+
 			};
-			
+
 			backgroundJob.setRule(rule);
 			backgroundJob.schedule();
 		}
 	}
-	
 
-	
 	protected boolean invokeMake(int kind, IMakeBuilderInfo info, IProgressMonitor monitor) {
 		boolean isClean = false;
 		IProject currProject = getProject();
@@ -162,21 +176,22 @@ public class MakeBuilder extends ACBuilder {
 				launcher.showCommand(true);
 
 				// Set the environment
-				HashMap envMap = new HashMap();
+				HashMap<String, String> envMap = new HashMap<String, String>();
 				if (info.appendEnvironment()) {
-					envMap.putAll(launcher.getEnvironment());
+					@SuppressWarnings({"unchecked", "rawtypes"})
+					Map<String, String> env = (Map)launcher.getEnvironment();
+					envMap.putAll(env);
 				}
 				// Add variables from build info
 				envMap.putAll(info.getExpandedEnvironment());
-				Iterator iter = envMap.entrySet().iterator();
-				List strings= new ArrayList(envMap.size());
-				while (iter.hasNext()) {
-					Map.Entry entry = (Map.Entry) iter.next();
-					StringBuffer buffer= new StringBuffer((String) entry.getKey());
-					buffer.append('=').append((String) entry.getValue());
+				List<String> strings= new ArrayList<String>(envMap.size());
+				Set<Entry<String, String>> entrySet = envMap.entrySet();
+				for (Entry<String, String> entry : entrySet) {
+					StringBuffer buffer= new StringBuffer(entry.getKey());
+					buffer.append('=').append(entry.getValue());
 					strings.add(buffer.toString());
 				}
-				String[] env = (String[]) strings.toArray(new String[strings.size()]);
+				String[] env = strings.toArray(new String[strings.size()]);
 				String[] buildArguments = targets;
 				if (info.isDefaultBuildCmd()) {
 					if (!info.isStopOnError()) {
@@ -201,11 +216,11 @@ public class MakeBuilder extends ACBuilder {
 				if (last == null) {
 					last = new Integer(100);
 				}
-				StreamMonitor streamMon = new StreamMonitor(new SubProgressMonitor(monitor, 100), cos, last.intValue());
 				ErrorParserManager epm = new ErrorParserManager(getProject(), workingDirectoryURI, this, info.getErrorParsers());
-				epm.setOutputStream(streamMon);
-				OutputStream stdout = epm.getOutputStream();
-				OutputStream stderr = epm.getOutputStream();
+				epm.setOutputStream(cos);
+				StreamMonitor streamMon = new StreamMonitor(new SubProgressMonitor(monitor, 100), epm, last.intValue());
+				OutputStream stdout = streamMon;
+				OutputStream stderr = streamMon;
 				// Sniff console output for scanner info
 				ConsoleOutputSniffer sniffer = ScannerInfoConsoleParserFactory.getMakeBuilderOutputSniffer(
 						stdout, stderr, getProject(), workingDirectory, null, this, null);
@@ -233,8 +248,8 @@ public class MakeBuilder extends ACBuilder {
 
 				if (errMsg != null) {
 					StringBuffer buf = new StringBuffer(buildCommand.toString() + " "); //$NON-NLS-1$
-					for (int i = 0; i < buildArguments.length; i++) {
-						buf.append(buildArguments[i]);
+					for (String buildArgument : buildArguments) {
+						buf.append(buildArgument);
 						buf.append(' ');
 					}
 
@@ -252,21 +267,20 @@ public class MakeBuilder extends ACBuilder {
 				monitor.subTask(MakeMessages.getString("MakeBuilder.Creating_Markers")); //$NON-NLS-1$
 				consoleOut.close();
 				consoleErr.close();
-				epm.reportProblems();
 				cos.close();
 			}
 		} catch (Exception e) {
-			CCorePlugin.log(e);
+			MakeCorePlugin.log(e);
 		} finally {
 			monitor.done();
 		}
 		return (isClean);
 	}
-	
+
 	/**
 	 * Refresh project. Can be overridden to not call actual refresh or to do something else.
 	 * Method is called after build is complete.
-	 * @param project
+	 * 
 	 * @since 6.0
 	 */
 	protected void refreshProject(IProject project) {

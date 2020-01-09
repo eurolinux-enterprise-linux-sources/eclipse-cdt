@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2009 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -29,6 +29,7 @@ public class MakeStartup extends Job {
 		setSystem(true);
 	}
 
+	@Override
 	protected IStatus run(IProgressMonitor monitor) {
         final IProject[] oldProject = UpdateMakeProjectAction.getOldProjects();
         if (oldProject.length > 0) {

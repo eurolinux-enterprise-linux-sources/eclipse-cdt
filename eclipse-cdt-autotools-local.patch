@@ -1,12 +1,10 @@
 diff -up ./org.eclipse.linuxtools.cdt.autotools.core/build.properties.fix ./org.eclipse.linuxtools.cdt.autotools.core/build.properties
---- ./org.eclipse.linuxtools.cdt.autotools.core/build.properties.fix	2010-03-19 15:28:41.000000000 -0400
-+++ ./org.eclipse.linuxtools.cdt.autotools.core/build.properties	2010-03-19 15:39:38.000000000 -0400
-@@ -3,5 +3,6 @@ output.. = bin/
- bin.includes = plugin.xml,\
+--- ./org.eclipse.linuxtools.cdt.autotools.core/build.properties.fix	2011-01-11 16:05:11.000000000 -0500
++++ ./org.eclipse.linuxtools.cdt.autotools.core/build.properties	2011-01-11 16:05:25.000000000 -0500
+@@ -4,5 +4,6 @@ bin.includes = plugin.xml,\
                 META-INF/,\
                 .,\
-+               macros/,\
                 html/,\
--               plugin.properties
-\ No newline at end of file
-+               plugin.properties
++               macros/,\
+ 	       about.html,\
+                plugin.properties

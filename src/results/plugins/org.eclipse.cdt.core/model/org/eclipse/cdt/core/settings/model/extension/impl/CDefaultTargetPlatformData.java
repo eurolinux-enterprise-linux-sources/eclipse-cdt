@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -55,7 +55,7 @@ public class CDefaultTargetPlatformData extends CTargetPlatformData {
 	@Override
 	public String[] getBinaryParserIds() {
 		if(fBinaryParserIds != null)
-			return (String[])fBinaryParserIds.clone();
+			return fBinaryParserIds.clone();
 		return new String[0];
 	}
 
@@ -65,7 +65,7 @@ public class CDefaultTargetPlatformData extends CTargetPlatformData {
 			return;
 		
 		if(ids != null)
-			fBinaryParserIds = (String[])ids.clone();
+			fBinaryParserIds = ids.clone();
 		else
 			fBinaryParserIds = null;
 		

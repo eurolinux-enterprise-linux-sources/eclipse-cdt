@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2009 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -30,16 +30,28 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class BuildTargetDialog extends Dialog {
 	private final TargetListViewerPart targetPart;
 	private final IContainer fContainer;
 
-	public BuildTargetDialog(Shell parent, IContainer container) {
+	/**
+	 * @since 7.0
+	 */
+	public BuildTargetDialog(Shell parent, IContainer container, boolean recursive) {
 		super(parent);
 		setShellStyle(getShellStyle() | SWT.RESIZE);
 		fContainer = container;
-		targetPart = new TargetListViewerPart(fContainer);
+		targetPart = new TargetListViewerPart(fContainer, recursive);
 	}
+	
+	public BuildTargetDialog(Shell parent, IContainer container) {
+		this(parent, container, true);
+	}
+
 
 	public void setTarget(IMakeTarget target) {
 		targetPart.setSelectedTarget(target);

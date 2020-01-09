@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 QNX Software Systems and others.
+ * Copyright (c) 2007, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,7 +21,6 @@ import org.eclipse.cdt.core.dom.IPDOMVisitor;
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IField;
-import org.eclipse.cdt.core.dom.ast.IProblemBinding;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
@@ -33,15 +32,12 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPConstructor;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPField;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPSpecialization;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateDefinition;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateInstance;
-import org.eclipse.cdt.core.parser.util.CharArrayUtils;
 import org.eclipse.cdt.core.parser.util.ObjectMap;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPClassSpecialization;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.ClassTypeHelper;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.ICPPClassSpecializationScope;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPTemplates;
 import org.eclipse.cdt.internal.core.index.IIndexCPPBindingConstants;
-import org.eclipse.cdt.internal.core.index.IIndexType;
 import org.eclipse.cdt.internal.core.pdom.db.PDOMNodeLinkedList;
 import org.eclipse.cdt.internal.core.pdom.dom.IPDOMMemberOwner;
 import org.eclipse.cdt.internal.core.pdom.dom.PDOMBinding;
@@ -54,7 +50,7 @@ import org.eclipse.core.runtime.CoreException;
  * @author Bryan Wilkinson
  */
 class PDOMCPPClassSpecialization extends PDOMCPPSpecialization implements
-		ICPPClassSpecialization, IPDOMMemberOwner, IIndexType, IPDOMCPPClassType {
+		ICPPClassSpecialization, IPDOMMemberOwner, IPDOMCPPClassType {
 
 	private static final int FIRSTBASE = PDOMCPPSpecialization.RECORD_SIZE + 0;
 	private static final int MEMBERLIST = PDOMCPPSpecialization.RECORD_SIZE + 4;
@@ -155,12 +151,14 @@ class PDOMCPPClassSpecialization extends PDOMCPPSpecialization implements
 	}
 	
 	public void addBase(PDOMCPPBase base) throws CoreException {
+		getPDOM().removeCachedResult(record+PDOMCPPLinkage.CACHE_BASES);
 		PDOMCPPBase firstBase = getFirstBase();
 		base.setNextBase(firstBase);
 		setFirstBase(base);
 	}
 	
 	public void removeBase(PDOMName pdomName) throws CoreException {
+		getPDOM().removeCachedResult(record+PDOMCPPLinkage.CACHE_BASES);
 		PDOMCPPBase base= getFirstBase();
 		PDOMCPPBase predecessor= null;
 		long nameRec= pdomName.getRecord();
@@ -310,35 +308,10 @@ class PDOMCPPClassSpecialization extends PDOMCPPSpecialization implements
 		}
 
 		// require a class specialization
-		if (type instanceof ICPPSpecialization == false || type instanceof IProblemBinding)
+		if (!(type instanceof ICPPClassSpecialization))
 			return false;
-		
-		// exclude class template specialization or class instance
-		if (type instanceof ICPPTemplateInstance || type instanceof ICPPTemplateDefinition)
-			return false;
-		
-		final ICPPClassSpecialization classSpec2 = (ICPPClassSpecialization) type;
-		try {
-			if (getKey() != classSpec2.getKey()) 
-				return false;
-			
-			if (!CharArrayUtils.equals(getNameCharArray(), classSpec2.getNameCharArray()))
-				return false;
-			
-			// the argument map is not significant for comparing specializations, the map is
-			// determined by the owner of the specialization. This is different for instances,
-			// which have a separate implementation for isSameType().
-			final IBinding owner1= getOwner();
-			final IBinding owner2= classSpec2.getOwner();
-			
-			// for a specialization that is not an instance the owner has to be a class-type
-			if (owner1 instanceof ICPPClassType == false || owner2 instanceof ICPPClassType == false)
-				return false;
 
-			return ((ICPPClassType) owner1).isSameType((ICPPClassType) owner2);
-		} catch (DOMException e) {
-			return false;
-		}
+		return CPPClassSpecialization.isSameClassSpecialization(this, (ICPPClassSpecialization) type);
 	}
 	
 	@Override

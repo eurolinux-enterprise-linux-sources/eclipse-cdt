@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,6 +20,7 @@ import org.eclipse.cdt.core.dom.ast.IASTCompoundStatement;
 import org.eclipse.cdt.core.dom.ast.IASTConditionalExpression;
 import org.eclipse.cdt.core.dom.ast.IASTDeclarator;
 import org.eclipse.cdt.core.dom.ast.IASTDoStatement;
+import org.eclipse.cdt.core.dom.ast.IASTEqualsInitializer;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IASTExpressionList;
 import org.eclipse.cdt.core.dom.ast.IASTExpressionStatement;
@@ -28,7 +29,6 @@ import org.eclipse.cdt.core.dom.ast.IASTForStatement;
 import org.eclipse.cdt.core.dom.ast.IASTFunctionCallExpression;
 import org.eclipse.cdt.core.dom.ast.IASTIdExpression;
 import org.eclipse.cdt.core.dom.ast.IASTIfStatement;
-import org.eclipse.cdt.core.dom.ast.IASTInitializerExpression;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IASTProblemExpression;
 import org.eclipse.cdt.core.dom.ast.IASTProblemStatement;
@@ -43,7 +43,6 @@ import org.eclipse.cdt.core.dom.ast.IFunctionType;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.IVariable;
 import org.eclipse.cdt.core.dom.ast.gnu.IGNUASTCompoundStatementExpression;
-import org.eclipse.cdt.core.dom.ast.gnu.IGNUASTUnaryExpression;
 import org.eclipse.cdt.internal.core.pdom.dom.PDOMName;
 
 /**
@@ -66,7 +65,7 @@ public abstract class VariableReadWriteFlags {
 		else if (parent instanceof IASTStatement) {
 			return rwInStatement(node, (IASTStatement) parent, indirection);
 		}
-		else if (parent instanceof IASTInitializerExpression) {
+		else if (parent instanceof IASTEqualsInitializer) {
 			return rwInInitializerExpression(indirection, parent);
 		}
 		else if (parent instanceof IASTArrayModifier) {
@@ -114,7 +113,7 @@ public abstract class VariableReadWriteFlags {
 		if (expr instanceof IASTExpressionList) {
 			final IASTExpressionList exprList = (IASTExpressionList)expr;
 			final IASTNode grand= expr.getParent();
-			if (grand instanceof IASTFunctionCallExpression && expr.getPropertyInParent() == IASTFunctionCallExpression.PARAMETERS) {
+			if (grand instanceof IASTFunctionCallExpression && expr.getPropertyInParent() == IASTFunctionCallExpression.ARGUMENT) {
 				final IASTFunctionCallExpression funcCall = (IASTFunctionCallExpression) grand;
 				return rwArgumentForFunctionCall(node, exprList, funcCall, indirection);
 			}
@@ -162,19 +161,15 @@ public abstract class VariableReadWriteFlags {
 	}
 
 	protected int rwArgumentForFunctionCall(final IASTFunctionCallExpression func, int parameterIdx, int indirection) {
-		try {
-			final IASTExpression functionNameExpression = func.getFunctionNameExpression();
-			if (functionNameExpression != null) {
-				final IType type= functionNameExpression.getExpressionType();
-				if (type instanceof IFunctionType) {
-					IType[] ptypes= ((IFunctionType) type).getParameterTypes();
-					if (ptypes != null && ptypes.length > parameterIdx) {
-						return rwAssignmentToType(ptypes[parameterIdx], indirection);
-					}
+		final IASTExpression functionNameExpression = func.getFunctionNameExpression();
+		if (functionNameExpression != null) {
+			final IType type= functionNameExpression.getExpressionType();
+			if (type instanceof IFunctionType) {
+				IType[] ptypes= ((IFunctionType) type).getParameterTypes();
+				if (ptypes != null && ptypes.length > parameterIdx) {
+					return rwAssignmentToType(ptypes[parameterIdx], indirection);
 				}
 			}
-		}
-		catch (DOMException e) {
 		}
 		return READ | WRITE; // fallback
 	}
@@ -263,8 +258,8 @@ public abstract class VariableReadWriteFlags {
 			return PDOMName.READ_ACCESS;
 
 		case IASTUnaryExpression.op_sizeof:
-		case IGNUASTUnaryExpression.op_alignOf:
-		case IGNUASTUnaryExpression.op_typeof:
+		case IASTUnaryExpression.op_sizeofParameterPack:
+		case IASTUnaryExpression.op_alignOf:
 			return 0;
 		}
 		return READ;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,6 +12,7 @@ package org.eclipse.cdt.internal.ui.callhierarchy;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -50,7 +51,7 @@ public class CHQueries {
 			throws CoreException {
 		CalledByResult result= new CalledByResult();
 		ICElement callee= node.getRepresentedDeclaration();
-		if (! (callee instanceof ISourceReference)) {
+		if (!(callee instanceof ISourceReference)) {
 			return EMPTY_NODES;
 		}
 		boolean done= false;
@@ -75,12 +76,12 @@ public class CHQueries {
 		final ICProject project = callee.getCProject();
 		IIndexBinding calleeBinding= IndexUI.elementToBinding(index, callee, linkageID);
 		if (calleeBinding != null) {
-			findCalledBy(index, calleeBinding, true, project, result);
+			findCalledBy1(index, calleeBinding, true, project, result);
 			if (calleeBinding instanceof ICPPMethod) {
 				try {
 					IBinding[] overriddenBindings= ClassTypeHelper.findOverridden((ICPPMethod) calleeBinding);
 					for (IBinding overriddenBinding : overriddenBindings) {
-						findCalledBy(index, overriddenBinding, false, project, result);
+						findCalledBy1(index, overriddenBinding, false, project, result);
 					}
 				} catch (DOMException e) {
 					// index bindings don't throw DOMExceptions
@@ -89,7 +90,17 @@ public class CHQueries {
 		}
 	}
 
-	private static void findCalledBy(IIndex index, IBinding callee, boolean includeOrdinaryCalls, ICProject project, CalledByResult result) 
+	private static void findCalledBy1(IIndex index, IBinding callee, boolean includeOrdinaryCalls,
+			ICProject project, CalledByResult result) throws CoreException {
+		findCalledBy2(index, callee, includeOrdinaryCalls, project, result);
+		List<? extends IBinding> specializations = IndexUI.findSpecializations(callee);
+		for (IBinding spec : specializations) {
+			findCalledBy2(index, spec, includeOrdinaryCalls, project, result);
+		}
+	}
+
+
+	private static void findCalledBy2(IIndex index, IBinding callee, boolean includeOrdinaryCalls, ICProject project, CalledByResult result) 
 			throws CoreException {
 		IIndexName[] names= index.findNames(callee, IIndex.FIND_REFERENCES | IIndex.SEARCH_ACROSS_LANGUAGE_BOUNDARIES);
 		for (IIndexName rname : names) {
@@ -120,19 +131,7 @@ public class CHQueries {
 				if (CallHierarchyUI.isRelevantForCallHierarchy(binding)) {
 					ICElement[] defs= null;
 					if (binding instanceof ICPPMethod) {
-						try {
-							IBinding[] virtualOverriders= ClassTypeHelper.findOverriders(index, (ICPPMethod) binding);
-							if (virtualOverriders.length > 0) {
-								ArrayList<ICElementHandle> list= new ArrayList<ICElementHandle>();
-								list.addAll(Arrays.asList(IndexUI.findRepresentative(index, binding)));
-								for (IBinding overrider : virtualOverriders) {
-									list.addAll(Arrays.asList(IndexUI.findRepresentative(index, overrider)));
-								}
-								defs= list.toArray(new ICElement[list.size()]);
-							}
-						} catch (DOMException e) {
-							// index bindings don't throw DOMExceptions
-						}
+						defs = findOverriders(index, (ICPPMethod) binding);
 					}
 					if (defs == null) {
 						defs= IndexUI.findRepresentative(index, binding);
@@ -144,5 +143,25 @@ public class CHQueries {
 			}
 		}
 		return cp.createNodes(node, result);
+	}
+
+	/**
+	 * Searches for overriders of method and converts them to ICElement, returns null, if there are none.
+	 */
+	static ICElement[] findOverriders(IIndex index, ICPPMethod binding)	throws CoreException {
+		try {
+			IBinding[] virtualOverriders= ClassTypeHelper.findOverriders(index, binding);
+			if (virtualOverriders.length > 0) {
+				ArrayList<ICElementHandle> list= new ArrayList<ICElementHandle>();
+				list.addAll(Arrays.asList(IndexUI.findRepresentative(index, binding)));
+				for (IBinding overrider : virtualOverriders) {
+					list.addAll(Arrays.asList(IndexUI.findRepresentative(index, overrider)));
+				}
+				return list.toArray(new ICElement[list.size()]);
+			}
+		} catch (DOMException e) {
+			// index bindings don't throw DOMExceptions
+		}
+		return null;
 	}
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,6 +16,7 @@ import java.util.Collections;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.accessibility.AccessibleAdapter;
 import org.eclipse.swt.accessibility.AccessibleEvent;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.TableColumn;
 
 import org.eclipse.cdt.core.model.util.CDTListComparator;
@@ -32,9 +33,11 @@ public class SymbolTab extends AbstractLangsListTab {
     	TableColumn tc = new TableColumn(table, SWT.LEFT);
     	tc.setText(UIMessages.getString("SymbolTab.0")); //$NON-NLS-1$
     	tc.setWidth(80);
+    	tc.setToolTipText(UIMessages.getString("SymbolTab.0")); //$NON-NLS-1$
     	tc = new TableColumn(table, SWT.LEFT);
     	tc.setText(UIMessages.getString("SymbolTab.1")); //$NON-NLS-1$
     	tc.setWidth(130);
+    	tc.setToolTipText(UIMessages.getString("SymbolTab.1")); //$NON-NLS-1$
     	table.getAccessible().addAccessibleListener(
 				new AccessibleAdapter() {                       
                     @Override
@@ -91,5 +94,13 @@ public class SymbolTab extends AbstractLangsListTab {
 		}		
 		updateLbs(lb1, lb2);
 		updateButtons();
+	}
+	
+	
+	@Override
+	public void createControls(final Composite parent) {
+		super.createControls(parent);
+		showBIButton.setSelection(true);
+		ImportExportWizardButtons.addWizardLaunchButtons(usercomp, page.getElement());
 	}
 }

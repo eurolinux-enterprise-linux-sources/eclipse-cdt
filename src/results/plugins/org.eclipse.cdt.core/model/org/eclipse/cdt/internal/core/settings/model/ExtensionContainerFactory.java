@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -29,6 +29,9 @@ import org.eclipse.core.runtime.IExtensionPoint;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.Platform;
 
+/**
+ * Responsible for managing external settings providers contributed through the extension point
+ */
 public class ExtensionContainerFactory extends CExternalSettingContainerFactoryWithListener {
 	static final String FACTORY_ID = CCorePlugin.PLUGIN_ID + ".extension.container.factory"; //$NON-NLS-1$
 	private static final String EXTENSION_ID = CCorePlugin.PLUGIN_ID + ".externalSettingsProvider"; //$NON-NLS-1$
@@ -80,6 +83,7 @@ public class ExtensionContainerFactory extends CExternalSettingContainerFactoryW
 			return fId;
 		}
 
+		@SuppressWarnings("unused")
 		public String getName(){
 			return fName;
 		}
@@ -98,8 +102,8 @@ public class ExtensionContainerFactory extends CExternalSettingContainerFactoryW
 			return fProvider;
 		}
 		
-		CExternalSettingsContainer getContainer(IProject project, ICConfigurationDescription cfg){
-			return new CESContainer(getProvider().getSettings(project, cfg));
+		CExternalSettingsContainer getContainer(IProject project, ICConfigurationDescription cfg, CExternalSetting[] previousSettings){
+			return new CESContainer(getProvider().getSettings(project, cfg, previousSettings));
 		}
 
 		CExternalSettingProvider createProvider() throws CoreException{
@@ -171,11 +175,13 @@ public class ExtensionContainerFactory extends CExternalSettingContainerFactoryW
 
 	@Override
 	public CExternalSettingsContainer createContainer(String id,
-			IProject project, ICConfigurationDescription cfgDes) throws CoreException {
+			IProject project, ICConfigurationDescription cfgDes, CExternalSetting[] previousSettings) throws CoreException {
 		CExtensionSettingProviderDescriptor dr = getProviderDescriptorMap().get(id);
 		if(dr != null)
-			return dr.getContainer(project, cfgDes);
-		return CExternalSettingsManager.NullContainer.INSTANCE;
+			return dr.getContainer(project, cfgDes, previousSettings);
+		// Notify the manager that there's no external settings manager matching id.
+		throw new CoreException(CCorePlugin.createStatus("External settings provider: \"" + id + "\" couldn't be found for " +  //$NON-NLS-1$//$NON-NLS-2$
+			cfgDes.getProjectDescription().getProject() + ":"+cfgDes.getName())); //$NON-NLS-1$
 	}
 	
 	public static String[] getReferencedProviderIds(ICConfigurationDescription cfg){

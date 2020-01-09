@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -15,15 +15,15 @@ import java.util.List;
 public class PathEntryResolveInfo {
 	private PathEntryResolveInfoElement[] fElements;
 	
-	public PathEntryResolveInfo(List list){
+	public PathEntryResolveInfo(List<PathEntryResolveInfoElement> list){
 		if(list != null){
-			fElements = (PathEntryResolveInfoElement[])list.toArray(new PathEntryResolveInfoElement[list.size()]);
+			fElements = list.toArray(new PathEntryResolveInfoElement[list.size()]);
 		} else {
 			fElements = new PathEntryResolveInfoElement[0];
 		}
 	}
 	
 	public PathEntryResolveInfoElement[] getElements(){
-		return (PathEntryResolveInfoElement[])fElements.clone();
+		return fElements.clone();
 	}
 }

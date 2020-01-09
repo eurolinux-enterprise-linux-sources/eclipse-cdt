@@ -12,7 +12,7 @@ package org.eclipse.cdt.internal.core.pdom;
 
 import org.eclipse.cdt.core.index.IIndexFileLocation;
 import org.eclipse.cdt.core.model.AbstractLanguage;
-import org.eclipse.cdt.core.parser.CodeReader;
+import org.eclipse.cdt.core.parser.FileContent;
 import org.eclipse.cdt.core.parser.IScannerInfo;
 
 /**
@@ -50,6 +50,12 @@ public abstract class IndexerInputAdapter extends ASTFilePathResolver {
 	public abstract boolean isFileBuildConfigured(Object tu);
 
 	/**
+	 * Returns whether the given translation-unit is not indexed unless it gets included.
+	 * This applies to files that are outside of a source root.
+	 */
+	public abstract boolean isIndexedOnlyIfIncluded(Object tu);
+
+	/**
 	 * Tests whether the file in the index is allowed to be part of an SDK. If not
 	 * it will be indexed.
 	 */
@@ -68,6 +74,5 @@ public abstract class IndexerInputAdapter extends ASTFilePathResolver {
 	/**
 	 * Returns a code reader for the given input file.
 	 */
-	public abstract CodeReader getCodeReader(Object tu);
-
+	public abstract FileContent getCodeReader(Object tu);
 }

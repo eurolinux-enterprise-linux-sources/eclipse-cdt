@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2009 IBM Corporation and others.
+ * Copyright (c) 2003, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -36,6 +36,7 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jface.action.GroupMarker;
 import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.action.Separator;
@@ -55,7 +56,9 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.editors.text.templates.ContributionContextTypeRegistry;
 import org.eclipse.ui.editors.text.templates.ContributionTemplateStore;
+import org.eclipse.ui.navigator.ICommonMenuConstants;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
+import org.eclipse.ui.preferences.ScopedPreferenceStore;
 import org.eclipse.ui.texteditor.ChainedPreferenceStore;
 import org.eclipse.ui.texteditor.ConfigurationElementSorter;
 import org.osgi.framework.Bundle;
@@ -85,12 +88,9 @@ import org.eclipse.cdt.internal.ui.ResourceAdapterFactory;
 import org.eclipse.cdt.internal.ui.buildconsole.BuildConsoleManager;
 import org.eclipse.cdt.internal.ui.editor.ASTProvider;
 import org.eclipse.cdt.internal.ui.editor.CDocumentProvider;
-import org.eclipse.cdt.internal.ui.editor.CustomBufferFactory;
 import org.eclipse.cdt.internal.ui.editor.WorkingCopyManager;
-import org.eclipse.cdt.internal.ui.editor.asm.AsmTextTools;
 import org.eclipse.cdt.internal.ui.refactoring.CTextFileChangeFactory;
 import org.eclipse.cdt.internal.ui.text.CTextTools;
-import org.eclipse.cdt.internal.ui.text.PreferencesAdapter;
 import org.eclipse.cdt.internal.ui.text.c.hover.CEditorTextHoverDescriptor;
 import org.eclipse.cdt.internal.ui.text.doctools.DocCommentOwnerManager;
 import org.eclipse.cdt.internal.ui.text.doctools.EditorReopener;
@@ -122,6 +122,8 @@ public class CUIPlugin extends AbstractUIPlugin {
 	public static final String CPP_PROJECT_WIZARD_ID = PLUGIN_ID + ".wizards.StdCCWizard"; //$NON-NLS-1$
 
 	public final static String CWIZARD_CATEGORY_ID = "org.eclipse.cdt.ui.newCWizards"; //$NON-NLS-1$
+	/** @deprecated This wizard category has been merged with the {@link #CWIZARD_CATEGORY_ID c wizard category} */
+	@Deprecated
 	public final static String CCWIZARD_CATEGORY_ID = "org.eclipse.cdt.ui.newCCWizards"; //$NON-NLS-1$
 	
 	public static final String SEARCH_ACTION_SET_ID = PLUGIN_ID + ".SearchActionSet"; //$NON-NLS-1$
@@ -143,7 +145,6 @@ public class CUIPlugin extends AbstractUIPlugin {
 	 * (value <code>"org.eclipse.cdt.ui.CHierarchyPerspective"</code>).
 	 * 
 	 * @deprecated This perspective no longer exists.
-	 * @noreference This field is not intended to be referenced by clients.
 	 */	
 	@Deprecated
 	public static final String ID_CHIERARCHY_PERSPECTIVE = PLUGIN_ID + ".CHierarchyPerspective"; //$NON-NLS-1$
@@ -154,7 +155,6 @@ public class CUIPlugin extends AbstractUIPlugin {
 	 * 
 	 * @since 2.0
 	 * @deprecated This perspective no longer exists.
-	 * @noreference This field is not intended to be referenced by clients.
 	 */
 	@Deprecated
 	public static final String ID_CBROWSING_PERSPECTIVE = PLUGIN_ID + ".CBrowsingPerspective"; //$NON-NLS-1$
@@ -243,15 +243,15 @@ public class CUIPlugin extends AbstractUIPlugin {
 
 	/**
 	 * @noreference This method is not intended to be referenced by clients.
+	 * @deprecated use {@link CDTUITools#getWorkingCopyManager()}, instead.
 	 */
+	@Deprecated
 	public synchronized IBufferFactory getBufferFactory() {
-		if (fBufferFactory == null)
-			fBufferFactory= new CustomBufferFactory();
-		return fBufferFactory;
+		return ((WorkingCopyManager) getWorkingCopyManager()).getBufferFactory();
 	}
 	
 	public static IWorkingCopy[] getSharedWorkingCopies() {
-		return CCorePlugin.getSharedWorkingCopies(getDefault().getBufferFactory());
+		return getDefault().getWorkingCopyManager().getSharedWorkingCopies();
 	}
 	
 	public static String getResourceString(String key) {
@@ -346,7 +346,7 @@ public class CUIPlugin extends AbstractUIPlugin {
 	*/
 	public static void errorDialog(Shell shell, String title, String message, Throwable t, boolean logError) {
 		if (logError)
-		    log(t);	
+			log(message, t);
 		
 		IStatus status;
 		if (t instanceof CoreException) {
@@ -381,10 +381,8 @@ public class CUIPlugin extends AbstractUIPlugin {
 
 	private CoreModel fCoreModel;
 	private CDocumentProvider fDocumentProvider;
-	private IBufferFactory fBufferFactory;
 	private WorkingCopyManager fWorkingCopyManager;
 	private CTextTools fTextTools;
-	private AsmTextTools fAsmTextTools;
 	private ProblemMarkerManager fProblemMarkerManager;
 	private Map<String, BuildConsoleManager> fBuildConsoleManagers;
 	private ResourceAdapterFactory fResourceAdapterFactory;
@@ -459,18 +457,6 @@ public class CUIPlugin extends AbstractUIPlugin {
 		if (fTextTools == null)
 			fTextTools = new CTextTools();
 		return fTextTools;
-	}
-
-	/**
-	 * Returns the shared assembly text tools.
-	 * @deprecated Use methods provided by {@link CDTUITools} instead.
-	 * @noreference This method is not intended to be referenced by clients.
-	 */
-	@Deprecated
-	public AsmTextTools getAsmTextTools() {
-		if (fAsmTextTools == null)
-			fAsmTextTools = new AsmTextTools();
-		return fAsmTextTools;
 	}
 
 	/**
@@ -559,10 +545,6 @@ public class CUIPlugin extends AbstractUIPlugin {
 		if (fTextTools != null) {
 			fTextTools.dispose();
 			fTextTools= null;
-		}
-		if (fAsmTextTools != null) {
-			fAsmTextTools.dispose();
-			fAsmTextTools= null;
 		}
 		if (fImageDescriptorRegistry != null) {
 			fImageDescriptorRegistry.dispose();
@@ -666,8 +648,11 @@ public class CUIPlugin extends AbstractUIPlugin {
 	 */
 	public IPreferenceStore getCombinedPreferenceStore() {
 		if (fCombinedPreferenceStore == null) {
-			IPreferenceStore generalTextStore= EditorsUI.getPreferenceStore(); 
-			fCombinedPreferenceStore= new ChainedPreferenceStore(new IPreferenceStore[] { getPreferenceStore(), new PreferencesAdapter(CCorePlugin.getDefault().getPluginPreferences()), generalTextStore });
+			fCombinedPreferenceStore= new ChainedPreferenceStore(new IPreferenceStore[] { 
+					getPreferenceStore(), 
+					new ScopedPreferenceStore(new InstanceScope(), PLUGIN_CORE_ID), 
+					EditorsUI.getPreferenceStore() 
+			});
 		}
 		return fCombinedPreferenceStore;
 	}
@@ -739,11 +724,12 @@ public class CUIPlugin extends AbstractUIPlugin {
 	public static void createStandardGroups(IMenuManager menu) {
 		if (!menu.isEmpty())
 			return;
-			
+
 		menu.add(new Separator(IContextMenuConstants.GROUP_NEW));
 		menu.add(new GroupMarker(IContextMenuConstants.GROUP_GOTO));
 		menu.add(new Separator(IContextMenuConstants.GROUP_OPEN));
 		menu.add(new GroupMarker(IContextMenuConstants.GROUP_SHOW));
+		menu.add(new Separator(ICommonMenuConstants.GROUP_EDIT));
 		menu.add(new Separator(IContextMenuConstants.GROUP_REORGANIZE));
 		menu.add(new Separator(IContextMenuConstants.GROUP_GENERATE));
 		menu.add(new Separator(IContextMenuConstants.GROUP_SEARCH));
@@ -909,7 +895,7 @@ public class CUIPlugin extends AbstractUIPlugin {
 	 */
 	public ContextTypeRegistry getCodeTemplateContextRegistry() {
 		if (fCodeTemplateContextTypeRegistry == null) {
-			fCodeTemplateContextTypeRegistry= new ContributionContextTypeRegistry();
+			fCodeTemplateContextTypeRegistry= new ContributionContextTypeRegistry("org.eclipse.cdt.ui.codeTemplates"); //$NON-NLS-1$
 			
 			CodeTemplateContextType.registerContextTypes(fCodeTemplateContextTypeRegistry);
 			FileTemplateContextType.registerContextTypes(fCodeTemplateContextTypeRegistry);

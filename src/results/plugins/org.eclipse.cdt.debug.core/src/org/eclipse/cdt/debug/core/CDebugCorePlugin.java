@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,7 +18,9 @@ import java.util.HashSet;
 import java.util.List;
 
 import org.eclipse.cdt.debug.core.breakpointactions.BreakpointActionManager;
+import org.eclipse.cdt.debug.core.command.CCommandAdapterFactory;
 import org.eclipse.cdt.debug.core.disassembly.IDisassemblyContextService;
+import org.eclipse.cdt.debug.core.model.IRestart;
 import org.eclipse.cdt.debug.core.sourcelookup.ICSourceLocation;
 import org.eclipse.cdt.debug.internal.core.DebugConfiguration;
 import org.eclipse.cdt.debug.internal.core.ICDebugInternalConstants;
@@ -31,6 +33,7 @@ import org.eclipse.cdt.debug.internal.core.sourcelookup.SourceUtils;
 import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IAdapterManager;
 import org.eclipse.core.runtime.IConfigurationElement;
 import org.eclipse.core.runtime.IExtensionPoint;
 import org.eclipse.core.runtime.IStatus;
@@ -38,6 +41,10 @@ import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Plugin;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.debug.core.DebugException;
+import org.eclipse.debug.core.DebugPlugin;
+import org.eclipse.debug.core.ILaunchConfigurationType;
+import org.eclipse.debug.core.ILaunchDelegate;
+import org.eclipse.debug.core.ILaunchManager;
 import org.osgi.framework.BundleContext;
 
 /**
@@ -331,9 +338,11 @@ public class CDebugCorePlugin extends Plugin {
     public void start( BundleContext context ) throws Exception {
 		super.start( context );
 		initializeCommonSourceLookupDirector();
+		createCommandAdapterFactory();
 		createBreakpointListenersList();
 		createDisassemblyContextService();
 		setSessionManager( new SessionManager() );
+		setDefaultLaunchDelegates();
 	}
 
 	/* (non-Javadoc)
@@ -349,11 +358,22 @@ public class CDebugCorePlugin extends Plugin {
 		super.stop( context );
 	}
 
+	private void createCommandAdapterFactory() {
+        IAdapterManager manager= Platform.getAdapterManager();
+        CCommandAdapterFactory actionFactory = new CCommandAdapterFactory();
+        manager.registerAdapters(actionFactory, IRestart.class);
+	}
+	
 	private void initializeCommonSourceLookupDirector() {
 		if ( fCommonSourceLookupDirector == null ) {
 			fCommonSourceLookupDirector = new CommonSourceLookupDirector();
 			String newMemento = CDebugCorePlugin.getDefault().getPluginPreferences().getString( ICDebugInternalConstants.PREF_COMMON_SOURCE_CONTAINERS );
 			if ( newMemento.length() == 0 ) {
+				// Add the participant(s). This happens as part of
+				// initializeFromMemento(), but since we're not calling it, we
+				// need to do this explicitly. See 299583.
+				fCommonSourceLookupDirector.initializeParticipants();
+				
 				// Convert source locations to source containers
 				convertSourceLocations( fCommonSourceLookupDirector );
 			}
@@ -414,4 +434,67 @@ public class CDebugCorePlugin extends Plugin {
         if ( fDisassemblyContextService != null )
             fDisassemblyContextService.dispose();
     }
+    
+	private void setDefaultLaunchDelegates() {
+		// Set the default launch delegates as early as possible, and do it only once (Bug 312997) 
+		ILaunchManager launchMgr = DebugPlugin.getDefault().getLaunchManager();
+
+		HashSet<String> debugSet = new HashSet<String>();
+		debugSet.add(ILaunchManager.DEBUG_MODE);
+
+		ILaunchConfigurationType localCfg = launchMgr.getLaunchConfigurationType(ICDTLaunchConfigurationConstants.ID_LAUNCH_C_APP);
+		try {
+			if (localCfg.getPreferredDelegate(debugSet) == null) {
+				ILaunchDelegate[] delegates = localCfg.getDelegates(debugSet);
+				for (ILaunchDelegate delegate : delegates) {
+					if (ICDTLaunchConfigurationConstants.PREFERRED_DEBUG_LOCAL_LAUNCH_DELEGATE.equals(delegate.getId())) {
+						localCfg.setPreferredDelegate(debugSet, delegate);
+						break;
+					}
+				}
+			}
+		} catch (CoreException e) {}
+
+		ILaunchConfigurationType attachCfg = launchMgr.getLaunchConfigurationType(ICDTLaunchConfigurationConstants.ID_LAUNCH_C_ATTACH);
+		try {
+			if (attachCfg.getPreferredDelegate(debugSet) == null) {
+				ILaunchDelegate[] delegates = attachCfg.getDelegates(debugSet);
+				for (ILaunchDelegate delegate : delegates) {
+					if (ICDTLaunchConfigurationConstants.PREFERRED_DEBUG_ATTACH_LAUNCH_DELEGATE.equals(delegate.getId())) {
+						attachCfg.setPreferredDelegate(debugSet, delegate);
+						break;
+					}
+				}
+			}
+		} catch (CoreException e) {}
+
+		ILaunchConfigurationType postMortemCfg = launchMgr.getLaunchConfigurationType(ICDTLaunchConfigurationConstants.ID_LAUNCH_C_POST_MORTEM);
+		try {
+			if (postMortemCfg.getPreferredDelegate(debugSet) == null) {
+				ILaunchDelegate[] delegates = postMortemCfg.getDelegates(debugSet);
+				for (ILaunchDelegate delegate : delegates) {
+					if (ICDTLaunchConfigurationConstants.PREFERRED_DEBUG_POSTMORTEM_LAUNCH_DELEGATE.equals(delegate.getId())) {
+						postMortemCfg.setPreferredDelegate(debugSet, delegate);
+						break;
+					}
+				}
+			}
+		} catch (CoreException e) {}
+
+		HashSet<String> runSet = new HashSet<String>();
+		runSet.add(ILaunchManager.RUN_MODE);
+
+		try {
+			if (localCfg.getPreferredDelegate(runSet) == null) {
+				ILaunchDelegate[] delegates = localCfg.getDelegates(runSet);
+				for (ILaunchDelegate delegate : delegates) {
+					if (ICDTLaunchConfigurationConstants.PREFERRED_RUN_LAUNCH_DELEGATE.equals(delegate.getId())) {
+						localCfg.setPreferredDelegate(runSet, delegate);
+						break;
+					}
+				}
+			}
+		} catch (CoreException e) {}
+	}
+	
 }

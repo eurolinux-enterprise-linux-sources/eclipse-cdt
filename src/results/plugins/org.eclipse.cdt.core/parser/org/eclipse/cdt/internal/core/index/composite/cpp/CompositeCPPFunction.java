@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Symbian Software Systems and others.
+ * Copyright (c) 2007, 2009 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,13 +13,12 @@ package org.eclipse.cdt.internal.core.index.composite.cpp;
 
 import org.eclipse.cdt.core.dom.ast.ASTTypeUtil;
 import org.eclipse.cdt.core.dom.ast.DOMException;
-import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunction;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameter;
 import org.eclipse.cdt.internal.core.index.IIndexFragmentBinding;
-import org.eclipse.cdt.internal.core.index.IIndexType;
 import org.eclipse.cdt.internal.core.index.composite.ICompositesFactory;
 
 class CompositeCPPFunction extends CompositeCPPBinding implements ICPPFunction {
@@ -44,17 +43,17 @@ class CompositeCPPFunction extends CompositeCPPBinding implements ICPPFunction {
 		fail(); return null;
 	}
 
-	public IParameter[] getParameters() throws DOMException {
-		IParameter[] result = ((ICPPFunction)rbinding).getParameters();
+	public ICPPParameter[] getParameters() throws DOMException {
+		ICPPParameter[] result = ((ICPPFunction)rbinding).getParameters();
 		for(int i=0; i<result.length; i++) {
-			result[i] = (IParameter) cf.getCompositeBinding((IIndexFragmentBinding) result[i]);
+			result[i] = (ICPPParameter) cf.getCompositeBinding((IIndexFragmentBinding) result[i]);
 		}
 		return result;
 	}
 
 	public ICPPFunctionType getType() throws DOMException {
 		IType rtype = ((ICPPFunction)rbinding).getType();
-		return (ICPPFunctionType) cf.getCompositeType((IIndexType)rtype);
+		return (ICPPFunctionType) cf.getCompositeType(rtype);
 	}
 
 	public boolean isAuto() throws DOMException {
@@ -75,6 +74,14 @@ class CompositeCPPFunction extends CompositeCPPBinding implements ICPPFunction {
 
 	public boolean takesVarArgs() throws DOMException {
 		return ((ICPPFunction)rbinding).takesVarArgs();
+	}
+	
+	public int getRequiredArgumentCount() throws DOMException {
+		return ((ICPPFunction)rbinding).getRequiredArgumentCount();
+	}
+
+	public boolean hasParameterPack() {
+		return ((ICPPFunction)rbinding).hasParameterPack();
 	}
 
 	@Override
@@ -100,7 +107,7 @@ class CompositeCPPFunction extends CompositeCPPBinding implements ICPPFunction {
 		
 		IType[] result= new IType[es.length];
 		for (int i = 0; i < result.length; i++) {
-			result[i]= cf.getCompositeType((IIndexType) es[i]);
+			result[i]= cf.getCompositeType(es[i]);
 		}
 		return result;
 	}

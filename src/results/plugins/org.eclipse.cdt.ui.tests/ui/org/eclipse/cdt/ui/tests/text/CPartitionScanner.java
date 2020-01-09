@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -96,7 +96,7 @@ public class CPartitionScanner extends RuleBasedPartitionScanner implements ICPa
 		IToken single_comment= new Token(C_SINGLE_LINE_COMMENT);
 		IToken string= new Token(C_STRING);
 		IToken character = new Token(C_CHARACTER);
-		List rules= new ArrayList();
+		List<IPredicateRule> rules= new ArrayList<IPredicateRule>();
 
 		// Minimize the number of rules, since we have duplicate rules 
 		// in the CCodeScanner...

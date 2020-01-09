@@ -44,6 +44,8 @@ final class ScannerContext {
 	private Token fTokens;
 	private ArrayList<Conditional> fConditionals= null;
 	private CodeState fCurrentState= CodeState.eActive;
+	private IncludeSearchPathElement fFoundOnPath;
+	private String fFoundViaDirective;
 
 	/**
 	 * @param ctx 
@@ -56,9 +58,7 @@ final class ScannerContext {
 	}
 	
 	public ScannerContext(ILocationCtx ctx, ScannerContext parent, TokenList tokens) {
-		fLocationCtx= ctx;
-		fParent= parent;
-		fLexer= null;
+		this(ctx, parent, (Lexer) null);
 		fTokens= tokens.first();
 		fInactiveState= CodeState.eSkipInactive;  // no branches in result of macro expansion
 	}
@@ -170,7 +170,7 @@ final class ScannerContext {
 	}
 
 	private int getOldNestingLevel(BranchKind kind, int nesting) {
-		switch(kind) {
+		switch (kind) {
 		case eIf:
 			return nesting-1;
 		case eElif:
@@ -269,5 +269,27 @@ final class ScannerContext {
 		if (fConditionals == null)
 			return 0;
 		return fConditionals.size();
+	}
+
+	/**
+	 * Returns the element of the include search path that was used to find this context, or <code>null</code> if not applicable.
+	 */
+	public IncludeSearchPathElement getFoundOnPath() {
+		return fFoundOnPath;
+	}
+
+	/**
+	 * Returns the directive with which the this context was found, or <code>null</code> if not applicable.
+	 */
+	public String getFoundViaDirective() {
+		return fFoundViaDirective;
+	}
+
+	/**
+	 * Returns the element of the include search path that was used to find this context, or <code>null</code> if not applicable.
+	 */
+	public void setFoundOnPath(IncludeSearchPathElement foundOnPath, String viaDirective) {
+		fFoundOnPath= foundOnPath;
+		fFoundViaDirective= viaDirective;
 	}
 }

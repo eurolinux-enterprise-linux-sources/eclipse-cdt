@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2006 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -38,6 +38,11 @@ import org.eclipse.cdt.ui.wizards.IPathEntryContainerPage;
 
 import org.eclipse.cdt.internal.ui.util.CoreUtility;
 
+/**
+ * @deprecated as of CDT 4.0. This wizard was used in property pages/wizards
+ * for 3.X style projects.
+ */
+@Deprecated
 public class CPathContainerDescriptor implements IContainerDescriptor {
 
 
@@ -47,7 +52,7 @@ public class CPathContainerDescriptor implements IContainerDescriptor {
 	 * @deprecated
 	 */
 	@Deprecated
-	public static class PathEntryContainerPageAdapter implements IWizardPage, IPathEntryContainerPage {
+	public static class PathEntryContainerPageAdapter implements IPathEntryContainerPage {
 		public static IPathEntryContainerPage createAdapter(Object elem) {
 			if (elem instanceof org.eclipse.cdt.ui.wizards.ICPathContainerPage) {
 				return new PathEntryContainerPageAdapter((org.eclipse.cdt.ui.wizards.ICPathContainerPage) elem);
@@ -341,9 +346,9 @@ public class CPathContainerDescriptor implements IContainerDescriptor {
 			String defaultPageName = CPathContainerDefaultPage.class.getName();
 
 			IConfigurationElement[] elements = extensionPoint.getConfigurationElements();
-			for (int i = 0; i < elements.length; i++) {
+			for (IConfigurationElement element : elements) {
 				try {
-					CPathContainerDescriptor curr = new CPathContainerDescriptor(elements[i]);
+					CPathContainerDescriptor curr = new CPathContainerDescriptor(element);
 					if (defaultPageName.equals(curr.getPageClass())) {
 						defaultPage = curr;
 					} else {

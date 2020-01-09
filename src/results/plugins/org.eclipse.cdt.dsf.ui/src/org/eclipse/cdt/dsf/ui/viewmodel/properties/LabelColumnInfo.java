@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -76,12 +76,38 @@ public class LabelColumnInfo  {
     /**
      * Returns the list of configured label attributes for this column.
      * 
-     * @since 2.0
+     * @since 2.1
      */
-    protected LabelAttribute[] setLabelAttributes(LabelAttribute attributes) { 
-        return fLabelAttributes; 
+    protected void setLabelAttributes(LabelAttribute[] attributes) { 
+    	fLabelAttributes = attributes;
+
+        List<String> names = new LinkedList<String>();
+        for (LabelAttribute attr : attributes) {
+            for (String name : attr.getPropertyNames()) {
+                names.add(name);
+            }
+        }
+
+        fPropertyNames = names.toArray(new String[names.size()]);
     }    
 
+    /**
+     * Inserts an attribute in front of all the other existing attributes.
+     * 
+     * @since 2.1
+     */
+    public void insertAttribute(LabelAttribute attribute) {
+    	LabelAttribute[] newAttributeList = new LabelAttribute[fLabelAttributes.length+1];
+    	
+    	for ( int idx = 0 ; idx < fLabelAttributes.length; idx ++ ) {
+    		newAttributeList[ idx + 1 ] = fLabelAttributes[ idx ];
+    	}
+    	
+    	newAttributeList[ 0 ] = attribute;
+    	
+    	setLabelAttributes( newAttributeList );
+    }
+    
     /**
      * Updates the label parameters for this column based on the provided
      * properties.  The label information is written to the givne label

@@ -1811,34 +1811,6 @@ returnvalue=false
 returnparameterindex=0
 visibility=public
 
-//!Bug 288268: c-refactoring creates c++-parameters
-//#org.eclipse.cdt.ui.tests.refactoring.extractfunction.ExtractFunctionRefactoringTest
-//@main.c
-int main()
-{
-    int a,b;
-    /*$*/a = b*2;/*$$*/
-    return a;
-}
-
-//=
-void test(int *a, int b)
-{
-    a = b * 2;
-}
-
-int main()
-{
-    int a,b;
-    test(a, b);
-    return a;
-}
-
-//@.config
-filename=main.c
-methodname=test
-replaceduplicates=false
-returnvalue=false
 //!ExtractFunctionRefactoringTest const Method Bug # 46
 //#org.eclipse.cdt.ui.tests.refactoring.extractfunction.ExtractFunctionRefactoringTest
 //@A.h
@@ -2806,3 +2778,130 @@ int main()
     return a;
 }
 
+//!ExtractFunctionRefactoringTest virtual
+//#org.eclipse.cdt.ui.tests.refactoring.extractfunction.ExtractFunctionRefactoringTest
+//@A.h
+#ifndef A_H_
+#define A_H_
+
+class A
+{
+public:
+	A();
+	virtual ~A();
+	int foo();
+	
+private:
+	int help();
+};
+
+#endif /*A_H_*/
+
+//=
+#ifndef A_H_
+#define A_H_
+
+class A
+{
+public:
+	A();
+	virtual ~A();
+	int foo();
+    virtual void exp(int & i);
+	
+private:
+	int help();
+};
+
+#endif /*A_H_*/
+
+//@A.cpp
+#include "A.h"
+
+A::A()
+{
+}
+
+A::~A()
+{
+}
+int A::foo()
+{
+	int i = 2;
+	//comment
+	/*$*/++i;
+	help();/*$$*/
+	return i;
+}
+
+int A::help()
+{
+	return 42;
+}	
+
+//=
+#include "A.h"
+
+A::A()
+{
+}
+
+A::~A()
+{
+}
+void A::exp(int & i)
+{
+    //comment
+    ++i;
+    help();
+}
+
+int A::foo()
+{
+	int i = 2;
+    exp(i);
+	return i;
+}
+
+int A::help()
+{
+	return 42;
+}	
+
+//@.config
+filename=A.cpp
+methodname=exp
+replaceduplicates=false
+returnvalue=false
+returnparameterindex=0
+virtual=true
+visibility=public
+
+//!Bug 288268: c-refactoring creates c++-parameters
+//#org.eclipse.cdt.ui.tests.refactoring.extractfunction.ExtractFunctionRefactoringTest
+//@main.c
+int main()
+{
+    int a,b;
+    /*$*/a = b*2;/*$$*/
+    return a;
+}
+
+//=
+void test(int *a, int b)
+{
+    a = b * 2;
+}
+
+int main()
+{
+    int a,b;
+    test(a, b);
+    return a;
+}
+
+//@.config
+filename=main.c
+methodname=test
+replaceduplicates=false
+returnvalue=false

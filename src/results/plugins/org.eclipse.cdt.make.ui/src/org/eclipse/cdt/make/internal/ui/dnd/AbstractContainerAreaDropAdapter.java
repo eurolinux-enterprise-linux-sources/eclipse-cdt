@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2009 Andrew Gvozdev.
+ * Copyright (c) 2008, 2010 Andrew Gvozdev.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -215,7 +215,7 @@ public abstract class AbstractContainerAreaDropAdapter implements TransferDropTa
 
 	/**
 	 * This method provides caching of potentially long running and called on each
-	 * mouse move {@link dragOverOperation}.
+	 * mouse move {@link #dragOverOperation}.
 	 *
 	 * @param operation - incoming operation.
 	 * @param dropContainer - container where drop is going to be.

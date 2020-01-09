@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -190,5 +190,89 @@ public class BasicCompletionTest extends CompletionTestBase {
 		String[] expectedC= {"a1", "a2", "b", "u1", "u2"};
 		checkCompletion(code, true, expectedCpp);
 		checkCompletion(code, false, expectedC);
+	}
+	
+	//	struct A{
+	//		virtual void test() {}
+	//	};
+	//	struct B : A {
+	//		void test() {}
+	//		void func() {
+	//			A::t
+	public void testQualifiedMemberAccess_Bug300139() throws Exception {
+		String code = getAboveComment();
+		String[] expectedCpp= {"test"};
+		checkCompletion(code, true, expectedCpp);
+	}
+	
+	//	typedef int MyType;
+	//	void func(){
+	//	    static_cast<My
+	public void testCastExpression_Bug301933() throws Exception {
+		String code = getAboveComment();
+		String[] expectedCpp= {"MyType"};
+		checkCompletion(code, true, expectedCpp);
+	}
+
+	//	int v1, v2;
+	//	void func() {
+	//     v1= 0 ? v
+	public void testConditionalOperator_Bug308611() throws Exception {
+		String code = getAboveComment();
+		String[] expected= {"v1", "v2"};
+		checkCompletion(code, true, expected);
+		checkCompletion(code, false, expected);
+	}
+	
+	//	struct B {
+	//		int m;
+	//	};
+	//	int foo() {
+	//		B * b;
+	//		new (b->
+	public void testNewExpressions_Bug313982a() throws Exception {
+		String code = getAboveComment();
+		String[] expected= {"B", "m"};
+		checkCompletion(code, true, expected);
+	}
+
+	//	struct B {
+	//		int m;
+	//	};
+	//	int foo() {
+	//		B * b;
+	//		new (b->m) B
+	public void testNewExpressions_Bug313982b() throws Exception {
+		String code = getAboveComment();
+		String[] expected= {"B"};
+		checkCompletion(code, true, expected);
+	}
+
+	//	struct B {
+	//		int m;
+	//	};
+	//	int foo() {
+	//		B * b;
+	//		new (b->m) (B
+	public void testNewExpressions_Bug313982c() throws Exception {
+		String code = getAboveComment();
+		String[] expected= {"B"};
+		checkCompletion(code, true, expected);
+	}
+	
+	//	typedef int tint;
+	//	void f(x) ti
+	public void testIncompleteKnrFunction_Bug324384() throws Exception {
+		String code = getAboveComment();
+		String[] expected= {"tint"};
+		checkCompletion(code, false, expected);
+	}
+	
+	//	void f(x) int y(ti
+	public void testIncompleteKnrFunction_Bug324384b() throws Exception {
+		// Content assist won't work here, just verify that we don't run out of memory
+		String code = getAboveComment();
+		String[] expected= {};
+		checkCompletion(code, false, expected);
 	}
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -29,7 +29,6 @@ import org.eclipse.cdt.core.dom.ast.IASTFunctionDefinition;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
-import org.eclipse.cdt.core.dom.ast.IBasicType;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IField;
 import org.eclipse.cdt.core.dom.ast.IFunctionType;
@@ -39,6 +38,7 @@ import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier.ICPPASTBaseSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTElaboratedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateDeclaration;
@@ -50,10 +50,11 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPConstructor;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPField;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunction;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPMember;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPReferenceType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPUsingDeclaration;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier.ICPPASTBaseSpecifier;
 import org.eclipse.cdt.core.index.IIndex;
 import org.eclipse.cdt.core.index.IIndexName;
 import org.eclipse.cdt.core.parser.util.ArrayUtil;
@@ -444,10 +445,10 @@ public class ClassTypeHelper {
 		final char[] mname= m.getNameCharArray();
 		final ICPPClassType mcl= m.getClassOwner();
 		if (mcl != null) {
-			final IFunctionType mft= m.getType();
+			final ICPPFunctionType mft= m.getType();
 			ICPPMethod[] allMethods= mcl.getMethods();
 			for (ICPPMethod method : allMethods) {
-				if (CharArrayUtils.equals(mname, method.getNameCharArray()) && mft.isSameType(method.getType())) {
+				if (CharArrayUtils.equals(mname, method.getNameCharArray()) && functionTypesAllowOverride(mft, method.getType())) {
 					if (method.isVirtual()) {
 						return true;
 					}
@@ -455,6 +456,34 @@ public class ClassTypeHelper {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Checks if the function types are consistent enough to be considered overrides.
+	 */
+	private static boolean functionTypesAllowOverride(ICPPFunctionType a, ICPPFunctionType b) {
+        if (a.isConst() != b.isConst() || a.isVolatile() != b.isVolatile() || a.takesVarArgs() != b.takesVarArgs()) {
+            return false;
+        }
+
+        IType[] paramsA = a.getParameterTypes();
+        IType[] paramsB = b.getParameterTypes();
+        
+        if (paramsA.length == 1 && paramsB.length == 0) {
+			if (!SemanticUtil.isVoidType(paramsA[0]))
+				return false;
+		} else if (paramsB.length == 1 && paramsA.length == 0) {
+			if (!SemanticUtil.isVoidType(paramsB[0]))
+				return false;
+		} else if (paramsA.length != paramsB.length) {
+		    return false;
+		} else {
+			for (int i = 0; i < paramsA.length; i++) {
+		        if (paramsA[i] == null || ! paramsA[i].isSameType(paramsB[i]))
+		            return false;
+		    }
+		}
+		return true;
 	}
 
 	/**
@@ -466,9 +495,9 @@ public class ClassTypeHelper {
 			return false;
 		if (!isVirtual(target)) 
 			return false;
-		if (!source.getType().isSameType(target.getType()))
+		if (!functionTypesAllowOverride(source.getType(), target.getType()))
 			return false;
-	
+		
 		final ICPPClassType sourceClass= source.getClassOwner();
 		final ICPPClassType targetClass= target.getClassOwner();
 		if (sourceClass == null || targetClass == null)
@@ -498,7 +527,7 @@ public class ClassTypeHelper {
 		
 		final ArrayList<ICPPMethod> result= new ArrayList<ICPPMethod>();
 		final HashMap<ICPPClassType, Boolean> virtualInClass= new HashMap<ICPPClassType, Boolean>();
-		final IFunctionType mft= method.getType();
+		final ICPPFunctionType mft= method.getType();
 
 		virtualInClass.put(mcl, method.isVirtual());
 		ICPPBase[] bases= mcl.getBases();
@@ -520,7 +549,7 @@ public class ClassTypeHelper {
 	 * method.
 	 * Returns whether {@code cl} contains an overridden method.
 	 */
-	private static boolean findOverridden(ICPPClassType cl, char[] mname, IFunctionType mft,
+	private static boolean findOverridden(ICPPClassType cl, char[] mname, ICPPFunctionType mft,
 			HashMap<ICPPClassType, Boolean> virtualInClass, ArrayList<ICPPMethod> result) throws DOMException {
 		Boolean visitedBefore= virtualInClass.get(cl);
 		if (visitedBefore != null)
@@ -530,7 +559,7 @@ public class ClassTypeHelper {
 		ICPPMethod candidate= null;
 		boolean hasOverridden= false;
 		for (ICPPMethod method : methods) {
-			if (CharArrayUtils.equals(mname, method.getNameCharArray()) && mft.isSameType(method.getType())) {
+			if (CharArrayUtils.equals(mname, method.getNameCharArray()) && functionTypesAllowOverride(mft,method.getType())) {
 				candidate= method;
 				hasOverridden= method.isVirtual();
 				break;
@@ -572,13 +601,13 @@ public class ClassTypeHelper {
 		
 		final ArrayList<ICPPMethod> result= new ArrayList<ICPPMethod>();
 		final char[] mname= method.getNameCharArray();
-		final IFunctionType mft= method.getType();
+		final ICPPFunctionType mft= method.getType();
 		ICPPClassType[] subclasses= getSubClasses(index, mcl);
 		for (ICPPClassType subClass : subclasses) {
 			ICPPMethod[] methods= subClass.getDeclaredMethods();
 			for (ICPPMethod candidate : methods) {
 				if (CharArrayUtils.equals(mname, candidate.getNameCharArray()) &&
-						mft.isSameType(candidate.getType())) {
+						functionTypesAllowOverride(mft, candidate.getType())) {
 					result.add(candidate);
 				}
 			}
@@ -668,8 +697,8 @@ public class ClassTypeHelper {
 			if (params.length == 0)
 				return KIND_DEFAULT_CTOR;
 			if (params.length == 1) {
-				IType t= params[0];
-				if (t instanceof IBasicType && ((IBasicType) t).getType() == IBasicType.t_void)
+				IType t= SemanticUtil.getNestedType(params[0], SemanticUtil.TDEF);
+				if (SemanticUtil.isVoidType(t))
 					return KIND_DEFAULT_CTOR;
 
 				if (isRefToConstClass(ct, t))
@@ -735,5 +764,31 @@ public class ClassTypeHelper {
 			return null;
 		}
 		return null;
+	}
+
+	/**
+	 * 8.5.1 Aggregates [dcl.init.aggr]
+	 * An aggregate is an array or a class (Clause 9) with no user-provided constructors (12.1), 
+	 * no private or protected non-static data members (Clause 11), 
+	 * no base classes (Clause 10), and no virtual functions (10.3).
+	 */
+	public static boolean isAggregateClass(ICPPClassType classTarget) throws DOMException {
+		if (classTarget.getBases().length > 0)
+			return false;
+		ICPPMethod[] methods = classTarget.getDeclaredMethods();
+		for (ICPPMethod m : methods) {
+			if (m instanceof ICPPConstructor)
+				return false;
+			if (m.isVirtual()) {
+				return false;
+			}
+		}
+		ICPPField[] fields = classTarget.getDeclaredFields();
+		for (ICPPField field : fields) {
+			if (!(field.getVisibility() == ICPPMember.v_public || field.isStatic())) {
+				return false;
+			}
+		}
+		return true;
 	}
 }

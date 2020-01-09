@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2004, 2009 IBM Corporation and others.
+ *  Copyright (c) 2004, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -148,7 +148,7 @@ public class DefaultRunSIProvider implements IExternalScannerInfoProvider {
             cos.close();
         }
         catch (Exception e) {
-            CCorePlugin.log(e);
+            MakeCorePlugin.log(e);
         }
         finally {
             monitor.done();
@@ -170,9 +170,6 @@ public class DefaultRunSIProvider implements IExternalScannerInfoProvider {
     /**
      * Initialization of protected fields. 
      * Subclasses are most likely to override default implementation.
-     * 
-     * @param currentProject
-     * @return boolean
      */
     protected boolean initialize() {
     	
@@ -188,19 +185,11 @@ public class DefaultRunSIProvider implements IExternalScannerInfoProvider {
      * Add additional arguments. For example: tso - target specific options
      * Base class implementation returns compileArguments.
      * Subclasses are most likely to override default implementation.
-     * 
-     * @param isDefaultCommand
-     * @param collector 
-     * @return
      */
     protected String[] prepareArguments(boolean isDefaultCommand) {
         return fCompileArguments;
     }
 
-    /**
-     * @param array
-     * @return
-     */
     private String coligate(String[] array) {
         StringBuffer sb = new StringBuffer(128);
         for (int i = 0; i < array.length; ++i) {
@@ -211,10 +200,6 @@ public class DefaultRunSIProvider implements IExternalScannerInfoProvider {
         return ca;
     }
 
-    /**
-     * @param launcher
-     * @return
-     */
     protected String[] setEnvironment(ICommandLauncher launcher, Properties initialEnv) {
         // Set the environmennt, some scripts may need the CWD var to be set.
         Properties props = initialEnv != null ? initialEnv : launcher.getEnvironment();

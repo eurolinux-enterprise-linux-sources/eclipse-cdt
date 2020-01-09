@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -34,6 +34,10 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class TargetListViewerPart extends StructuredViewerPart {
 
     private TableViewer tableViewer;
@@ -42,16 +46,28 @@ public class TargetListViewerPart extends StructuredViewerPart {
     private final int REMOVE_TARGET = 1;
     private final int EDIT_TARGET = 2;
     private IContainer fContainer;
-
-    public TargetListViewerPart(IContainer container) {
+    private boolean recursive;  
+    
+    /** 
+     * @param container 
+     * @param recursive {@code true} if to search recursively for target
+     * 
+     * @since 7.0
+     */
+    public TargetListViewerPart(IContainer container, boolean recursive) {
         super(new String[] {
                 MakeUIPlugin.getResourceString("TargetListViewer.button.add"), //$NON-NLS-1$
-                MakeUIPlugin
-                        .getResourceString("TargetListViewer.button.remove"), //$NON-NLS-1$
+                MakeUIPlugin.getResourceString("TargetListViewer.button.remove"), //$NON-NLS-1$
                 MakeUIPlugin.getResourceString("TargetListViewer.button.edit")}); //$NON-NLS-1$
-        fContainer = container;
+        this.fContainer = container;
+        this.recursive = recursive;
     }
 
+    public TargetListViewerPart(IContainer container) {
+    	this(container, true);
+    }
+
+    @Override
     protected StructuredViewer createStructuredViewer(Composite parent,
             int style) {
         tableViewer = new TableViewer(parent, SWT.SINGLE | SWT.BORDER);
@@ -78,9 +94,10 @@ public class TargetListViewerPart extends StructuredViewerPart {
                                         .getSelection());
                     }
                 });
-        tableViewer.setContentProvider(new MakeContentProvider(true));
+        tableViewer.setContentProvider(new MakeContentProvider(recursive));
         tableViewer.addFilter(new ViewerFilter() {
 
+            @Override
             public boolean select(Viewer viewer, Object parentElement,
                     Object element) {
                 return (element instanceof IMakeTarget);
@@ -93,6 +110,7 @@ public class TargetListViewerPart extends StructuredViewerPart {
         return tableViewer;
     }
 
+    @Override
     protected void buttonSelected(Button button, int index) {
         try {
             switch (index) {
@@ -155,6 +173,7 @@ public class TargetListViewerPart extends StructuredViewerPart {
      * 
      * @see org.eclipse.cdt.make.internal.ui.part.SharedPart#updateEnabledState()
      */
+    @Override
     protected void updateEnabledState() {
         super.updateEnabledState();
         setButtonEnabled(REMOVE_TARGET, fSelectedTarget != null && isEnabled());
@@ -167,6 +186,7 @@ public class TargetListViewerPart extends StructuredViewerPart {
      * @see org.eclipse.cdt.make.internal.ui.part.SharedPart#createControl(org.eclipse.swt.widgets.Composite,
      *      int, int)
      */
+    @Override
     public void createControl(Composite parent, int style, int span) {
         super.createControl(parent, style, span);
         updateEnabledState();

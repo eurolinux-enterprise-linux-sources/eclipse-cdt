@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -31,8 +31,15 @@ import org.eclipse.core.runtime.SubProgressMonitor;
  * Runs after standard make builder.
  * Consolidates discovered scanner configuration and updates project's scanner configuration.
  * 
+ * @deprecated as of CDT 4.0. Used by legacy CDT 3.X projects.
+ * Replaced by ScannerConfigBuilder in org.eclipse.cdt.managedbuilder.core.
+ * 
  * @see IncrementalProjectBuilder
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
  */
+@Deprecated
 public class ScannerConfigBuilder extends ACBuilder {
 	public final static String BUILDER_ID = MakeCorePlugin.getUniqueIdentifier() + ".ScannerConfigBuilder"; //$NON-NLS-1$
 
@@ -43,7 +50,12 @@ public class ScannerConfigBuilder extends ACBuilder {
 	/**
 	 * @see IncrementalProjectBuilder#build
 	 */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	@Override
 	protected IProject [] build(int kind, Map args, IProgressMonitor monitor) throws CoreException {
+		if (DEBUG_EVENTS)
+			printEvent(kind, args);
+
 		// If auto discovery is disabled, do nothing
 //		boolean autodiscoveryEnabled;
 		if(buildNewStyle(getProject(), monitor))

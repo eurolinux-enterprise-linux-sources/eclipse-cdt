@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,7 +11,9 @@
  *******************************************************************************/
 package org.eclipse.cdt.dsf.mi.service;
 
+import java.util.ArrayList;
 import java.util.Hashtable;
+import java.util.List;
 
 import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
@@ -25,11 +27,11 @@ import org.eclipse.cdt.dsf.debug.service.IRunControl;
 import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IContainerDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.StateChangeReason;
+import org.eclipse.cdt.dsf.debug.service.command.BufferedCommandControl;
 import org.eclipse.cdt.dsf.debug.service.command.CommandCache;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIDataListRegisterNames;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIDataListRegisterValues;
+import org.eclipse.cdt.dsf.mi.service.command.CommandFactory;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIDataListRegisterNamesInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIDataListRegisterValuesInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIInfo;
@@ -142,6 +144,8 @@ public class MIRegisters extends AbstractDsfService implements IRegisters, ICach
      *  Internal control variables.
      */
     
+	private CommandFactory fCommandFactory;
+
     private MIRegisterGroupDMC fGeneralRegistersGroupDMC; 
     private CommandCache fRegisterNameCache;	 // Cache for holding the Register Names in the single Group
     private CommandCache fRegisterValueCache;  // Cache for holding the Register Values
@@ -172,8 +176,22 @@ public class MIRegisters extends AbstractDsfService implements IRegisters, ICach
          * Create the lower level register cache.
          */
     	ICommandControlService commandControl = getServicesTracker().getService(ICommandControlService.class);
-        fRegisterValueCache = new CommandCache(getSession(), commandControl);
+		BufferedCommandControl bufferedCommandControl = new BufferedCommandControl(commandControl, getExecutor(), 2);
+		
+		fCommandFactory = getServicesTracker().getService(IMICommandControl.class).getCommandFactory();
+
+		// This cache stores the result of a command when received; also, this cache
+		// is manipulated when receiving events.  Currently, events are received after
+		// three scheduling of the executor, while command results after only one.  This
+		// can cause problems because command results might be processed before an event
+		// that actually arrived before the command result.
+		// To solve this, we use a bufferedCommandControl that will delay the command
+		// result by two scheduling of the executor.
+		// See bug 280461
+        fRegisterValueCache = new CommandCache(getSession(), bufferedCommandControl);
         fRegisterValueCache.setContextAvailable(commandControl.getContext(), true);
+
+        // This cache is not affected by events so does not need the bufferedCommandControl
         fRegisterNameCache  = new CommandCache(getSession(), commandControl);
         fRegisterNameCache.setContextAvailable(commandControl.getContext(), true);
                
@@ -248,7 +266,7 @@ public class MIRegisters extends AbstractDsfService implements IRegisters, ICach
             
             int[] regnos = {miRegDmc.getRegNo()};
             fRegisterValueCache.execute(
-                new MIDataListRegisterValues(execDmc, MIFormat.HEXADECIMAL, regnos),
+            	fCommandFactory.createMIDataListRegisterValues(execDmc, MIFormat.HEXADECIMAL, regnos),
                 new DataRequestMonitor<MIDataListRegisterValuesInfo>(getExecutor(), rm) {
                     @Override
                     protected void handleSuccess() {
@@ -262,6 +280,9 @@ public class MIRegisters extends AbstractDsfService implements IRegisters, ICach
                             rm.done();
                             return;
                         }
+                        
+                        // the request was for only one register
+                        assert regValue.length == 1;
                         
                         // We can determine if the register is floating point because
                         // GDB returns this additional information as part of the value.
@@ -303,7 +324,7 @@ public class MIRegisters extends AbstractDsfService implements IRegisters, ICach
         
         int[] regnos = {regDmc.getRegNo()};
         fRegisterValueCache.execute(
-            new MIDataListRegisterValues(miExecDmc, NumberFormat, regnos),
+        	fCommandFactory.createMIDataListRegisterValues(miExecDmc, NumberFormat, regnos),
             new DataRequestMonitor<MIDataListRegisterValuesInfo>(getExecutor(), rm) {
                 @Override
                 protected void handleSuccess() {
@@ -359,17 +380,18 @@ public class MIRegisters extends AbstractDsfService implements IRegisters, ICach
     
     // Wraps a list of registers in DMContexts.
     private MIRegisterDMC[] makeRegisterDMCs(MIRegisterGroupDMC groupDmc, IMIExecutionDMContext execDmc, String[] regNames) {
-        MIRegisterDMC[] regDmcList = new MIRegisterDMC[regNames.length];
-        int regNo = 0 ;
+        List<MIRegisterDMC> regDmcList = new ArrayList<MIRegisters.MIRegisterDMC>( regNames.length );
+        int regNo = 0;
         for (String regName : regNames) {
-        	if(execDmc != null)
-        		regDmcList[regNo] = new MIRegisterDMC(this, groupDmc, execDmc, regNo, regName);
-        	else
-        		regDmcList[regNo] = new MIRegisterDMC(this, groupDmc, regNo, regName);
+            if(regName != null && regName.length() > 0) {
+            	if(execDmc != null)
+            		regDmcList.add(new MIRegisterDMC(this, groupDmc, execDmc, regNo, regName));
+            	else
+            		regDmcList.add(new MIRegisterDMC(this, groupDmc, regNo, regName));
+            }
             regNo++;
         }
-        
-        return regDmcList;
+        return regDmcList.toArray(new MIRegisterDMC[regDmcList.size()]);
     }
 
     /*
@@ -460,7 +482,7 @@ public class MIRegisters extends AbstractDsfService implements IRegisters, ICach
         if ( groupDmc.getGroupNo() == 0 ) {
         	final IMIExecutionDMContext executionDmc = DMContexts.getAncestorOfType(dmc, IMIExecutionDMContext.class);
         	fRegisterNameCache.execute(
-                new MIDataListRegisterNames(containerDmc),
+        		fCommandFactory.createMIDataListRegisterNames(containerDmc),
                 new DataRequestMonitor<MIDataListRegisterNamesInfo>(getExecutor(), rm) { 
                     @Override
                     protected void handleSuccess() {

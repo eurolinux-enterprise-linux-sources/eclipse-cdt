@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2009 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -77,11 +77,11 @@ import org.eclipse.cdt.core.model.ITranslationUnit;
 import org.eclipse.cdt.core.model.IWorkingCopy;
 import org.eclipse.cdt.core.parser.IPersistableProblem;
 import org.eclipse.cdt.core.parser.IProblem;
+import org.eclipse.cdt.ui.CDTUITools;
 import org.eclipse.cdt.ui.CUIPlugin;
 import org.eclipse.cdt.ui.PreferenceConstants;
 import org.eclipse.cdt.ui.text.ICPartitions;
 
-import org.eclipse.cdt.internal.core.model.IBufferFactory;
 import org.eclipse.cdt.internal.core.model.TranslationUnit;
 
 import org.eclipse.cdt.internal.ui.text.IProblemRequestorExtension;
@@ -651,7 +651,7 @@ public class CDocumentProvider extends TextFileDocumentProvider {
 		 * @see AnnotationModel#addAnnotation(Annotation, Position, boolean)
 		 */
 		@Override
-		@SuppressWarnings("unchecked")
+		@SuppressWarnings({ "unchecked" })
 		protected void addAnnotation(Annotation annotation, Position position, boolean fireModelChanged) throws BadLocationException {
 			super.addAnnotation(annotation, position, fireModelChanged);
 			
@@ -860,8 +860,7 @@ public class CDocumentProvider extends TextFileDocumentProvider {
 		setUpSynchronization(tuInfo);
 
 		IProblemRequestor requestor= tuInfo.fModel instanceof IProblemRequestor ? (IProblemRequestor) tuInfo.fModel : null;
-		IBufferFactory factory = CUIPlugin.getDefault().getBufferFactory();
-		tuInfo.fCopy = original.getSharedWorkingCopy(getProgressMonitor(), factory, requestor);
+		tuInfo.fCopy = CDTUITools.getWorkingCopyManager().getSharedWorkingCopy(original, requestor, getProgressMonitor());
 
 		if (tuInfo.fModel == null) {
 			IPath location = original.getLocation();

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 QNX Software Systems and others.
+ * Copyright (c) 2009, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -28,18 +28,20 @@ import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
 import org.eclipse.cdt.dsf.concurrent.IDsfStatusConstants;
 import org.eclipse.cdt.dsf.concurrent.ImmediateExecutor;
 import org.eclipse.cdt.dsf.concurrent.Query;
+import org.eclipse.cdt.dsf.concurrent.ThreadSafe;
+import org.eclipse.cdt.dsf.concurrent.ThreadSafeAndProhibitedFromDsfExecutor;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IContainerDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IExecutionDMContext;
+import org.eclipse.cdt.dsf.debug.service.command.ICommand;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandListener;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandResult;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandToken;
 import org.eclipse.cdt.dsf.debug.service.command.IEventListener;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
+import org.eclipse.cdt.dsf.mi.service.IMICommandControl;
 import org.eclipse.cdt.dsf.mi.service.MIProcesses.ContainerExitedDMEvent;
 import org.eclipse.cdt.dsf.mi.service.command.commands.CLICommand;
-import org.eclipse.cdt.dsf.mi.service.command.commands.CLIExecAbort;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIGDBShowExitCode;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIConst;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIExecAsyncOutput;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIGDBShowExitCodeInfo;
@@ -81,6 +83,7 @@ public class MIInferiorProcess extends Process
     private final PTY fPty;
 
     private final ICommandControlService fCommandControl;
+    private CommandFactory fCommandFactory;
 
     private IContainerDMContext fContainerDMContext;
     
@@ -101,11 +104,20 @@ public class MIInferiorProcess extends Process
      */
     private int fSuppressTargetOutputCounter = 0;
 
+	/**
+	 * Flag we use to avoid making repeated CLI 'info program' requests to get
+	 * the PID when gdb doesn't provide the PID in the response.
+	 */
+    @ConfinedToDsfExecutor("fSession#getExecutor")    
+    private boolean fGiveUpOnPidQuery;
+
+    @ThreadSafe
     Integer fExitCode = null;
 
     private State fState = State.RUNNING;
     
-    private String fInferiorPid = null;
+    @ConfinedToDsfExecutor("fSession#getExecutor")
+    private String fInferiorPid;
 
     /**
      * Creates an inferior process object which uses the given output stream 
@@ -141,6 +153,13 @@ public class MIInferiorProcess extends Process
     private MIInferiorProcess(ICommandControlService commandControl, final OutputStream gdbOutputStream, PTY p) {
         fCommandControl = commandControl;
         fSession = commandControl.getSession();
+        
+        if (fCommandControl instanceof IMICommandControl) {
+        	fCommandFactory = ((IMICommandControl)fCommandControl).getCommandFactory();
+        } else {
+        	// Should not happen
+        	fCommandFactory = new CommandFactory();
+        }
         
         commandControl.addEventListener(this);
         commandControl.addCommandListener(this);
@@ -197,6 +216,7 @@ public class MIInferiorProcess extends Process
         fDisposed = true;
     }
 
+    @ThreadSafe
     protected DsfSession getSession() {
         return fSession;
     }
@@ -204,8 +224,10 @@ public class MIInferiorProcess extends Process
     /**
      * @since 1.1
      */
+    @ConfinedToDsfExecutor("fSession#getExecutor")
     protected ICommandControlService getCommandControlService() { return fCommandControl; }
     
+    @ConfinedToDsfExecutor("fSession#getExecutor")
     protected boolean isDisposed() { return fDisposed; }
     
     @Override
@@ -223,7 +245,10 @@ public class MIInferiorProcess extends Process
         return fErrorStream;
     }
 
+    @ThreadSafeAndProhibitedFromDsfExecutor("fSession#getExecutor")
     public synchronized void waitForSync() throws InterruptedException {
+        assert !getSession().getExecutor().isInExecutorThread();
+        
         while (getState() != State.TERMINATED) {
             wait(100);
         }        
@@ -232,19 +257,24 @@ public class MIInferiorProcess extends Process
     /**
      * @see java.lang.Process#waitFor()
      */
+    @ThreadSafeAndProhibitedFromDsfExecutor("fSession#getExecutor")
     @Override
     public int waitFor() throws InterruptedException {
+        assert !getSession().getExecutor().isInExecutorThread();
+        
         waitForSync();
         return exitValue();
     }
 
-    /**
-     * @see java.lang.Process#exitValue()
-     */
+    @ThreadSafeAndProhibitedFromDsfExecutor("fSession#getExecutor")
     @Override
     public int exitValue() {
-        if (fExitCode != null) {
-            return fExitCode;
+        assert !getSession().getExecutor().isInExecutorThread();
+        
+        synchronized (this) {
+            if (fExitCode != null) {
+                return fExitCode;
+            }
         }
         
         try {
@@ -253,7 +283,8 @@ public class MIInferiorProcess extends Process
                 protected void execute(final DataRequestMonitor<Integer> rm) {
                     // Guard against session disposed.
                     if (!DsfSession.isSessionActive(fSession.getId())) {
-                        cancel(false);
+                        rm.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, IDsfStatusConstants.INVALID_STATE, "Debug session already shut down.", null)); //$NON-NLS-1$
+                        rm.done();
                         return;
                     }
 
@@ -267,7 +298,7 @@ public class MIInferiorProcess extends Process
                         rm.done();
                     } else {
                     	getCommandControlService().queueCommand(
-                            new MIGDBShowExitCode(getCommandControlService().getContext()), 
+                    		fCommandFactory.createMIGDBShowExitCode(getCommandControlService().getContext()), 
                             new DataRequestMonitor<MIGDBShowExitCodeInfo>(fSession.getExecutor(), rm) {
                                 @Override
                                 protected void handleSuccess() {
@@ -280,13 +311,16 @@ public class MIInferiorProcess extends Process
                 }
             };
             fSession.getExecutor().execute(exitCodeQuery);
-            fExitCode = exitCodeQuery.get();
-            return fExitCode;
+
+            int exitCode = exitCodeQuery.get(); 
+            synchronized(this) {
+                fExitCode = exitCode;
+            }
+            return exitCode;
         } catch (RejectedExecutionException e) {
         } catch (InterruptedException e) {
         } catch (CancellationException e) {
         } catch (ExecutionException e) {
-            // Che
             if (e.getCause() instanceof CoreException && 
                 ((CoreException)e.getCause()).getStatus().getException() instanceof RuntimeException ) 
             {
@@ -337,7 +371,7 @@ public class MIInferiorProcess extends Process
 
         // To avoid a RejectedExecutionException, use an executor that
         // immediately executes in the same dispatch cycle.
-        CLIExecAbort cmd = new CLIExecAbort(getCommandControlService().getContext());
+        ICommand<MIInfo> cmd = fCommandFactory.createCLIExecAbort(getCommandControlService().getContext());
         getCommandControlService().queueCommand(
             cmd,
             new DataRequestMonitor<MIInfo>(ImmediateExecutor.getInstance(), null) { 
@@ -349,10 +383,12 @@ public class MIInferiorProcess extends Process
         );         
     }
 
-    public State getState() { 
+    @ThreadSafe
+    public synchronized State getState() { 
         return fState;
     }
 
+    @ConfinedToDsfExecutor("fSession#getExecutor")
     public IExecutionDMContext getExecutionContext() {
         return fContainerDMContext;
     }
@@ -360,10 +396,12 @@ public class MIInferiorProcess extends Process
     /**
 	 * @since 1.1
 	 */
+    @ConfinedToDsfExecutor("fSession#getExecutor")
     public void setContainerContext(IContainerDMContext containerDmc) {
     	fContainerDMContext = containerDmc;
     }
     
+    @ConfinedToDsfExecutor("fSession#getExecutor")
     synchronized void setState(State state) {
         if (fState == State.TERMINATED) return;
         fState = state;
@@ -390,17 +428,24 @@ public class MIInferiorProcess extends Process
     public PTY getPTY() {
         return fPty;
     }
-    
-    /**
-     * @since 1.1
-     */
+
+	/**
+	 * Return the PID of this inferior, or null if not known.
+	 * 
+	 * @since 1.1
+	 */
+    @ConfinedToDsfExecutor("fSession#getExecutor")
     public String getPid() { 
     	return fInferiorPid;
     }
-    
-    /**
-     * @since 1.1
-     */
+
+	/**
+	 * Record the PID of this inferior. The PID may not be known at the time of
+	 * our instantiation.
+	 * 
+	 * @since 1.1
+	 */
+    @ConfinedToDsfExecutor("fSession#getExecutor")
     public void setPid(String pid) { 
     	fInferiorPid = pid;
     }
@@ -478,4 +523,42 @@ public class MIInferiorProcess extends Process
         else if ("exit".equals(state))    { setState(State.TERMINATED); }//$NON-NLS-1$            
         else if ("error".equals(state))   { setState(State.STOPPED); }//$NON-NLS-1$            
     }
+
+//    
+// Post-poned because 'info program' yields different result on different platforms.
+// https://bugs.eclipse.org/bugs/show_bug.cgi?id=305385#c20
+//
+//    /**
+//	 * @since 3.0
+//	 */
+//    @ConfinedToDsfExecutor("fSession#getExecutor")    
+//	public void update() {
+//    	// If we don't already know the PID of the inferior, ask GDB for it.
+//    	if (getPid() == null && fContainerDMContext != null && !fGiveUpOnPidQuery) {
+//        	getCommandControlService().queueCommand(
+//            		fCommandFactory.createCLIInfoProgram(fContainerDMContext), 
+//                    new DataRequestMonitor<CLIInfoProgramInfo>(fSession.getExecutor(), null) {
+//						@Override
+//                        protected void handleSuccess() {
+//                        	if (getPid() == null) {	// check again
+//                        		Long pid = getData().getPID();
+//                        		if (pid != null) {
+//                       				setPid(Long.toString(pid));
+//                        		}
+//                        		else {
+//									// We made the 'program info' request to
+//									// GDB, it gave us an answer, but it either
+//									// doesn't provide the process PID or we
+//									// can't make it out. No point in trying
+//									// again.
+//                        			fGiveUpOnPidQuery = true;
+//                        			assert false;	// investigate why this is happening
+//                        		}
+//                        	}
+//                        }
+//                    });
+//    	}
+//	}
+//
+
 }

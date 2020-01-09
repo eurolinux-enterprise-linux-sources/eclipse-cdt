@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -19,6 +19,5 @@ public interface ITypedef extends IBinding, IType {
 	/**
 	 * Returns the type that this thing is a typedef of
 	 */
-	public IType getType() throws DOMException;
-	
+	public IType getType();
 }

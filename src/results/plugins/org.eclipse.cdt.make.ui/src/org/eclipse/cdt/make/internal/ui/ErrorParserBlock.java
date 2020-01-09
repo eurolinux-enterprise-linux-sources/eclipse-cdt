@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2007 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,6 +21,11 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.Preferences;
 import org.eclipse.swt.widgets.Composite;
 
+/**
+ * @deprecated as of CDT 4.0. This tab was used to set preferences/properties
+ * for 3.X style projects.
+ */
+@Deprecated
 public class ErrorParserBlock extends AbstractErrorParserBlock {
 
 	// make builder enabled
@@ -38,6 +43,7 @@ public class ErrorParserBlock extends AbstractErrorParserBlock {
 	 * 
 	 * @see org.eclipse.jface.dialogs.IDialogPage#createControl(org.eclipse.swt.widgets.Composite)
 	 */
+	@Override
 	public void createControl(Composite parent) {
 
 		if (useBuildInfo == true && fBuildInfo == null) {
@@ -55,6 +61,7 @@ public class ErrorParserBlock extends AbstractErrorParserBlock {
 	 * 
 	 * @see org.eclipse.cdt.ui.dialogs.ErrorParserBlock#getErrorParserIDs(org.eclipse.core.resources.IProject)
 	 */
+	@Override
 	protected String[] getErrorParserIDs(IProject project) {
 		if (getContainer().getProject() != null && fBuildInfo == null) {
 			try {
@@ -74,6 +81,7 @@ public class ErrorParserBlock extends AbstractErrorParserBlock {
 	 * @see org.eclipse.cdt.ui.dialogs.ErrorParserBlock#saveErrorParsers(org.eclipse.core.resources.IProject,
 	 *      java.lang.String[])
 	 */
+	@Override
 	public void saveErrorParsers(IProject project, String[] parserIDs) throws CoreException {
 		if (getContainer().getProject() != null) {
 			try {
@@ -90,6 +98,7 @@ public class ErrorParserBlock extends AbstractErrorParserBlock {
 	/* (non-Javadoc)
 	 * @see org.eclipse.cdt.ui.dialogs.AbstractErrorParserBlock#saveErrorParsers(java.lang.String[])
 	 */
+	@Override
 	protected void saveErrorParsers(String[] parserIDs) throws CoreException {
 		fBuildInfo = MakeCorePlugin.createBuildInfo(fPrefs, MakeBuilder.BUILDER_ID, false);
 		fBuildInfo.setErrorParsers(parserIDs);
@@ -98,11 +107,13 @@ public class ErrorParserBlock extends AbstractErrorParserBlock {
 	/* (non-Javadoc)
 	 * @see org.eclipse.cdt.ui.dialogs.AbstractErrorParserBlock#getErrorParserIDs(boolean)
 	 */
+	@Override
 	protected String[] getErrorParserIDs(boolean defaults) {
 		fBuildInfo = MakeCorePlugin.createBuildInfo(fPrefs, MakeBuilder.BUILDER_ID, defaults);
 		return fBuildInfo.getErrorParsers();
 	}
 	
+	@Override
 	public void setContainer(ICOptionContainer container) {
 		super.setContainer(container);
 		if (getContainer().getProject() != null) {

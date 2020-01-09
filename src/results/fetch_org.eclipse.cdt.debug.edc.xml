@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Fetch script for feature@org.eclipse.cdt.debug.edc -->
+
+<project name="FetchScript" default="fetch">
+	<property name="quiet" value="true"/>
+
+	<target name="fetch">
+		<antcall target="fetch.element"/>
+		<antcall target="fetch.plugins"/>
+		<antcall target="fetch.recursively"/>
+	</target>
+	<target name="fetch.element" if="featureOnly">
+		<available property="${buildDirectory}/features/org.eclipse.cdt.debug.edc/feature.xml" file="${buildDirectory}/features/org.eclipse.cdt.debug.edc/feature.xml"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/features/org.eclipse.cdt.debug.edc/feature.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.debug.edc"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.debug.edc-feature"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/features"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+	</target>
+	<target name="fetch.plugins" if="featureAndPlugins">
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.debug.edc"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.debug.edc"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.linux.x86/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.linux.x86/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.linux.x86/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.linux.x86/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.linux.x86/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.debug.edc.linux.x86"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.debug.edc.linux.x86"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.tcf.extension/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.tcf.extension/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.tcf.extension/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.tcf.extension/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.tcf.extension/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.debug.edc.tcf.extension"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.debug.edc.tcf.extension"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.ui/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.ui/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.ui/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.debug.edc.ui"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.debug.edc.ui"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.debug.edc.windows"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.debug.edc.windows"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows.ui/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows.ui/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.windows.ui/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.debug.edc.windows.ui"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.debug.edc.windows.ui"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.scripting/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.scripting/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.scripting/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.scripting/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.scripting/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.scripting"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.scripting"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.x86/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.x86/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.x86/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.x86/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.x86/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.debug.edc.x86"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.debug.edc.x86"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.doc.user/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.doc.user/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.doc.user/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.doc.user/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.debug.edc.doc.user/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.debug.edc.doc.user"/>
+			<param name="module" value="org.eclipse.cdt/edc/org.eclipse.cdt.debug.edc.doc.user"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+	</target>
+	<target name="fetch.recursively" if="featuresRecursively">
+	</target>
+	<target name="FetchFromCVS" unless="${fileToCheck}">
+		<cvs command="export -d ${elementName}" cvsRoot="${cvsRoot}" dest="${destinationFolder}" package="${module}" tag="${tag}" quiet="${quiet}" reallyquiet="${reallyquiet}" taskname="CVS - ${module}"		/>
+	</target>
+
+</project>

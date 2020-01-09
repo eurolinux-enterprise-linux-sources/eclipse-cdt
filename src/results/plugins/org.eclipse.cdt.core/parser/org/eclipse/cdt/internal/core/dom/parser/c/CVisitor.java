@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -29,6 +29,7 @@ import org.eclipse.cdt.core.dom.ast.IASTDeclarationStatement;
 import org.eclipse.cdt.core.dom.ast.IASTDeclarator;
 import org.eclipse.cdt.core.dom.ast.IASTElaboratedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier;
+import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier.IASTEnumerator;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IASTFieldReference;
 import org.eclipse.cdt.core.dom.ast.IASTForStatement;
@@ -53,6 +54,7 @@ import org.eclipse.cdt.core.dom.ast.IASTTranslationUnit;
 import org.eclipse.cdt.core.dom.ast.IASTTypeId;
 import org.eclipse.cdt.core.dom.ast.IArrayType;
 import org.eclipse.cdt.core.dom.ast.IBasicType;
+import org.eclipse.cdt.core.dom.ast.IBasicType.Kind;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.ICompositeType;
 import org.eclipse.cdt.core.dom.ast.IEnumeration;
@@ -67,7 +69,6 @@ import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
 import org.eclipse.cdt.core.dom.ast.IVariable;
-import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier.IASTEnumerator;
 import org.eclipse.cdt.core.dom.ast.c.CASTVisitor;
 import org.eclipse.cdt.core.dom.ast.c.ICASTArrayModifier;
 import org.eclipse.cdt.core.dom.ast.c.ICASTCompositeTypeSpecifier;
@@ -82,7 +83,6 @@ import org.eclipse.cdt.core.dom.ast.c.ICArrayType;
 import org.eclipse.cdt.core.dom.ast.c.ICCompositeTypeScope;
 import org.eclipse.cdt.core.dom.ast.c.ICFunctionScope;
 import org.eclipse.cdt.core.dom.ast.gnu.c.ICASTKnRFunctionDeclarator;
-import org.eclipse.cdt.core.dom.ast.gnu.c.IGCCASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.index.IIndexBinding;
 import org.eclipse.cdt.core.index.IIndexFileSet;
 import org.eclipse.cdt.core.parser.util.ArrayUtil;
@@ -603,11 +603,7 @@ public class CVisitor extends ASTQueries {
 		
 		IType type = fieldOwner.getExpressionType();
 	    while (type != null && type instanceof ITypeContainer) {
-    		try {
-                type = ((ITypeContainer)type).getType();
-            } catch (DOMException e) {
-                return e.getProblem();
-            }
+    		type = ((ITypeContainer)type).getType();
 	    }
 		
 		if (type != null && type instanceof ICompositeType) {
@@ -642,37 +638,38 @@ public class CVisitor extends ASTQueries {
 		IScope scope = getContainingScope(expr);
 		try {
 			IBinding[] bs = scope.find(PTRDIFF_T);
-			if (bs.length > 0) {
-				for (IBinding b : bs) {
-					if (b instanceof IType) {
-						if (b instanceof ICInternalBinding == false || 
-								CVisitor.declaredBefore(((ICInternalBinding) b).getPhysicalNode(), expr)) {
-							return (IType) b;
-						}
+			for (IBinding b : bs) {
+				if (b instanceof IType) {
+					if (b instanceof ICInternalBinding == false || 
+							CVisitor.declaredBefore(((ICInternalBinding) b).getPhysicalNode(), expr)) {
+						return (IType) b;
 					}
 				}
 			}
 		} catch (DOMException e) {
 		}
 
-		CBasicType basicType = new CBasicType(IBasicType.t_int, CBasicType.IS_UNSIGNED | CBasicType.IS_LONG);
-		basicType.setValue(expr);
-		return basicType;
+		return new CBasicType(Kind.eInt, 0, expr);
 	}
     
 	static IType getSize_T(IASTExpression expr) {
 		IScope scope = getContainingScope(expr);
 		try {
 			IBinding[] bs = scope.find(SIZE_T);
-			if (bs.length > 0 && bs[0] instanceof IType) {
-				return (IType) bs[0];
+			for (IBinding b : bs) {
+				if (b instanceof IType) {
+					if (b instanceof ICInternalBinding == false || 
+							CVisitor.declaredBefore(((ICInternalBinding) b).getPhysicalNode(), expr)) {
+						return (IType) b;
+					}
+				}
 			}
 		} catch (DOMException e) {
 		}
-		return new CBasicType(IBasicType.t_int, CBasicType.IS_LONG | CBasicType.IS_UNSIGNED);
+		return new CBasicType(Kind.eInt, IBasicType.IS_LONG | IBasicType.IS_UNSIGNED);
 	}
 
-	static IType unwrapTypedefs(IType type) throws DOMException {
+	static IType unwrapTypedefs(IType type) {
 		while (type instanceof ITypedef) {
 			type= ((ITypedef) type).getType();
 		}
@@ -694,7 +691,7 @@ public class CVisitor extends ASTQueries {
 				}
 				if (binding != null && !(binding instanceof IIndexBinding) && name.isActive()) {
 				    if (binding instanceof ICInternalFunction)
-				        ((ICInternalFunction)binding).addDeclarator((ICASTKnRFunctionDeclarator) declarator);
+				        ((ICInternalFunction)binding).addDeclarator(declarator);
 				    else 
 				        binding = new ProblemBinding(name, IProblemBinding.SEMANTIC_INVALID_OVERLOAD, name.toCharArray());
 				} else { 
@@ -713,17 +710,9 @@ public class CVisitor extends ASTQueries {
 	}
 
 	private static IBinding createBinding(IASTDeclarator declarator) {
-		IASTNode parent = declarator.getParent();
-		while (parent instanceof IASTDeclarator) {
-			parent = parent.getParent();
-		}
-
-		declarator= ASTQueries.findInnermostDeclarator(declarator);
+		IASTNode parent = ASTQueries.findOutermostDeclarator(declarator).getParent();
+		declarator= ASTQueries.findInnermostDeclarator(declarator);		
 		IASTDeclarator typeRelevant= ASTQueries.findTypeRelevantDeclarator(declarator);
-		IASTFunctionDeclarator funcDeclarator= null;
-		if (typeRelevant instanceof IASTFunctionDeclarator) {
-			funcDeclarator= (IASTFunctionDeclarator) typeRelevant;
-		}
 		
 		IScope scope= getContainingScope(parent);
 		ASTNodeProperty prop = parent.getPropertyInParent();
@@ -741,7 +730,8 @@ public class CVisitor extends ASTQueries {
             binding = (scope != null) ? scope.getBinding(name, false) : null;
         } catch (DOMException e1) {
         }  
-		
+        
+        boolean isFunction= false;
         if (parent instanceof IASTParameterDeclaration || parent.getPropertyInParent() == ICASTKnRFunctionDeclarator.FUNCTION_PARAMETER) {
         	IASTDeclarator fdtor = (IASTDeclarator) parent.getParent();
         	if (ASTQueries.findTypeRelevantDeclarator(fdtor) instanceof IASTFunctionDeclarator) {
@@ -755,48 +745,58 @@ public class CVisitor extends ASTQueries {
         		}
         		return binding;
         	}
-		} else if (funcDeclarator != null) {
-			if (binding != null && !(binding instanceof IIndexBinding) && name.isActive()) {
-			    if (binding instanceof IFunction) {
-			        IFunction function = (IFunction) binding;
-			        if (function instanceof CFunction) {
-			        	((CFunction)function).addDeclarator(funcDeclarator);
-			        }
-			        return function;
-			    }
-		        binding = new ProblemBinding(name, IProblemBinding.SEMANTIC_INVALID_OVERLOAD, name.toCharArray());
-			} else if (parent instanceof IASTSimpleDeclaration && ((IASTSimpleDeclaration) parent).getDeclSpecifier().getStorageClass() == IASTDeclSpecifier.sc_typedef)
-				binding = new CTypedef(name);
-			else
-				binding = new CFunction(funcDeclarator);
+		} else if (parent instanceof IASTFunctionDefinition) {
+			isFunction= true;
 		} else if (parent instanceof IASTSimpleDeclaration) {
 			IASTSimpleDeclaration simpleDecl = (IASTSimpleDeclaration) parent;			
 			if (simpleDecl.getDeclSpecifier().getStorageClass() == IASTDeclSpecifier.sc_typedef) {
 				binding = new CTypedef(name);
 			} else {
-			    IType t1 = null, t2 = null;
-			    if (binding != null && !(binding instanceof IIndexBinding) && name.isActive()) {
-			        if (binding instanceof IParameter) {
-			            return new ProblemBinding(name, IProblemBinding.SEMANTIC_INVALID_REDECLARATION, name.toCharArray());
-			        } else if (binding instanceof IVariable) {
-				        t1 = createType(declarator);
-				        try {
-	                        t2 = ((IVariable)binding).getType();
-	                    } catch (DOMException e1) {
-	                    }
-	                    if (t1 != null && t2 != null && t1.isSameType(t2)) {
-	    			        if (binding instanceof CVariable)
-	    			            ((CVariable)binding).addDeclaration(name);
-	    			    } else {
-	    			        return new ProblemBinding(name, IProblemBinding.SEMANTIC_INVALID_REDECLARATION, name.toCharArray());
-	    			    }
-			    	}
-			    } else if (simpleDecl.getParent() instanceof ICASTCompositeTypeSpecifier) {
-					binding = new CField(name);
-				} else {
-					binding = new CVariable(name);
+				isFunction= typeRelevant instanceof IASTFunctionDeclarator;
+				if (!isFunction) { 
+					IType t1 = createType(declarator), t2 = null;
+					if (CVisitor.unwrapTypedefs(t1) instanceof IFunctionType) {
+						isFunction= true;
+					} else {
+						if (binding != null && !(binding instanceof IIndexBinding) && name.isActive()) {
+							if (binding instanceof IParameter) {
+								return new ProblemBinding(name, IProblemBinding.SEMANTIC_INVALID_REDECLARATION, name.toCharArray());
+							} else if (binding instanceof IVariable) {
+								try {
+									t2 = ((IVariable)binding).getType();
+								} catch (DOMException e1) {
+								}
+								if (t1 != null && t2 != null && (
+										t1.isSameType(t2) || isCompatibleArray(t1, t2) != null)) {
+									if (binding instanceof CVariable)
+										((CVariable)binding).addDeclaration(name);
+								} else {
+									return new ProblemBinding(name, IProblemBinding.SEMANTIC_INVALID_REDECLARATION, name.toCharArray());
+								}
+							}
+						} else if (simpleDecl.getParent() instanceof ICASTCompositeTypeSpecifier) {
+							binding = new CField(name);
+						} else {
+							binding = new CVariable(name);
+						}
+					}
 				}
 			}
+		}
+		if (isFunction) {
+			if (binding != null && !(binding instanceof IIndexBinding) && name.isActive()) {
+				if (binding instanceof IFunction) {
+					IFunction function = (IFunction) binding;
+					if (function instanceof CFunction) {
+						((CFunction)function).addDeclarator(typeRelevant);
+					}
+					return function;
+				}
+				binding = new ProblemBinding(name, IProblemBinding.SEMANTIC_INVALID_OVERLOAD, name.toCharArray());
+			} else {
+				binding = new CFunction(typeRelevant);
+			}
+
 		}
 		return binding;
 	}
@@ -926,14 +926,10 @@ public class CVisitor extends ASTQueries {
                         }
 					} else if (struct instanceof ITypeContainer) {
 						IType type;
-                        try {
-                            type = ((ITypeContainer)struct).getType();
-                            while (type instanceof ITypeContainer && !(type instanceof CStructure)) {
-    							type = ((ITypeContainer)type).getType();
-    						}
-                        } catch (DOMException e) {
-                            return e.getProblem();
-                        }
+                        type = ((ITypeContainer)struct).getType();
+						while (type instanceof ITypeContainer && !(type instanceof CStructure)) {
+							type = ((ITypeContainer)type).getType();
+						}
                         
 						
 						if (type instanceof CStructure)
@@ -1276,29 +1272,21 @@ public class CVisitor extends ASTQueries {
         	IType paramType = type;
         	// Remove typedefs ready for subsequent processing.
         	while (paramType instanceof ITypedef) {
-        		try {
-					paramType = ((ITypedef)paramType).getType();
-				} catch (DOMException e) {
-					paramType= null;
-				}
+        		paramType = ((ITypedef)paramType).getType();
         	}
         	        	
             //C99: 6.7.5.3-7 a declaration of a parameter as "array of type" shall be adjusted to "qualified pointer to type", where the
     		//type qualifiers (if any) are those specified within the[and] of the array type derivation
             if (paramType instanceof IArrayType) { // the index does not yet return ICArrayTypes
 	            IArrayType at = (IArrayType) paramType;
-				try {
-					int q= 0;
-					if (at instanceof ICArrayType) {
-						ICArrayType cat= (ICArrayType) at;
-						if (cat.isConst()) q |= CPointerType.IS_CONST;
-						if (cat.isVolatile()) q |= CPointerType.IS_VOLATILE;
-						if (cat.isRestrict()) q |= CPointerType.IS_RESTRICT;
-					}
-					type = new CPointerType(at.getType(), q);
-				} catch (DOMException e) {
-					// ignore the qualifiers
+				int q= 0;
+				if (at instanceof ICArrayType) {
+					ICArrayType cat= (ICArrayType) at;
+					if (cat.isConst()) q |= CPointerType.IS_CONST;
+					if (cat.isVolatile()) q |= CPointerType.IS_VOLATILE;
+					if (cat.isRestrict()) q |= CPointerType.IS_RESTRICT;
 				}
+				type = new CPointerType(at.getType(), q);
 	        } else if (paramType instanceof IFunctionType) {
 	            //-8 A declaration of a parameter as "function returning type" shall be adjusted to "pointer to function returning type"
 	            type = new CPointerType(paramType, 0);
@@ -1346,13 +1334,12 @@ public class CVisitor extends ASTQueries {
 	 * @return the base IType
 	 */
 	public static IType createBaseType(IASTDeclSpecifier declSpec) {
-		if (declSpec instanceof IGCCASTSimpleDeclSpecifier) {
-			IASTExpression exp = ((IGCCASTSimpleDeclSpecifier)declSpec).getTypeofExpression();
+		if (declSpec instanceof ICASTSimpleDeclSpecifier) {
+			final ICASTSimpleDeclSpecifier sds = (ICASTSimpleDeclSpecifier)declSpec;
+			IASTExpression exp = sds.getDeclTypeExpression();
 			if (exp != null)
 				return exp.getExpressionType();
-			return new CBasicType((ICASTSimpleDeclSpecifier) declSpec);
-		} else if (declSpec instanceof ICASTSimpleDeclSpecifier) {
-		    return new CBasicType((ICASTSimpleDeclSpecifier)declSpec);
+			return new CBasicType(sds);
 		} 
 		IBinding binding = null;
 		IASTName name = null;

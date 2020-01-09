@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -57,6 +57,7 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTLinkageSpecification;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTNamespaceAlias;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTNamespaceDefinition;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTQualifiedName;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTStaticAssertDeclaration;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateDeclaration;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateId;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateSpecialization;
@@ -161,13 +162,15 @@ public class CModelBuilder2 implements IContributedModelBuilder {
 			startTime= System.currentTimeMillis();
 			buildModel(ast);
 			elementInfo.setIsStructureKnown(true);
-			if (DEBUG) Util.debugLog("CModelBuilder2: building " //$NON-NLS-1$
-					+"children="+ elementInfo.internalGetChildren().size() //$NON-NLS-1$
-					+" time="+ (System.currentTimeMillis() - startTime) + "ms", //$NON-NLS-1$ //$NON-NLS-2$
-					DebugLogConstants.MODEL, false);
+			if (DEBUG) {
+				Util.debugLog("CModelBuilder2: building " //$NON-NLS-1$
+						+ "children=" + elementInfo.internalGetChildren().size() //$NON-NLS-1$
+						+ " time=" + (System.currentTimeMillis() - startTime) + "ms", //$NON-NLS-1$ //$NON-NLS-2$
+						DebugLogConstants.MODEL, false);
+			}
 
 			if (elementInfo instanceof ASTHolderTUInfo) {
-				((ASTHolderTUInfo)elementInfo).fAST= ast;
+				((ASTHolderTUInfo) elementInfo).fAST= ast;
 				// preserve index lock for AST receiver
 				index= null;
 			}
@@ -332,6 +335,8 @@ public class CModelBuilder2 implements IContributedModelBuilder {
 			// TODO [cmodel] asm declaration?
 		} else if (declaration instanceof IASTProblemDeclaration) {
 			// TODO [cmodel] problem declaration?
+		} else if (declaration instanceof ICPPASTStaticAssertDeclaration) {
+			// ignore
 		} else {
 			assert false : "TODO: " + declaration.getClass().getName(); //$NON-NLS-1$
 		}
@@ -667,7 +672,7 @@ public class CModelBuilder2 implements IContributedModelBuilder {
 			for (final ICPPASTBaseSpecifier baseSpecifier : baseSpecifiers) {
 				final IASTName baseName= baseSpecifier.getName();
 				final ASTAccessVisibility visibility;
-				switch(baseSpecifier.getVisibility()) {
+				switch (baseSpecifier.getVisibility()) {
 				case ICPPASTBaseSpecifier.v_public:
 					visibility= ASTAccessVisibility.PUBLIC;
 					break;
@@ -1228,7 +1233,7 @@ public class CModelBuilder2 implements IContributedModelBuilder {
 	 * @return the corresponding <code>ASTAccessVisibility</code>
 	 */
 	private ASTAccessVisibility adaptVisibilityConstant(int visibility) {
-		switch(visibility) {
+		switch (visibility) {
 		case ICPPASTVisibilityLabel.v_public:
 			return ASTAccessVisibility.PUBLIC;
 		case ICPPASTVisibilityLabel.v_protected:
@@ -1286,5 +1291,4 @@ public class CModelBuilder2 implements IContributedModelBuilder {
 		}
 		return null;
 	}
-
 }

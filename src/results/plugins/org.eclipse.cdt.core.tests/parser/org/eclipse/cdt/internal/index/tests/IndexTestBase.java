@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2007 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -43,8 +43,7 @@ public class IndexTestBase extends BaseTestCase {
 				String name= "IndexTest_" + System.currentTimeMillis();
 				if (useCpp) {
 					result[0]= CProjectHelper.createCCProject(name, null, IPDOMManager.ID_NO_INDEXER);
-				}
-				else {
+				} else {
 					result[0]= CProjectHelper.createCProject(name, null, IPDOMManager.ID_NO_INDEXER);
 				}					
 				CProjectHelper.importSourcesFromPlugin(result[0], CTestPlugin.getDefault().getBundle(), importSource);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 QNX Software Systems and others.
+ * Copyright (c) 2008, 2010 QNX Software Systems and others.
  * 
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -19,35 +19,45 @@ import org.eclipse.core.runtime.CoreException;
  * is break on raising exception in C++, or break on receiving signal.
  * 
  * @sinse 5.0
+ * @since 7.0
  */
 public interface ICEventBreakpoint extends ICBreakpoint {
 	/**
-	 * Breakpoint attribute storing the event breakpoint event id
+	 * Breakpoint attribute storing the event breakpoint event id. Basically,
+	 * this indicates what type of event the breakpoint catches--e.g., a C++
+	 * exception throw, a library load, a thread exit, etc. Event types are
+	 * contributed via the "breakpointContribution" extension point.
+	 * 
+	 * <p>
 	 * This attribute is a <code>String</code>.
 	 * 
 	 */
-	public static final String EVENT_TYPE_ID = "org.eclipse.cdt.debug.core.eventbreakpoint_event_id"; //$NON-NLS-1$	
+	public static final String EVENT_TYPE_ID = "org.eclipse.cdt.debug.core.eventbreakpoint_event_id"; //$NON-NLS-1$
+
 	/**
-	 * Breakpoint attribute storing the event breakpoint argument
-	 * This attribute is a <code>String</code>.
-	 * 
+	 * Breakpoint attribute storing the event breakpoint argument. This
+	 * attribute is a <code>String</code>, though it may be a stringified
+	 * representation of another type (it may be a number, for example).
+	 * Currently, an event type can have only one argument
 	 */
 	public static final String EVENT_ARG = "org.eclipse.cdt.debug.core.eventbreakpoint_event_arg"; //$NON-NLS-1$	
-	
+
 	/**
-	 * Get event breakpoint type. This is usually id in reverse web notation. 
-	 * This type is interpreted by underlying debugger implementation.
-	 * Use extension point <code>org.eclipse.cdt.debug.ui.breakpointContribution</code> to define user visible label for this event type.
+	 * Get the event breakpoint type. Same as querying the property
+	 * {@link #EVENT_TYPE_ID}
+	 * 
 	 * @return event breakpoint type id (not null)
-	 * @throws CoreException 
+	 * @throws CoreException
 	 */
 	String getEventType() throws CoreException;
 
 	/**
-	 * Get extra event argument. For example name of the exception or number of a signal.
-	 * Use extension point <code>org.eclipse.cdt.debug.ui.breakpointContribution</code> to define UI control to edit/view this argument
-	 * @return event argument (not null)
-	 * @throws CoreException 
+	 * Get the event argument, if the type has one. Currently, an event type can
+	 * have at most one argument. Same as querying the property
+	 * {@link #EVENT_ARG}
+	 * 
+	 * @return event argument, or null if not applicable
+	 * @throws CoreException
 	 */
 	String getEventArgument() throws CoreException;
 }

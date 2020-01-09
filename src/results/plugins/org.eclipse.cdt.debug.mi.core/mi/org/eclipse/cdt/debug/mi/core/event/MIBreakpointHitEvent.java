@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -36,6 +36,21 @@ public class MIBreakpointHitEvent extends MIStoppedEvent {
 	public MIBreakpointHitEvent(MISession source, MIResultRecord record) {
 		super(source, record);
 		parse();
+	}
+
+	/**
+	 * This constructor is used for catchpoint hits with gdb < 7.0. In that
+	 * environment, we have to get creative as gdb doesn't send us a reason with
+	 * the stopped event. Fortunately, a stream record tells us the target has
+	 * stopped because of a catchpoint and the associated breakpoint number.
+	 * 
+	 * @since 7.0
+	 */
+	public MIBreakpointHitEvent(MISession source, MIExecAsyncOutput record, int bkptNumber) {
+		super(source, record);
+		parse();
+		bkptno = bkptNumber;
+		assert bkptNumber > 0;	// we know gdb bkpt numbers are 1-based
 	}
 
 	public int getNumber() {

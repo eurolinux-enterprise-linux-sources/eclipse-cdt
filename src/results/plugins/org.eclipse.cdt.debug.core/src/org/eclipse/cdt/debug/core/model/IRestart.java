@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,14 +7,24 @@
  *
  * Contributors:
  *     QNX Software Systems - Initial API and implementation
+ *     Navid Mehregani (TI) - Bug 289526 - Migrate the Restart feature to the new one, as supported by the platform
  *******************************************************************************/
 
 package org.eclipse.cdt.debug.core.model;
 
 import org.eclipse.debug.core.DebugException;
 /**
- * Provides the ability to restart a debug target.
+ * Provides the ability to restart a debug target.  
+ * <p>
+ * Note: Debug elements which support restart should implement this interface.
+ * Adopting to this interface is not enough.   
+ * </p>
+ * <p>
+ * Note 2: Debugger can also implement the asynchronous  
+ * {@link org.eclipse.debug.core.commands.IRestartHandler}.
+ * </p>
  * 
+ * @see org.eclipse.debug.core.commands.IRestartHandler
  */
 public interface IRestart 
 {

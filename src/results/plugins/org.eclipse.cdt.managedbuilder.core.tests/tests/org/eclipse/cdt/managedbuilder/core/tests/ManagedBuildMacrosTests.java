@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2007 Intel Corporation and others.
+ * Copyright (c) 2005, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,6 +13,8 @@ package org.eclipse.cdt.managedbuilder.core.tests;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import junit.framework.Test;
 import junit.framework.TestCase;
@@ -67,14 +69,16 @@ public class ManagedBuildMacrosTests extends TestCase {
 	
 	static final String UNKNOWN = "<HZ>"; //$NON-NLS-1$
 	static final String LISTSEP = "|";    //$NON-NLS-1$
+	static final String LISTSEP_REGEX = "\\|";    //$NON-NLS-1$
 	static final String TEST = "TEST";    //$NON-NLS-1$
 	static final String[] TST = {"DUMMY", "FILETEST",   //$NON-NLS-1$ //$NON-NLS-2$
 		"OPTTEST", "CFGTEST", "PRJTEST",  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 		"WSPTEST", "INSTEST", "ENVTEST"}; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 	// used for options testing
-	final String OPT_IDS = "macro.test.string";  //$NON-NLS-1$
-	final String OPT_IDL = "macro.test.list";    //$NON-NLS-1$
-	final String INC_DEF  = "${IncludeDefaults}";//$NON-NLS-1$
+	static final String OPT_IDS = "macro.test.string";  //$NON-NLS-1$
+	static final String OPT_IDL = "macro.test.list";    //$NON-NLS-1$
+	static final String INC_DEF  = "${IncludeDefaults}";//$NON-NLS-1$
+	static final String PATH_ENV_VAR = "${PATH}"; //$NON-NLS-1$
 	
 	public ManagedBuildMacrosTests() { super(); }
 	public ManagedBuildMacrosTests(String name) { super(name); }
@@ -224,43 +228,55 @@ public class ManagedBuildMacrosTests extends TestCase {
 //	}
 	
 	
-	public void testMacroOptL(){
+	public void testMacroOptL() {
 		doInit();
-		IToolChain tc = cfgs[0].getToolChain();
-		ITool       t = cfgs[0].getTools()[0];
-		IOption   opt = t.getOptionById(OPT_IDL);
-		OptionContextData ocd = new OptionContextData(opt,t);
+		ITool t = cfgs[0].getTools()[0];
+		IOption opt = t.getOptionById(OPT_IDL);
+		OptionContextData ocd = new OptionContextData(opt, t);
 		assertNotNull(opt);
 		ms = mp.getSuppliers(IBuildMacroProvider.CONTEXT_OPTION, ocd);
 		assertNotNull(ms);
 		assertEquals(ms.length, 1);
-		
+
 		try {
 			String[] set0 = opt.getStringListValue();
 			assertNotNull(set0);
-			final String[] set1 = {"new a", /*"test=${TEST}",*/ INC_DEF, //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$  
-				 "${PATH}", "PRJ=${NEW_FOR_PRJ}", "LIST=" + INC_DEF};//$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-			String[] res1 = {"new a", /*"test=CFGTEST",*/ "x", "y",      //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-					     "z", ":", "PRJ=NewMacrosForProjectContext", "LIST=x|y|z"};        //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+			final String[] set1 = {"new a", /*"test=${TEST}",*/ INC_DEF,  
+				 "PRJ=${NEW_FOR_PRJ}", "LIST=" + INC_DEF, PATH_ENV_VAR};
+			String[] resArr1 = {"new a", /*"test=CFGTEST",*/ "x", "y",
+					     "z", "PRJ=NewMacrosForProjectContext", "LIST=x|y|z"};
+			List<String> res1 = new ArrayList<String>(Arrays.asList(resArr1));
 			try {
-				res1[4] = mp.resolveValue("${PATH}",UNKNOWN,LISTSEP,IBuildMacroProvider.CONTEXT_OPTION, ocd);  //$NON-NLS-1$
-			} catch (BuildMacroException e) { fail(e.getLocalizedMessage()); } 
+				// Add split ${PATH} to res1
+				String strList = mp.resolveValue(PATH_ENV_VAR, UNKNOWN, LISTSEP, IBuildMacroProvider.CONTEXT_OPTION, ocd);
+				String[] split = strList.split(LISTSEP_REGEX);
+				res1.addAll(Arrays.asList(split));
+			} catch (BuildMacroException e) {
+				fail(e.getLocalizedMessage());
+			}
 
 			opt = cfgs[0].setOption(t, opt, set1);
 			assertNotNull(opt);
 
-			ArrayList ar = new ArrayList(1);
-			for (int i=0; i<set1.length; i++) {
+			ArrayList<String> res2 = new ArrayList<String>(res1.size());
+			for (int i = 0; i < set1.length; i++) {
 				try {
-					String[] aus = mp.resolveStringListValue(set1[i], UNKNOWN, LISTSEP, IBuildMacroProvider.CONTEXT_OPTION, new OptionContextData(opt,t));
-					if (aus == null) continue;
-					for (int j=0; j<aus.length; j++) ar.add(aus[j]);
-				} catch (BuildMacroException e) { fail(e.getLocalizedMessage()); } 
+					String[] aus = mp.resolveStringListValue(set1[i], UNKNOWN, LISTSEP,
+							IBuildMacroProvider.CONTEXT_OPTION, new OptionContextData(opt, t));
+					if (aus == null)
+						continue;
+					for (int j = 0; j < aus.length; j++)
+						res2.add(aus[j]);
+				} catch (BuildMacroException e) {
+					fail(e.getLocalizedMessage());
+				}
 			}
-			String[] res = (String[])ar.toArray(new String[0]);
-			assertEquals(res.length, res1.length);
-			for (int i=0; i<res.length; i++) assertEquals(res[i], res1[i]);
-		} catch (BuildException e) { fail(e.getLocalizedMessage());	}
+			assertEquals(res1.size(), res2.size());
+			for (int i = 0; i < res1.size(); i++)
+				assertEquals(res1.get(i), res2.get(i));
+		} catch (BuildException e) {
+			fail(e.getLocalizedMessage());
+		}
 	}
 	
 	/**
@@ -472,7 +488,7 @@ public class ManagedBuildMacrosTests extends TestCase {
 
 		boolean exceptionRaised = false;
 		try { // ZERO is undefined macro
-			String a = mp.resolveValue("${ONE} - ${ZERO}", null, null,  //$NON-NLS-1$
+			mp.resolveValue("${ONE} - ${ZERO}", null, null,  //$NON-NLS-1$
 				IBuildMacroProvider.CONTEXT_CONFIGURATION, cfgs[0]);
 		} catch (BuildMacroException e) {
 			exceptionRaised = true;
@@ -481,7 +497,7 @@ public class ManagedBuildMacrosTests extends TestCase {
 		
 		exceptionRaised = false;
 		try { // delimiter is undefined for list
-			String a = mp.resolveValue("${LST}", null, null,  //$NON-NLS-1$
+			mp.resolveValue("${LST}", null, null,  //$NON-NLS-1$
 				IBuildMacroProvider.CONTEXT_CONFIGURATION, cfgs[0]);
 		} catch (BuildMacroException e) {
 			exceptionRaised = true;
@@ -671,7 +687,7 @@ public class ManagedBuildMacrosTests extends TestCase {
 	
 	// returns a list of macro's NAMES (not values).
 	private String[] printMacros(IBuildMacro[] vars, String head) {
-		ArrayList ar = new ArrayList(0);
+		ArrayList<String> ar = new ArrayList<String>(0);
 		if (vars != null) {
 			if (vars.length > 0) {
 				for (int i=0; i < vars.length; i++) {
@@ -697,7 +713,7 @@ public class ManagedBuildMacrosTests extends TestCase {
 				}
 			} else { if (print) System.out.println(head + ": array is empty");	}  //$NON-NLS-1$
 		} else { if (print) System.out.println(head + ": array is null"); }  //$NON-NLS-1$
-		return (String[])ar.toArray(new String[0]);
+		return ar.toArray(new String[0]);
 	}
 
 	private void printStrings(String[] vars, String head) {

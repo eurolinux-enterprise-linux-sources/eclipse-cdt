@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,8 +18,9 @@ import org.eclipse.core.runtime.IProgressMonitor;
 
 
 /**
- * C Project wizard that creates a new project resource in
+ * @deprecated as of CDT 4.0. Being kept here for API compatibility only.
  */
+@Deprecated
 public abstract class NewCCProjectWizard extends NewCProjectWizard {
 
 	public NewCCProjectWizard() {

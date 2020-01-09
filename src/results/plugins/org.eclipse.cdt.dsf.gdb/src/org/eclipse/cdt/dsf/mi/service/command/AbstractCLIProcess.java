@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 QNX Software Systems and others.
+ * Copyright (c) 2009, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -32,6 +32,7 @@ import org.eclipse.cdt.dsf.debug.service.command.ICommandToken;
 import org.eclipse.cdt.dsf.debug.service.command.IEventListener;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
 import org.eclipse.cdt.dsf.mi.service.command.commands.CLICommand;
+import org.eclipse.cdt.dsf.mi.service.command.commands.MICommand;
 import org.eclipse.cdt.dsf.mi.service.command.commands.MIInterpreterExecConsole;
 import org.eclipse.cdt.dsf.mi.service.command.commands.RawCommand;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIConsoleStreamOutput;
@@ -57,6 +58,9 @@ public abstract class AbstractCLIProcess extends Process
 {
     public static final String PRIMARY_PROMPT = "(gdb)"; //$NON-NLS-1$
     public static final String SECONDARY_PROMPT = ">"; //$NON-NLS-1$
+    
+    // This is the command that will end a secondary prompt
+    private static final String SECONDARY_PROMPT_END_COMMAND = "end"; //$NON-NLS-1$
 
     private final DsfSession fSession;
     private final ICommandControlService fCommandControl;
@@ -83,8 +87,13 @@ public abstract class AbstractCLIProcess extends Process
      * the console output. 
      */
     private int fSuppressConsoleOutputCounter = 0;
-         
-    private int fPrompt = 1; // 1 --> Primary prompt "(gdb)"; 2 --> Secondary Prompt ">"
+    
+    // Primary prompt == "(gdb)"
+    // Secondary Prompt == ">"
+    // Secondary_prompt_missing means that the backend should be sending the secondary
+    // prompt but it isn't.  So we do it ourselves.
+    private enum PromptType { IN_PRIMARY_PROMPT, IN_SECONDARY_PROMPT, IN_SECONDARY_PROMPT_MISSING };
+    private PromptType fPrompt = PromptType.IN_PRIMARY_PROMPT;
 
     /**
      * @since 1.1
@@ -188,7 +197,20 @@ public abstract class AbstractCLIProcess extends Process
     		{
                 MIConsoleStreamOutput out = (MIConsoleStreamOutput) oobr;
                 String str = out.getString();
-                // Process the console stream too.
+                
+                if (str.trim().equals(SECONDARY_PROMPT)) {
+                    // Make sure to skip any secondary prompt that we
+                    // have already printed ourselves.  This would happen
+                    // when a new version of the backend starts sending
+                    // the secondary prompt for a command that it didn't
+                    // use to.  In this case, we still send it ourselves.
+                	if (inMissingSecondaryPrompt()) {
+                		return;
+                	}
+                	// Add a space for readability
+                	str = SECONDARY_PROMPT + ' ';
+                }
+
                 setPrompt(str);
                 try {
                     fMIOutConsolePipe.write(str.getBytes());
@@ -214,6 +236,10 @@ public abstract class AbstractCLIProcess extends Process
     }
 
     public void commandSent(ICommandToken token) {
+    	// Bug 285170
+    	// Don't reset the fPrompt here, in case we are
+    	// dealing with the missing secondary prompt.
+    	
         ICommand<?> command = token.getCommand();
         // Check if the command is a CLI command and if it did not originate from this class.
         if (command instanceof CLICommand<?> &&
@@ -221,13 +247,86 @@ public abstract class AbstractCLIProcess extends Process
         {
             fSuppressConsoleOutputCounter++;
         }
+        
+    	// Bug 285170
+        // Deal with missing secondary prompt, if needed.
+        // The only two types we care about are ProcessMIInterpreterExecConsole
+        // and RawCommand, both of which are MICommands
+        if (command instanceof MICommand<?>) {
+        	checkMissingSecondaryPrompt((MICommand<?>)command);
+        }
+    }
+    
+    private void checkMissingSecondaryPrompt(MICommand<?> command) {                          
+        // If the command send is one of ours, check if it is one that is missing a secondary prompt
+    	if (command instanceof ProcessMIInterpreterExecConsole) {
+    		String[] operations = ((ProcessMIInterpreterExecConsole)command).getParameters();                                                         
+    		if (operations != null && operations.length > 0) {                                                     
+    			// Get the command name.                                                                           
+    			String operation = operations[0];                                                                   
+    			int indx = operation.indexOf(' ');                                                                 
+    			if (indx != -1) {                                                                                  
+    				operation = operation.substring(0, indx).trim();                                               
+    			} else {                                                                                           
+    				operation = operation.trim();                                                                  
+    			}                                                                                                  
+
+    			if (isMissingSecondaryPromptCommand(operation)) {                             
+    				// For such commands, the backend does not send the secondary prompt                             
+    				// so we set it manually.  We'll remain in this state until we get 
+    				// a commandDone() call.
+    				// This logic will still work when a new version of the backend
+    				// fixes this lack of secondary prompt.
+    				fPrompt = PromptType.IN_SECONDARY_PROMPT_MISSING;                                                                                   
+    			}                                                                                                   
+    		}
+    	}
+    	
+    	// Even if the previous check didn't kick in, we may already be in the missing
+    	// secondary prompt case.  If so, we'll print the prompt ourselves.
+    	// Just make sure that this command is not ending the secondary prompt.
+    	if (fPrompt == PromptType.IN_SECONDARY_PROMPT_MISSING) {
+    		String operation = command.getOperation();
+    		if (operation != null) {
+    			int indx = operation.indexOf(' ');
+    			if (indx != -1) {
+    				operation = operation.substring(0, indx).trim();
+    			} else {
+    				operation = operation.trim();
+    			}
+
+    			if (!operation.equals(SECONDARY_PROMPT_END_COMMAND)) {
+                	// Add a space for readability
+                	String str = SECONDARY_PROMPT + ' ';
+    				try {
+    					fMIOutConsolePipe.write(str.getBytes());
+    					fMIOutConsolePipe.flush();
+    				} catch (IOException e) {
+    				}
+    			}
+    		}
+    	}
     }
 
+    /**                                                                                                        
+     * Check to see if the user typed a command that we know the backend
+     * does not send the secondary prompt for, but should.                                                   
+     * If so, we'll need to pretend we are receiving the secondary prompt.
+     *                                     
+     * @since 3.0
+     */                                                                                                        
+    protected boolean isMissingSecondaryPromptCommand(String operation) {
+    	return false;
+    }
+    
     public void commandRemoved(ICommandToken token) {
             // Ignore
     }
 
     public void commandDone(ICommandToken token, ICommandResult result) {
+    	// Whenever we get a command that is completed, we know we must be in the primary prompt
+    	fPrompt = PromptType.IN_PRIMARY_PROMPT;
+    	
         ICommand<?> command = token.getCommand();
     	if (token.getCommand() instanceof CLICommand<?> &&
     			!(command instanceof ProcessCLICommand || command instanceof ProcessMIInterpreterExecConsole)) 
@@ -237,26 +336,31 @@ public abstract class AbstractCLIProcess extends Process
      }
 
     void setPrompt(String line) {
-        fPrompt = 0;
+        fPrompt = PromptType.IN_PRIMARY_PROMPT;
         // See https://bugs.eclipse.org/bugs/show_bug.cgi?id=109733
         if (line == null)
             return;
         line = line.trim();
-        if (line.equals(PRIMARY_PROMPT)) {
-            fPrompt = 1;
-        } else if (line.equals(SECONDARY_PROMPT)) {
-            fPrompt = 2;
+        if (line.equals(SECONDARY_PROMPT)) {
+            fPrompt = PromptType.IN_SECONDARY_PROMPT;
         }
     }
 
     public boolean inPrimaryPrompt() {
-        return fPrompt == 1;
+        return fPrompt == PromptType.IN_PRIMARY_PROMPT;
     }
 
     public boolean inSecondaryPrompt() {
-        return fPrompt == 2;
+        return fPrompt == PromptType.IN_SECONDARY_PROMPT || fPrompt == PromptType.IN_SECONDARY_PROMPT_MISSING;
     }
     
+    /**
+	 * @since 3.0
+	 */
+    public boolean inMissingSecondaryPrompt() {
+        return fPrompt == PromptType.IN_SECONDARY_PROMPT_MISSING;
+    }
+
     private boolean isMIOperation(String operation) {
     	// The definition of an MI command states that it starts with
     	//  [ token ] "-"

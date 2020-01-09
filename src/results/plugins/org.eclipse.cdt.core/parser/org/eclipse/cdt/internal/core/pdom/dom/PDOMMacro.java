@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 QNX Software Systems and others.
+ * Copyright (c) 2006, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -9,6 +9,7 @@
  *    QNX - Initial API and implementation
  *    Markus Schorn (Wind River Systems)
  *    Andrew Ferguson (Symbian)
+ *    Sergey Prigogin (Google)
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.pdom.dom;
 
@@ -32,6 +33,7 @@ import org.eclipse.cdt.internal.core.index.IIndexFragment;
 import org.eclipse.cdt.internal.core.index.IIndexFragmentBinding;
 import org.eclipse.cdt.internal.core.index.IIndexFragmentName;
 import org.eclipse.cdt.internal.core.index.IIndexScope;
+import org.eclipse.cdt.internal.core.parser.scanner.CharArray;
 import org.eclipse.cdt.internal.core.parser.scanner.MacroDefinitionParser;
 import org.eclipse.cdt.internal.core.pdom.PDOM;
 import org.eclipse.cdt.internal.core.pdom.db.Database;
@@ -115,7 +117,7 @@ public class PDOMMacro implements IIndexMacro, IPDOMBinding, IASTFileLocation {
 	public PDOM getPDOM() {
 		return fLinkage.getPDOM();
 	}
-	
+
 	public long getRecord() {
 		return fRecord;
 	}
@@ -145,6 +147,7 @@ public class PDOMMacro implements IIndexMacro, IPDOMBinding, IASTFileLocation {
 		if (params != null) {
 			params.delete();
 		}
+		linkage.getDB().free(fRecord);
 	}
 	
 	public PDOMMacroContainer getContainer() throws CoreException {
@@ -268,6 +271,14 @@ public class PDOMMacro implements IIndexMacro, IPDOMBinding, IASTFileLocation {
 		return filerec != 0 ? new PDOMFile(fLinkage, filerec) : null;
 	}
 
+	public long getFileRecord() throws CoreException {
+		return fLinkage.getDB().getRecPtr(fRecord + FILE);
+	}
+
+	void setFile(PDOMFile file) throws CoreException {
+		fLinkage.getDB().putRecPtr(fRecord + FILE, file != null ? file.getRecord() : 0);
+	}
+
 	public int getEndingLineNumber() {
 		return 0;
 	}
@@ -321,7 +332,7 @@ public class PDOMMacro implements IIndexMacro, IPDOMBinding, IASTFileLocation {
 
 	public char[] getExpansion() {
 		char[] expansionImage= getExpansionImage();
-		return MacroDefinitionParser.getExpansion(expansionImage, 0, expansionImage.length);
+		return MacroDefinitionParser.getExpansion(new CharArray(expansionImage), 0, expansionImage.length);
 	}
 
 	public char[][] getParameterPlaceholderList() {
@@ -355,7 +366,7 @@ public class PDOMMacro implements IIndexMacro, IPDOMBinding, IASTFileLocation {
 		return null;
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public Object getAdapter(Class adapter) {
 		if (adapter.isAssignableFrom(PDOMMacro.class)) {
 			return this;

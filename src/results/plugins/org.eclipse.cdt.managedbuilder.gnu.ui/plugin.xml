@@ -6,7 +6,7 @@
 <!-- Managed Make Builder Tool Specifications -->
    <extension
          id="cdt.managed.build.info"
-         name="Managed Build Tools Description"
+         name="%extension.name"
          point="org.eclipse.cdt.managedbuilder.core.buildDefinitions">
       <managedBuildRevision
             fileVersion="4.0.0">
@@ -205,19 +205,19 @@
 			  </enablement>
 		 </outputType>
          <option
-               applicabilityCalculator="org.eclipse.cdt.managedbuilder.gnu.ui.GprofAppCalculator"
-               command="-pg"
-               defaultValue="false"
-               id="gnu.c.link.option.debugging.gprof"
-               name="%Option.Posix.Debug.gprof"
-               valueType="boolean">
-         </option>
-         <option
                applicabilityCalculator="org.eclipse.cdt.managedbuilder.gnu.ui.ProfAppCalculator"
                command="-p"
                defaultValue="false"
                id="gnu.c.link.option.debugging.prof"
                name="%Option.Posix.Debug.prof"
+               valueType="boolean">
+         </option>
+         <option
+               applicabilityCalculator="org.eclipse.cdt.managedbuilder.gnu.ui.GprofAppCalculator"
+               command="-pg"
+               defaultValue="false"
+               id="gnu.c.link.option.debugging.gprof"
+               name="%Option.Posix.Debug.gprof"
                valueType="boolean">
          </option>
       </tool>
@@ -406,19 +406,19 @@
 			  </enablement>
          </outputType>
          <option
-               applicabilityCalculator="org.eclipse.cdt.managedbuilder.gnu.ui.GprofAppCalculator"
-               command="-pg"
-               defaultValue="false"
-               id="gnu.cpp.link.option.debugging.gprof"
-               name="%Option.Posix.Debug.gprof"
-               valueType="boolean">
-         </option>
-         <option
                applicabilityCalculator="org.eclipse.cdt.managedbuilder.gnu.ui.ProfAppCalculator"
                command="-p"
                defaultValue="false"
                id="gnu.cpp.link.option.debugging.prof"
                name="%Option.Posix.Debug.prof"
+               valueType="boolean">
+         </option>
+         <option
+               applicabilityCalculator="org.eclipse.cdt.managedbuilder.gnu.ui.GprofAppCalculator"
+               command="-pg"
+               defaultValue="false"
+               id="gnu.cpp.link.option.debugging.gprof"
+               name="%Option.Posix.Debug.gprof"
                valueType="boolean">
          </option>
       </tool>
@@ -1011,6 +1011,14 @@
 			  valueType="includePath"
 			  browseType="directory">
 		  </option>
+	      <option
+	          browseType="file"
+	          category="gnu.c.compiler.category.dirs"
+	          command="-include"
+	          id="gnu.c.compiler.option.include.files"
+	          name="%Option.Posix.InclFiles"
+	          valueType="includeFiles">
+		  </option>
 		  <optionCategory
 			  owner="cdt.managedbuild.tool.gnu.c.compiler"
 			  name="%OptionCategory.Optimize"
@@ -1043,6 +1051,11 @@
 				  command="-O3"
 				  id="gnu.c.optimization.level.most">
 		  </enumeratedOptionValue>
+          <enumeratedOptionValue
+                  command="-Os"
+                  id="gnu.c.optimization.level.size"
+                  name="%Option.Posix.Optimize.Size">
+          </enumeratedOptionValue>
 		      <enablement 
               	type="CONTAINER_ATTRIBUTE" 
               	attribute="defaultValue" 
@@ -1129,18 +1142,18 @@
 		  </option>
 		  <option
 			  defaultValue="false"
-			  name="%Option.Posix.Debug.gprof"
-			  category="gnu.c.compiler.category.debug"
-			  command="-pg"
-			  id="gnu.c.compiler.option.debugging.gprof"
-			  valueType="boolean">
-		  </option>
-		  <option
-			  defaultValue="false"
 			  name="%Option.Posix.Debug.prof"
 			  category="gnu.c.compiler.category.debug"
 			  command="-p"
 			  id="gnu.c.compiler.option.debugging.prof"
+			  valueType="boolean">
+		  </option>
+		  <option
+			  defaultValue="false"
+			  name="%Option.Posix.Debug.gprof"
+			  category="gnu.c.compiler.category.debug"
+			  command="-pg"
+			  id="gnu.c.compiler.option.debugging.gprof"
 			  valueType="boolean">
 		  </option>
 		  <optionCategory
@@ -1337,6 +1350,11 @@
 				  command="-O3"
 				  id="gnu.cpp.compiler.optimization.level.most">
 		  </enumeratedOptionValue>
+          <enumeratedOptionValue
+                  command="-Os"
+                  id="gnu.cpp.compiler.optimization.level.size"
+                  name="%Option.Posix.Optimize.Size">
+          </enumeratedOptionValue>
 		      <enablement 
               	type="CONTAINER_ATTRIBUTE" 
               	attribute="value" 
@@ -1624,7 +1642,7 @@
           cleanBuildTarget="clean"
           ignoreErrCmd="-k"
           parallelBuildCmd="-j*"
-          errorParsers="org.eclipse.cdt.core.MakeErrorParser"
+          errorParsers="org.eclipse.cdt.core.CWDLocator;org.eclipse.cdt.core.GmakeErrorParser"
           name="%GNUMakeBuilder.name">
    	  </builder>   
    	  

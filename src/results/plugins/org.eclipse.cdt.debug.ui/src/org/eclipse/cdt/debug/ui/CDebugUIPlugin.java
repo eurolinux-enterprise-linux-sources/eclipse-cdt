@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,13 +16,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.eclipse.cdt.debug.core.CDebugCorePlugin;
+import org.eclipse.cdt.debug.core.model.ICDebugElement;
 import org.eclipse.cdt.debug.internal.ui.CBreakpointUpdater;
 import org.eclipse.cdt.debug.internal.ui.CDebugImageDescriptorRegistry;
 import org.eclipse.cdt.debug.internal.ui.CDebugModelPresentation;
 import org.eclipse.cdt.debug.internal.ui.CDebuggerPageAdapter;
+import org.eclipse.cdt.debug.internal.ui.CRegisterManagerProxies;
 import org.eclipse.cdt.debug.internal.ui.ColorManager;
 import org.eclipse.cdt.debug.internal.ui.EvaluationContextManager;
 import org.eclipse.cdt.debug.internal.ui.IInternalCDebugUIConstants;
+import org.eclipse.cdt.debug.internal.ui.disassembly.dsf.DisassemblyBackendCdiFactory;
 import org.eclipse.cdt.debug.internal.ui.disassembly.editor.DisassemblyEditorManager;
 import org.eclipse.cdt.debug.ui.sourcelookup.DefaultSourceLocator;
 import org.eclipse.cdt.debug.ui.sourcelookup.OldDefaultSourceLocator;
@@ -223,13 +226,18 @@ public class CDebugUIPlugin extends AbstractUIPlugin {
 	}
 
 	/**
-	 * Returns the active workbench shell or <code>null</code> if none
-	 * 
-	 * @return the active workbench shell or <code>null</code> if none
+	 * Returns the active workbench shell, or the shell from the first available
+	 * workbench window, or <code>null</code> if neither is available.
 	 */
 	public static Shell getActiveWorkbenchShell() {
 		IWorkbenchWindow window = getActiveWorkbenchWindow();
-		if ( window != null ) {
+		if (window == null) {
+			IWorkbenchWindow[] windows = PlatformUI.getWorkbench().getWorkbenchWindows();
+			if (windows.length > 0) {
+				return windows[0].getShell();
+			}
+		}
+		else {
 			return window.getShell();
 		}
 		return null;
@@ -284,6 +292,9 @@ public class CDebugUIPlugin extends AbstractUIPlugin {
 		EvaluationContextManager.startup();
 		CDebugCorePlugin.getDefault().addCBreakpointListener( CBreakpointUpdater.getInstance() );
 		
+		// Register the CDI backend for DSF's disassembly view
+		Platform.getAdapterManager().registerAdapters(new DisassemblyBackendCdiFactory(), ICDebugElement.class);
+		
 		// We contribute actions to the platform's Variables view with a
 		// criteria to enable only when this plugin is loaded. This can lead to
 		// some edge cases with broken behavior (273306). The solution is to
@@ -321,6 +332,7 @@ public class CDebugUIPlugin extends AbstractUIPlugin {
 	@Override
     public void stop( BundleContext context ) throws Exception {
 		CDebugCorePlugin.getDefault().removeCBreakpointListener( CBreakpointUpdater.getInstance() );
+		CRegisterManagerProxies.getInstance().dispose();
         fDisassemblyEditorManager.dispose();
 		if ( fImageDescriptorRegistry != null ) {
 			fImageDescriptorRegistry.dispose();

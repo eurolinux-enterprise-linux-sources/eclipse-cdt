@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,15 +21,16 @@ import java.util.concurrent.ExecutionException;
 
 import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.DsfExecutor;
+import org.eclipse.cdt.dsf.concurrent.IDsfStatusConstants;
 import org.eclipse.cdt.dsf.concurrent.Query;
 import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.datamodel.IDMContext;
 import org.eclipse.cdt.dsf.debug.service.IExpressions;
-import org.eclipse.cdt.dsf.debug.service.IFormattedValues;
-import org.eclipse.cdt.dsf.debug.service.IMemory;
 import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionDMContext;
+import org.eclipse.cdt.dsf.debug.service.IFormattedValues;
 import org.eclipse.cdt.dsf.debug.service.IFormattedValues.FormattedValueDMContext;
 import org.eclipse.cdt.dsf.debug.service.IFormattedValues.FormattedValueDMData;
+import org.eclipse.cdt.dsf.debug.service.IMemory;
 import org.eclipse.cdt.dsf.debug.service.IMemory.IMemoryDMContext;
 import org.eclipse.cdt.dsf.internal.DsfPlugin;
 import org.eclipse.cdt.dsf.service.DsfServices;
@@ -230,7 +231,14 @@ public class DsfMemoryBlockRetrieval extends PlatformObject implements IMemoryBl
         }
 	}
 
-	private void createBlocksFromConfiguration(IMemoryDMContext memoryCtx, String memento) throws CoreException {
+	/**
+	 * Create memory blocks based on the given memento (obtained from the launch
+	 * configuration) and add them to the platform's IMemoryBlockManager. The
+	 * memento was previously created by {@link #getMemento()}
+	 * 
+	 * @since 2.1
+	 */
+	protected void createBlocksFromConfiguration(IMemoryDMContext memoryCtx, String memento) throws CoreException {
 
 	    // Parse the memento and validate its type
         Element root = DebugPlugin.parseDocument(memento);
@@ -280,6 +288,15 @@ public class DsfMemoryBlockRetrieval extends PlatformObject implements IMemoryBl
 		}
 	}
 
+	/**
+	 * Create a memento to represent all active blocks created by this retrieval
+	 * object (blocks currently registered with the platform's
+	 * IMemoryBlockManager). We will be expected to recreate the blocks in
+	 * {@link #createBlocksFromConfiguration(IMemoryDMContext, String)}.
+	 * 
+	 * @return a string memento
+	 * @throws CoreException
+	 */
 	public String getMemento() throws CoreException {
 		IMemoryBlock[] blocks = DebugPlugin.getDefault().getMemoryBlockManager().getMemoryBlocks(this);
 		Document document = DebugPlugin.newDocument();
@@ -355,11 +372,8 @@ public class DsfMemoryBlockRetrieval extends PlatformObject implements IMemoryBl
 		return true;
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.eclipse.debug.core.model.IMemoryBlockRetrieval#getMemoryBlock(long,
-	 *      long)
+	/* (non-Javadoc)
+	 * @see org.eclipse.debug.core.model.IMemoryBlockRetrieval#getMemoryBlock(long, long)
 	 */
 	public IMemoryBlock getMemoryBlock(final long startAddress,	final long length) throws DebugException {
 	    throw new DebugException(new Status(
@@ -457,7 +471,10 @@ public class DsfMemoryBlockRetrieval extends PlatformObject implements IMemoryBl
 	// Helper functions
 	///////////////////////////////////////////////////////////////////////////
 
-	private BigInteger resolveMemoryAddress(final IDMContext dmc, final String expression) throws DebugException {
+	/**
+	 * @since 2.1
+	 */
+	protected BigInteger resolveMemoryAddress(final IDMContext dmc, final String expression) throws DebugException {
 
 		// Use a Query to "synchronize" the downstream calls
 		Query<BigInteger> query = new Query<BigInteger>() {
@@ -476,10 +493,21 @@ public class DsfMemoryBlockRetrieval extends PlatformObject implements IMemoryBl
 	            			@Override
 	            			protected void handleSuccess() {
 	            				// Store the result
-	            				FormattedValueDMData data = getData();
-            					String value = data.getFormattedValue().substring(2);	// Strip the "0x"
-            					drm.setData(new BigInteger(value, 16));
+	            				try {
+                					String value = getData().getFormattedValue().substring(2);	// Strip the "0x"
+                					drm.setData(new BigInteger(value, 16));
+	            				} catch (IndexOutOfBoundsException e) {
+	            				    setFormatError(e);
+	            				} catch (NumberFormatException e) {
+	            				    setFormatError(e);
+	            				}
 	            				drm.done();
+	            			}
+	            			
+	            			private void setFormatError(Exception e) {
+	            			    drm.setStatus(new Status(
+	            			        IStatus.ERROR, DsfPlugin.PLUGIN_ID, IDsfStatusConstants.INTERNAL_ERROR, 
+	            			        "The result of expression evaluation \"" + getData().getFormattedValue() + "\" is not formatted correctly.", e)); //$NON-NLS-1$ //$NON-NLS-2$
 	            			}
 	                	}
 	                );
@@ -501,6 +529,16 @@ public class DsfMemoryBlockRetrieval extends PlatformObject implements IMemoryBl
 					DsfPlugin.PLUGIN_ID, DebugException.INTERNAL_ERROR,
 					"Error evaluating memory address (ExecutionException).", e)); //$NON-NLS-1$
 		}
+	}
+	
+	
+	/**
+	 * Return the model ID specified at construction 
+	 * 
+	 * @since 2.1
+	 */
+	protected String getModelId() {
+		return fModelId;
 	}
 
 }

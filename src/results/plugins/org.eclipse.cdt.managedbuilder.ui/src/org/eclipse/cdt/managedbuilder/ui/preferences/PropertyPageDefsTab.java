@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     Intel Corporation - initial API and implementation
+ *     Miwako Tokugawa (Intel Corporation) - Fixed-location tooltip support
  *******************************************************************************/
 package org.eclipse.cdt.managedbuilder.ui.preferences;
 
@@ -24,15 +25,20 @@ import org.eclipse.swt.widgets.Group;
 
 /**
  * @since 5.1
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
  */
 public class PropertyPageDefsTab extends AbstractCPropertyTab {
 
 	private static final int SPACING = 5; // for radio buttons layout
 	
     private Button show_tree;
+    private Button show_inc_files;
     private Button show_mng;
     private Button show_tool;
     private Button show_exp;
+    private Button show_tipbox;
 
     private Button b_0;
     private Button b_1;
@@ -43,6 +49,7 @@ public class PropertyPageDefsTab extends AbstractCPropertyTab {
     private Button s_1;
     private Button s_2;
     
+	@Override
 	public void createControls(Composite parent) {
 		super.createControls(parent);
 		usercomp.setLayout(new GridLayout(1, false));
@@ -50,6 +57,10 @@ public class PropertyPageDefsTab extends AbstractCPropertyTab {
         show_mng = new Button(usercomp, SWT.CHECK);
         show_mng.setText(UIMessages.getString("PropertyPageDefsTab.0")); //$NON-NLS-1$
         show_mng.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        show_inc_files = new Button(usercomp, SWT.CHECK);
+        show_inc_files.setText(UIMessages.getString("PropertyPageDefsTab.showIncludeFileTab")); //$NON-NLS-1$
+        show_inc_files.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
 		show_tree = new Button(usercomp, SWT.CHECK);
         show_tree.setText(UIMessages.getString("PropertyPageDefsTab.1")); //$NON-NLS-1$
@@ -62,6 +73,10 @@ public class PropertyPageDefsTab extends AbstractCPropertyTab {
 		show_exp = new Button(usercomp, SWT.CHECK);
         show_exp.setText(UIMessages.getString("PropertyPageDefsTab.10")); //$NON-NLS-1$
         show_exp.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+        
+        show_tipbox = new Button(usercomp, SWT.CHECK);
+        show_tipbox.setText(UIMessages.getString("PropertyPageDefsTab.16")); //$NON-NLS-1$
+        show_tipbox.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         Group saveGrp = new Group(usercomp, SWT.NONE);
         saveGrp.setText(UIMessages.getString("PropertyPageDefsTab.11")); //$NON-NLS-1$
@@ -97,10 +112,12 @@ public class PropertyPageDefsTab extends AbstractCPropertyTab {
         b_3 = new Button(discGrp, SWT.RADIO);
         b_3.setText(UIMessages.getString("PropertyPageDefsTab.9")); //$NON-NLS-1$
         
+        show_inc_files.setSelection(CDTPrefUtil.getBool(CDTPrefUtil.KEY_SHOW_INC_FILES));
         show_tree.setSelection(CDTPrefUtil.getBool(CDTPrefUtil.KEY_DTREE));
 		show_mng.setSelection(!CDTPrefUtil.getBool(CDTPrefUtil.KEY_NOMNG));
 		show_tool.setSelection(!CDTPrefUtil.getBool(CDTPrefUtil.KEY_NOTOOLM));
 		show_exp.setSelection(CDTPrefUtil.getBool(CDTPrefUtil.KEY_EXPORT));
+		show_tipbox.setSelection(CDTPrefUtil.getBool(CDTPrefUtil.KEY_TIPBOX));
 		
 		switch (CDTPrefUtil.getInt(CDTPrefUtil.KEY_DISC_NAMES)) {
 			case CDTPrefUtil.DISC_NAMING_UNIQUE_OR_BOTH: b_0.setSelection(true); break;
@@ -116,11 +133,14 @@ public class PropertyPageDefsTab extends AbstractCPropertyTab {
 		}
 	}
 
+	@Override
 	protected void performOK() {
+		CDTPrefUtil.setBool(CDTPrefUtil.KEY_SHOW_INC_FILES, show_inc_files.getSelection());
 		CDTPrefUtil.setBool(CDTPrefUtil.KEY_DTREE, show_tree.getSelection());
 		CDTPrefUtil.setBool(CDTPrefUtil.KEY_NOMNG, !show_mng.getSelection());
 		CDTPrefUtil.setBool(CDTPrefUtil.KEY_NOTOOLM, !show_tool.getSelection());
 		CDTPrefUtil.setBool(CDTPrefUtil.KEY_EXPORT, show_exp.getSelection());
+		CDTPrefUtil.setBool(CDTPrefUtil.KEY_TIPBOX, show_tipbox.getSelection());
 		int x = 0;
 		if (b_1.getSelection()) x = 1;
 		else if (b_2.getSelection()) x = 2;
@@ -133,11 +153,14 @@ public class PropertyPageDefsTab extends AbstractCPropertyTab {
 		CDTPrefUtil.setInt(CDTPrefUtil.KEY_POSSAVE, x);
 	}
 	
+	@Override
 	protected void performDefaults() {
 		show_tree.setSelection(false);
+		show_inc_files.setSelection(false);
 		show_mng.setSelection(true);
 		show_tool.setSelection(true);
 		show_exp.setSelection(false);
+		show_tipbox.setSelection(false);
 		b_0.setSelection(true);
 		b_1.setSelection(false);
 		b_2.setSelection(false);
@@ -147,7 +170,10 @@ public class PropertyPageDefsTab extends AbstractCPropertyTab {
 		s_2.setSelection(false);
 	}
 
+	@Override
 	protected void performApply(ICResourceDescription src, ICResourceDescription dst) { performOK(); }
+	@Override
 	protected void updateData(ICResourceDescription cfg) {}  // Do nothing. Data is read once after creation
+	@Override
 	protected void updateButtons() {} // Do nothing. No buttons to update
 }

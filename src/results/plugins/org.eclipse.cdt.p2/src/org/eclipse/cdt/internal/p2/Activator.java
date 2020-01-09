@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 Wind River Systems and others.
+ * Copyright (c) 2009, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -61,7 +61,7 @@ public class Activator extends Plugin {
 		return plugin;
 	}
 
-	static public BundleContext getContext() {
+	public static BundleContext getContext() {
 		return plugin.getBundle().getBundleContext();
 	}
 	
@@ -72,8 +72,8 @@ public class Activator extends Plugin {
 	 * @return the service
 	 */
 	@SuppressWarnings("unchecked")
-	public <T> T getService(Class<T> clazz) {
-		BundleContext context = getBundle().getBundleContext();
+	public static <T> T getService(Class<T> clazz) {
+		BundleContext context = plugin.getBundle().getBundleContext();
 		ServiceReference ref = context.getServiceReference(clazz.getName());
 		return (ref != null) ? (T)context.getService(ref) : null;
 	}
@@ -83,11 +83,11 @@ public class Activator extends Plugin {
 	 * 
 	 * @param status
 	 */
-	public void log(int severity, String message, Throwable exception) {
+	public static void log(int severity, String message, Throwable exception) {
 		Platform.getLog(plugin.getBundle()).log(new Status(severity, PLUGIN_ID, message, exception));
 	}
 	
-	public void log(IStatus status) {
+	public static void log(IStatus status) {
 		Platform.getLog(plugin.getBundle()).log(status);
 	}
 	

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -195,6 +195,9 @@ abstract public class AbstractVMAdapter implements IVMAdapter
         final IVMProvider provider = getVMProvider(update.getPresentationContext());
         if (provider != null) {
             provider.update(update);
+        } else {
+            update.setStatus(new Status(IStatus.ERROR, DsfUIPlugin.PLUGIN_ID, "not supported"));
+            update.done();
         }
     }
 
@@ -239,7 +242,7 @@ abstract public class AbstractVMAdapter implements IVMAdapter
 			        listenerRm = crm;
 			        count++;
 			    } else {
-			        // Create a dummy executor for the handling of this event.
+			        // Create a dummy request monitor for the handling of this event.
 			        listenerRm = new RequestMonitor(ImmediateExecutor.getInstance(), null);
 			    }
 			    final RequestMonitor finalListenerRm = listenerRm;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,7 +12,6 @@
 package org.eclipse.cdt.debug.internal.ui.preferences;
 
 import java.nio.charset.Charset;
-import com.ibm.icu.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.SortedMap;
@@ -28,13 +27,9 @@ import org.eclipse.cdt.debug.ui.CDebugUIPlugin;
 import org.eclipse.cdt.utils.ui.controls.ControlFactory;
 import org.eclipse.debug.ui.IDebugUIConstants;
 import org.eclipse.debug.ui.IDebugView;
-import org.eclipse.jface.preference.ColorFieldEditor;
-import org.eclipse.jface.preference.FieldEditor;
 import org.eclipse.jface.preference.IPreferenceStore;
-import org.eclipse.jface.preference.IntegerFieldEditor;
 import org.eclipse.jface.preference.PreferenceConverter;
 import org.eclipse.jface.preference.PreferencePage;
-import org.eclipse.jface.preference.StringFieldEditor;
 import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.jface.viewers.StructuredViewer;
@@ -61,9 +56,6 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 
 	private IWorkbench fWorkbench;
 
-	// View setting widgets
-	private Button fPathsButton;
-
 	private Combo fVariableFormatCombo;
 
 	private Combo fExpressionFormatCombo;
@@ -71,15 +63,7 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 	private Combo fRegisterFormatCombo;
 
 	private Combo fCharsetCombo;
-
-	// Maximum number of disassembly instructions to display
-	private IntegerFieldEditor fMaxNumberOfInstructionsText;
-
-	// The color of source lines in the disassembly view.
-	private ColorFieldEditor fDisassemblySourceColor;
 	
-	private static final int NUMBER_OF_DIGITS = 3;
-
 	// Format constants
 	private static int[] fFormatIds = new int[]{ ICDIFormat.NATURAL, ICDIFormat.HEXADECIMAL, ICDIFormat.DECIMAL, ICDIFormat.BINARY };
 
@@ -138,8 +122,6 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 		createSpacer( composite, 1 );
 		createViewSettingPreferences( composite );
 		createSpacer( composite, 1 );
-		createDisassemblySettingPreferences( composite );
-		createSpacer( composite, 1 );
 		createBinarySettings( composite );
 		setValues();
 		return composite;
@@ -165,9 +147,6 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 	 */
 	private void setValues() {
 		IPreferenceStore store = getPreferenceStore();
-		fPathsButton.setSelection( store.getBoolean( ICDebugPreferenceConstants.PREF_SHOW_FULL_PATHS ) );
-		getMaxNumberOfInstructionsText().setStringValue( new Integer( CDebugCorePlugin.getDefault().getPluginPreferences().getInt( ICDebugConstants.PREF_MAX_NUMBER_OF_INSTRUCTIONS ) ).toString() );
-		getDisassemblySourceColor().load();
 		fVariableFormatCombo.select( getFormatIndex( CDebugCorePlugin.getDefault().getPluginPreferences().getInt( ICDebugConstants.PREF_DEFAULT_VARIABLE_FORMAT ) ) );
 		fExpressionFormatCombo.select( getFormatIndex( CDebugCorePlugin.getDefault().getPluginPreferences().getInt( ICDebugConstants.PREF_DEFAULT_EXPRESSION_FORMAT ) ) );
 		fRegisterFormatCombo.select( getFormatIndex( CDebugCorePlugin.getDefault().getPluginPreferences().getInt( ICDebugConstants.PREF_DEFAULT_REGISTER_FORMAT ) ) );
@@ -196,7 +175,6 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 	 */
 	public static void initDefaults( IPreferenceStore store ) {
 		store.setDefault( ICDebugPreferenceConstants.PREF_SHOW_HEX_VALUES, false );
-		store.setDefault( ICDebugPreferenceConstants.PREF_SHOW_FULL_PATHS, true );
 		PreferenceConverter.setDefault( store, IInternalCDebugUIConstants.DISASSEMBLY_SOURCE_LINE_COLOR, IInternalCDebugUIConstants.DEFAULT_DISASSEMBLY_SOURCE_LINE_RGB );
 	}
 
@@ -213,7 +191,6 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 	 */
 	private void createViewSettingPreferences( Composite parent ) {
 		Composite comp = createGroupComposite( parent, 1, PreferenceMessages.getString( "CDebugPreferencePage.4" ) ); //$NON-NLS-1$
-		fPathsButton = createCheckButton( comp, PreferenceMessages.getString( "CDebugPreferencePage.5" ) ); //$NON-NLS-1$
 		Composite formatComposite = ControlFactory.createCompositeEx( comp, 2, 0 );
 		((GridLayout)formatComposite.getLayout()).makeColumnsEqualWidth = true;
 		fVariableFormatCombo = createComboBox( formatComposite, PreferenceMessages.getString( "CDebugPreferencePage.8" ), fFormatLabels, fFormatLabels[0] ); //$NON-NLS-1$
@@ -236,43 +213,6 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 
 	private void createBinarySettings( Composite parent ) {
 		fShowBinarySourceFilesButton = createCheckButton( parent, PreferenceMessages.getString("CDebugPreferencePage.15") );		 //$NON-NLS-1$
-	}
-	/**
-	 * Create the disassembly setting preferences composite widget
-	 */
-	private void createDisassemblySettingPreferences( Composite parent ) {
-		Composite group = createGroupComposite( parent, 1, PreferenceMessages.getString( "CDebugPreferencePage.11" ) ); //$NON-NLS-1$
-		Composite comp = ControlFactory.createComposite( group, 2 );
-		createMaxNumberOfInstructionsField( comp );
-		createDisassemblyColorsField( comp );
-	}
-
-	private void createMaxNumberOfInstructionsField( Composite parent ) {
-		fMaxNumberOfInstructionsText = new IntegerFieldEditor( ICDebugConstants.PREF_MAX_NUMBER_OF_INSTRUCTIONS, PreferenceMessages.getString( "CDebugPreferencePage.12" ), parent, NUMBER_OF_DIGITS ); //$NON-NLS-1$
-		GridData data = (GridData)fMaxNumberOfInstructionsText.getTextControl( parent ).getLayoutData();
-		data.horizontalAlignment = GridData.BEGINNING;
-		data.widthHint = convertWidthInCharsToPixels( NUMBER_OF_DIGITS + 1 );
-		fMaxNumberOfInstructionsText.setPage( this );
-		fMaxNumberOfInstructionsText.setValidateStrategy( StringFieldEditor.VALIDATE_ON_KEY_STROKE );
-		fMaxNumberOfInstructionsText.setValidRange( ICDebugConstants.MIN_NUMBER_OF_INSTRUCTIONS, ICDebugConstants.MAX_NUMBER_OF_INSTRUCTIONS );
-		String minValue = Integer.toString( ICDebugConstants.MIN_NUMBER_OF_INSTRUCTIONS );
-		String maxValue = Integer.toString( ICDebugConstants.MAX_NUMBER_OF_INSTRUCTIONS );
-		fMaxNumberOfInstructionsText.setErrorMessage( MessageFormat.format( PreferenceMessages.getString( "CDebugPreferencePage.13" ), new String[]{ minValue, maxValue } ) ); //$NON-NLS-1$
-		fMaxNumberOfInstructionsText.load();
-		fMaxNumberOfInstructionsText.setPropertyChangeListener( new IPropertyChangeListener() {
-
-			public void propertyChange( PropertyChangeEvent event ) {
-				if ( event.getProperty().equals( FieldEditor.IS_VALID ) )
-					setValid( getMaxNumberOfInstructionsText().isValid() );
-			}
-		} );
-	}
-
-	private void createDisassemblyColorsField( Composite parent ) {
-		fDisassemblySourceColor = new ColorFieldEditor( IInternalCDebugUIConstants.DISASSEMBLY_SOURCE_LINE_COLOR, PreferenceMessages.getString( "CDebugPreferencePage.Color_of_disassembly_source_lines_1" ), parent ); //$NON-NLS-1$
-		fDisassemblySourceColor.setPage( this );
-		fDisassemblySourceColor.setPreferenceStore( getPreferenceStore() );
-		fDisassemblySourceColor.load();
 	}
 
 	/**
@@ -360,13 +300,10 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 	 */
 	private void storeValues() {
 		IPreferenceStore store = getPreferenceStore();
-		store.setValue( ICDebugPreferenceConstants.PREF_SHOW_FULL_PATHS, fPathsButton.getSelection() );
-		CDebugCorePlugin.getDefault().getPluginPreferences().setValue( ICDebugConstants.PREF_MAX_NUMBER_OF_INSTRUCTIONS, getMaxNumberOfInstructionsText().getIntValue() );
 		CDebugCorePlugin.getDefault().getPluginPreferences().setValue( ICDebugConstants.PREF_DEFAULT_VARIABLE_FORMAT, getFormatId( fVariableFormatCombo.getSelectionIndex() ) );
 		CDebugCorePlugin.getDefault().getPluginPreferences().setValue( ICDebugConstants.PREF_DEFAULT_EXPRESSION_FORMAT, getFormatId( fExpressionFormatCombo.getSelectionIndex() ) );
 		CDebugCorePlugin.getDefault().getPluginPreferences().setValue( ICDebugConstants.PREF_DEFAULT_REGISTER_FORMAT, getFormatId( fRegisterFormatCombo.getSelectionIndex() ) );
 		CDebugCorePlugin.getDefault().getPluginPreferences().setValue( ICDebugConstants.PREF_CHARSET, fCharsetCombo.getItem( fCharsetCombo.getSelectionIndex()) );
-		getDisassemblySourceColor().store();
 		CCorePlugin.getDefault().getPluginPreferences().setValue( CCorePreferenceConstants.SHOW_SOURCE_FILES_IN_BINARIES, fShowBinarySourceFilesButton.getSelection() );
 	}
 
@@ -382,9 +319,6 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 
 	private void setDefaultValues() {
 		IPreferenceStore store = getPreferenceStore();
-		fPathsButton.setSelection( store.getDefaultBoolean( ICDebugPreferenceConstants.PREF_SHOW_FULL_PATHS ) );
-		getMaxNumberOfInstructionsText().setStringValue( new Integer( CDebugCorePlugin.getDefault().getPluginPreferences().getDefaultInt( ICDebugConstants.PREF_MAX_NUMBER_OF_INSTRUCTIONS ) ).toString() );
-		getDisassemblySourceColor().loadDefault();
 		fVariableFormatCombo.select( getFormatIndex( CDebugCorePlugin.getDefault().getPluginPreferences().getDefaultInt( ICDebugConstants.PREF_DEFAULT_VARIABLE_FORMAT ) ) );
 		fExpressionFormatCombo.select( getFormatIndex( CDebugCorePlugin.getDefault().getPluginPreferences().getDefaultInt( ICDebugConstants.PREF_DEFAULT_EXPRESSION_FORMAT ) ) );
 		fRegisterFormatCombo.select( getFormatIndex( CDebugCorePlugin.getDefault().getPluginPreferences().getDefaultInt( ICDebugConstants.PREF_DEFAULT_REGISTER_FORMAT ) ) );
@@ -400,14 +334,6 @@ public class CDebugPreferencePage extends PreferencePage implements IWorkbenchPr
 			if ( fFormatIds[i] == id )
 				return i;
 		return -1;
-	}
-
-	protected IntegerFieldEditor getMaxNumberOfInstructionsText() {
-		return fMaxNumberOfInstructionsText;
-	}
-
-	private ColorFieldEditor getDisassemblySourceColor() {
-		return fDisassemblySourceColor;
 	}
 
 	private IWorkbench getWorkbench() {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,6 +11,7 @@
  *******************************************************************************/
 package org.eclipse.cdt.dsf.debug.service;
 
+import java.math.BigInteger;
 import java.util.Map;
 
 import org.eclipse.cdt.core.IAddress;
@@ -41,14 +42,60 @@ public interface IExpressions extends IFormattedValues {
          */
         String getExpression();
     }
-    
+
     /**
      * The address and size of an expression.
      */
     public interface IExpressionDMAddress {
+        
+        /**
+         * Returns the address of the expression.
+         */
     	IAddress getAddress();
+    	
+    	/**
+    	 * Returns the size of the address.
+    	 */
     	int getSize();
     }
+ 
+    /**
+     * A representation of an expression location that does not correspond to 
+     * an address.  
+     * 
+     * @since 2.1
+     */
+    public interface IExpressionDMLocation extends IExpressionDMAddress {
+        
+        /**
+         * A constant that can be returned by {@link IExpressionDMAddress#getAddress()}
+         * to represent an invalid address.  Implementations of 
+         * <code>IExpressionDMLocation</code> can return this constant if no  
+         * valid address can be returned for a given expression location.  
+         */
+        public static final IAddress INVALID_ADDRESS = new IAddress() {
+            public IAddress add(BigInteger offset) { return this; }
+            public IAddress add(long offset) { return this; }
+            public BigInteger getMaxOffset() { return BigInteger.ZERO; }
+            public BigInteger distanceTo(IAddress other) { return BigInteger.ZERO; }
+            public BigInteger getValue() { return BigInteger.ZERO; }
+            public boolean isZero() { return false; }
+            public boolean isMax() { return false; }
+            public String toString(int radix) { return "INVALID"; }
+            public String toHexAddressString() { return toString(); }
+            public String toBinaryAddressString()  { return toString(); }
+            public int getCharsNum() { return 0; }
+            public int getSize() { return 0; }
+            public int compareTo(Object o) { return 0; }
+        };
+        
+        /**
+         * Returns a string representation of the expression location.
+         */
+    	public String getLocation();
+    }
+
+    
     
     /**
      * This is the model data interface that corresponds to IExpressionDMContext.
@@ -95,6 +142,9 @@ public interface IExpressions extends IFormattedValues {
          *         "int *", "mytypedef", "(int *)[]", "enum Bar".  If the debugger backend cannot supply
          *         this information, this method returns "<UNKNOWN>" (the angle brackets are there just in
          *         case there is a type named "UNKNOWN" in the application).
+         *         <p>
+         *         If you implement {@link IExpressions2}, this should return the casted type name,
+         *         if this expression was generated via {@link IExpressions2#createCastedExpression(IDMContext, String, IExpressions2.ICastedExpressionDMContext)}
          */
         String getTypeName();
         
@@ -127,6 +177,7 @@ public interface IExpressions extends IFormattedValues {
      */
     public interface IExpressionChangedDMEvent extends IDMEvent<IExpressionDMContext> {}
 
+    
     /**
      * Retrieves the expression DM data object for the given expression context(<tt>dmc</tt>).
      * 
@@ -140,7 +191,9 @@ public interface IExpressions extends IFormattedValues {
     /**
      * Retrieves the address and size of an expression given by the expression context(<tt>dmc</tt>).
      * Non-lvalues do not have an addresses (e.g., "x + 5").  When the expression
--    * has no address, the data request monitor will contain null.
+-    * has no address, the request monitor will have an error with code 
+     * <code>IDsfStatusConstants.REQUEST_FAILED</code> and the data request
+     * monitor will contain null.
      * 
      * @param dmc
      *            The ExpressionDMC for the expression
@@ -158,14 +211,18 @@ public interface IExpressions extends IFormattedValues {
      *                
      * @param expression: The expression to evaluate.
      * 
-     * @return  An expression data model context object that must be passed to 
-     * getModelData() to obtain the value of the expression. 
+     * @return  An expression data model context object that must be passed to the appropriate
+     *          data retrieval routine to obtain the value of the expression.
      */
     IExpressionDMContext createExpression(IDMContext ctx, String expression);
 
     /**
      * Retrieves the sub-expressions of the given expression.  Sub-expressions are fields of a struct, union,
      * or class, the enumerators of an enumeration, and the element of an array.
+     * <br> 
+     * Note: Clients may call this method on any valid expression context, and before calling any other
+     * method to evaluate the expression value.  It is up to the implementation to internally evaluate the 
+     * expression if needed, in order to calculate sub expressions.    
      * 
      * @param exprCtx: The data model context representing an expression.
      * 
@@ -177,6 +234,10 @@ public interface IExpressions extends IFormattedValues {
      * Retrieves a particular range of sub-expressions of the given expression.  
      * Sub-expressions are fields of a struct, union, or class, the enumerators 
      * of an enumeration, and the element of an array.
+     * <br> 
+     * Note: Clients may call this method on any valid expression context, and before calling any other
+     * method to evaluate the expression value.  It is up to the implementation to internally evaluate the 
+     * expression if needed, in order to calculate sub expressions.    
      * 
      * @param exprCtx: The data model context representing an expression.
      *        startIndex: Index of the first sub-expression to retrieve
@@ -191,6 +252,10 @@ public interface IExpressions extends IFormattedValues {
     /**
      * Retrieves the number of sub-expressions of the given expression.  Sub-expressions are fields of a struct, union,
      * or class, the enumerators of an enumeration, and the element of an array.
+     * <br> 
+     * Note: Clients may call this method on any valid expression context, and before calling any other
+     * method to evaluate the expression value.  It is up to the implementation to internally evaluate the 
+     * expression if needed, in order to calculate sub expressions.    
      * 
      * @param exprCtx: The data model context representing an expression.
      * 
@@ -202,6 +267,10 @@ public interface IExpressions extends IFormattedValues {
     /**
      * For object oriented languages, this method returns the expressions representing base types of
      * the given expression type.
+     * <br> 
+     * Note: Clients may call this method on any valid expression context, and before calling any other
+     * method to evaluate the expression value.  It is up to the implementation to internally evaluate the 
+     * expression if needed, in order to calculate sub expressions.    
      * 
      * @param exprContext: The data model context representing an expression.
      * 

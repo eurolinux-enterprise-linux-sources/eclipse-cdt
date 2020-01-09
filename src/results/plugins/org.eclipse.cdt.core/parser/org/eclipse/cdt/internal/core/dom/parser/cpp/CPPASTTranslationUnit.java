@@ -14,26 +14,25 @@ package org.eclipse.cdt.internal.core.dom.parser.cpp;
 import org.eclipse.cdt.core.dom.ILinkage;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IBasicType;
+import org.eclipse.cdt.core.dom.ast.IBasicType.Kind;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IMacroBinding;
-import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTranslationUnit;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPBasicType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPNamespace;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPNamespaceScope;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameter;
 import org.eclipse.cdt.core.parser.ParserLanguage;
 import org.eclipse.cdt.core.parser.util.ArrayUtil;
 import org.eclipse.cdt.internal.core.dom.Linkage;
 import org.eclipse.cdt.internal.core.dom.parser.ASTTranslationUnit;
 import org.eclipse.cdt.internal.core.dom.parser.IASTAmbiguityParent;
-import org.eclipse.cdt.internal.core.dom.parser.GCCBuiltinSymbolProvider.CPPBuiltinParameter;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
 import org.eclipse.cdt.internal.core.index.IIndexScope;
-import org.eclipse.cdt.internal.core.parser.scanner.IncludeFileContent;
+import org.eclipse.cdt.internal.core.parser.scanner.InternalFileContent;
 
 /**
  * C++-specific implementation of a translation-unit.
@@ -62,18 +61,18 @@ public class CPPASTTranslationUnit extends ASTTranslationUnit implements ICPPAST
 	
 	private void addBuiltinOperators(CPPScope theScope) {
         // void
-        IType cpp_void = new CPPBasicType(IBasicType.t_void, 0);
+        IType cpp_void = new CPPBasicType(Kind.eVoid, 0);
         // void *
-        IType cpp_void_p = new GPPPointerType(new CPPQualifierType(new CPPBasicType(IBasicType.t_void, 0), false, false), new GPPASTPointer());
+        IType cpp_void_p = new GPPPointerType(new CPPQualifierType(new CPPBasicType(Kind.eVoid, 0), false, false), new GPPASTPointer());
         // size_t // assumed: unsigned long int
-        IType cpp_size_t = new CPPBasicType(IBasicType.t_int, ICPPBasicType.IS_LONG & ICPPBasicType.IS_UNSIGNED);
+        IType cpp_size_t = new CPPBasicType(Kind.eInt, IBasicType.IS_LONG & IBasicType.IS_UNSIGNED);
 
 		// void * operator new (std::size_t);
         IBinding temp = null;
         IType[] newParms = new IType[1];
         newParms[0] = cpp_size_t;
         ICPPFunctionType newFunctionType = new CPPFunctionType(cpp_void_p, newParms);
-        IParameter[] newTheParms = new IParameter[1];
+        ICPPParameter[] newTheParms = new ICPPParameter[1];
         newTheParms[0] = new CPPBuiltinParameter(newParms[0]);
         temp = new CPPImplicitFunction(OverloadableOperator.NEW.toCharArray(), theScope, newFunctionType, newTheParms, false);
         theScope.addBinding(temp);
@@ -88,7 +87,7 @@ public class CPPASTTranslationUnit extends ASTTranslationUnit implements ICPPAST
         IType[] deleteParms = new IType[1];
         deleteParms[0] = cpp_void_p;
         ICPPFunctionType deleteFunctionType = new CPPFunctionType(cpp_void, deleteParms);
-        IParameter[] deleteTheParms = new IParameter[1];
+        ICPPParameter[] deleteTheParms = new ICPPParameter[1];
         deleteTheParms[0] = new CPPBuiltinParameter(deleteParms[0]);
         temp = new CPPImplicitFunction(OverloadableOperator.DELETE.toCharArray(), theScope, deleteFunctionType, deleteTheParms, false);
         theScope.addBinding(temp);
@@ -132,6 +131,7 @@ public class CPPASTTranslationUnit extends ASTTranslationUnit implements ICPPAST
         return fBinding;
     }
 	
+    @Deprecated
     public ParserLanguage getParserLanguage() {
         return ParserLanguage.CPP;
     }
@@ -147,7 +147,7 @@ public class CPPASTTranslationUnit extends ASTTranslationUnit implements ICPPAST
 	 * @see org.eclipse.cdt.internal.core.parser.scanner.ISkippedIndexedFilesListener#skippedFile(org.eclipse.cdt.internal.core.parser.scanner.IncludeFileContent)
 	 */
 	@Override
-	public void skippedFile(int offset, IncludeFileContent fileContent) {
+	public void skippedFile(int offset, InternalFileContent fileContent) {
 		super.skippedFile(offset, fileContent);
 		fScopeMapper.registerAdditionalDirectives(offset, fileContent.getUsingDirectives());
 	}	

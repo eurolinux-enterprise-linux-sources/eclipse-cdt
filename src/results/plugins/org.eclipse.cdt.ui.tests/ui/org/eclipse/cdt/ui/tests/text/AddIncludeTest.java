@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 Google, Inc and others.
+ * Copyright (c) 2009, 2010 Google, Inc and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,6 +7,7 @@
  *
  * Contributors:
  * 	  Sergey Prigogin (Google) - initial API and implementation
+ *    Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.ui.tests.text;
 
@@ -27,6 +28,8 @@ import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.model.IWorkingCopy;
 import org.eclipse.cdt.core.testplugin.CProjectHelper;
 import org.eclipse.cdt.ui.CUIPlugin;
+import org.eclipse.cdt.ui.testplugin.EditorTestHelper;
+import org.eclipse.cdt.ui.testplugin.ResourceTestHelper;
 
 import org.eclipse.cdt.internal.ui.editor.AddIncludeOnSelectionAction;
 import org.eclipse.cdt.internal.ui.editor.CEditor;
@@ -38,6 +41,7 @@ public class AddIncludeTest extends TestCase {
 	private static final String PROJECT= "AddIncludeTests";
 
 	private static final class EmptyBundle extends ListResourceBundle {
+		@Override
 		protected Object[][] getContents() {
 			return new Object[0][];
 		}
@@ -133,6 +137,21 @@ public class AddIncludeTest extends TestCase {
 
 	public void testMacro() throws Exception {
 		select("ONE");
+		assertAddIncludeResult();
+	}
+	
+	public void testInsertionPoint_301780() throws Exception {
+		select("XXX");
+		assertAddIncludeResult();
+	}
+	
+	public void testTemplate_306670() throws Exception {
+		select("func306670");
+		assertAddIncludeResult();
+	}
+
+	public void testEnumerator_307738() throws Exception {
+		select("ENUM_VALUE");
 		assertAddIncludeResult();
 	}
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2005, 2009 IBM Corporation and others.
+ *  Copyright (c) 2005, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -17,13 +17,14 @@ import junit.framework.TestSuite;
 
 import org.eclipse.cdt.core.cdescriptor.tests.CDescriptorOldTests;
 import org.eclipse.cdt.core.cdescriptor.tests.CDescriptorTests;
+import org.eclipse.cdt.core.envvar.IEnvironmentVariableManagerTests;
+import org.eclipse.cdt.core.internal.efsextension.tests.EFSExtensionTests;
 import org.eclipse.cdt.core.internal.errorparsers.tests.ErrorParserTests;
 import org.eclipse.cdt.core.internal.tests.PositionTrackerTests;
 import org.eclipse.cdt.core.internal.tests.ResourceLookupTests;
 import org.eclipse.cdt.core.internal.tests.StringBuilderTest;
 import org.eclipse.cdt.core.language.AllLanguageTests;
 import org.eclipse.cdt.core.model.tests.AllCoreTests;
-import org.eclipse.cdt.core.model.tests.BinaryTests;
 import org.eclipse.cdt.core.model.tests.ElementDeltaTests;
 import org.eclipse.cdt.core.model.tests.WorkingCopyTests;
 import org.eclipse.cdt.core.parser.tests.ParserTestSuite;
@@ -58,10 +59,10 @@ public class AutomatedIntegrationSuite extends TestSuite {
 		// Add all success tests
 		suite.addTest(CDescriptorTests.suite());
 		suite.addTest(CDescriptorOldTests.suite());
+		suite.addTest(IEnvironmentVariableManagerTests.suite());
 		suite.addTest(ErrorParserTests.suite());
 		suite.addTest(ParserTestSuite.suite());
 		suite.addTest(AllCoreTests.suite());
-		suite.addTest(BinaryTests.suite());
 		suite.addTest(ElementDeltaTests.suite());
 		suite.addTest(WorkingCopyTests.suite());
         suite.addTest(PositionTrackerTests.suite());
@@ -70,6 +71,7 @@ public class AutomatedIntegrationSuite extends TestSuite {
         suite.addTest(AllLanguageTests.suite());
         suite.addTest(RewriteTests.suite());
 		suite.addTest(CommandLineUtilTest.suite());
+		suite.addTest(EFSExtensionTests.suite());
 				
 		// Add in PDOM tests
 		suite.addTest(PDOMTests.suite());

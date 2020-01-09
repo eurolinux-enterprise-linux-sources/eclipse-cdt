@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,6 +8,7 @@
  * Contributors:
  *     QNX Software Systems - Initial API and implementation
  *     Andrew Gvozdev (Quoin Inc.)
+ *     Gaetano Santoro (STMicroelectronics)
  *******************************************************************************/
 package org.eclipse.cdt.make.ui.views;
 
@@ -41,9 +42,12 @@ import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.action.IToolBarManager;
 import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.action.Separator;
+import org.eclipse.jface.bindings.BindingManagerEvent;
+import org.eclipse.jface.bindings.IBindingManagerListener;
 import org.eclipse.jface.dialogs.IDialogSettings;
 import org.eclipse.jface.util.DelegatingDragAdapter;
 import org.eclipse.jface.util.DelegatingDropAdapter;
+import org.eclipse.jface.util.LocalSelectionTransfer;
 import org.eclipse.jface.viewers.DoubleClickEvent;
 import org.eclipse.jface.viewers.IDoubleClickListener;
 import org.eclipse.jface.viewers.ISelectionChangedListener;
@@ -59,22 +63,30 @@ import org.eclipse.swt.dnd.DND;
 import org.eclipse.swt.dnd.FileTransfer;
 import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.dnd.Transfer;
-import org.eclipse.swt.events.KeyAdapter;
-import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IActionBars;
+import org.eclipse.ui.IWorkbenchCommandConstants;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.actions.TextActionHandler;
+import org.eclipse.ui.keys.IBindingService;
 import org.eclipse.ui.part.DrillDownAdapter;
 import org.eclipse.ui.part.ViewPart;
-import org.eclipse.ui.views.navigator.LocalSelectionTransfer;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class MakeView extends ViewPart {
+
+	private static final String TARGET_BUILD_LAST_COMMAND = "org.eclipse.cdt.make.ui.targetBuildLastCommand"; //$NON-NLS-1$
 
 	private Clipboard clipboard;
 
 	private BuildTargetAction buildTargetAction;
+	private RebuildLastTargetAction buildLastTargetAction;
 	private EditTargetAction editTargetAction;
 	private DeleteTargetAction deleteTargetAction;
 	private AddTargetAction newTargetAction;
@@ -83,6 +95,7 @@ public class MakeView extends ViewPart {
 	private TreeViewer fViewer;
 	private DrillDownAdapter drillDownAdapter;
 	private Action trimEmptyFolderAction;
+	private IBindingService bindingService;
 
 	public MakeView() {
 		super();
@@ -126,18 +139,7 @@ public class MakeView extends ViewPart {
 				handleSelectionChanged(event);
 			}
 		});
-		fViewer.getControl().addKeyListener(new KeyAdapter() {
 
-			@Override
-			public void keyPressed(KeyEvent event) {
-				if (event.character == SWT.DEL && event.stateMask == 0) {
-					handleDeleteKeyPressed();
-				}
-			}
-		});
-
-		fViewer.setContentProvider(new MakeContentProvider());
-		fViewer.setLabelProvider(new MakeLabelProvider());
 		fViewer.setSorter(new ViewerSorter() {
 
 			@Override
@@ -154,6 +156,13 @@ public class MakeView extends ViewPart {
 		makeActions();
 		hookContextMenu();
 		contributeToActionBars();
+		
+		updateActions((IStructuredSelection)fViewer.getSelection());
+		
+		bindingService = (IBindingService) PlatformUI.getWorkbench().getService(IBindingService.class);
+		if (bindingService != null) {
+			bindingService.addBindingManagerListener(bindingManagerListener);
+		}
 	}
 
 	/**
@@ -165,7 +174,7 @@ public class MakeView extends ViewPart {
 		// LocalSelectionTransfer is used inside Make Target View
 		// TextTransfer is used to drag outside the View or eclipse
 		Transfer[] dragTransfers= {
-			LocalSelectionTransfer.getInstance(),
+			LocalSelectionTransfer.getTransfer(),
 			MakeTargetTransfer.getInstance(),
 			TextTransfer.getInstance(),
 		};
@@ -182,7 +191,7 @@ public class MakeView extends ViewPart {
 		fViewer.addDragSupport(opers, dragTransfers, delegatingDragAdapter);
 
 		Transfer[] dropTransfers= {
-			LocalSelectionTransfer.getInstance(),
+			LocalSelectionTransfer.getTransfer(),
 			MakeTargetTransfer.getInstance(),
 			FileTransfer.getInstance(),
 			TextTransfer.getInstance(),
@@ -285,6 +294,7 @@ public class MakeView extends ViewPart {
 		clipboard = new Clipboard(shell.getDisplay());
 
 		buildTargetAction = new BuildTargetAction(shell);
+		buildLastTargetAction = new RebuildLastTargetAction();
 		newTargetAction = new AddTargetAction(shell);
 		copyTargetAction = new CopyTargetAction(shell, clipboard, pasteTargetAction);
 		pasteTargetAction = new PasteTargetAction(shell, clipboard);
@@ -301,10 +311,13 @@ public class MakeView extends ViewPart {
 		textActionHandler.setCopyAction(copyTargetAction);
 		textActionHandler.setPasteAction(pasteTargetAction);
 		textActionHandler.setDeleteAction(deleteTargetAction);
+		
+		actionBars.setGlobalActionHandler(ActionFactory.RENAME.getId(), editTargetAction);
 	}
 
 	private void fillLocalToolBar(IToolBarManager toolBar) {
 		toolBar.add(newTargetAction);
+		toolBar.add(editTargetAction);
 		toolBar.add(buildTargetAction);
 		toolBar.add(new Separator());
 		drillDownAdapter.addNavigationActions(toolBar);
@@ -340,13 +353,10 @@ public class MakeView extends ViewPart {
 		manager.add(deleteTargetAction);
 		manager.add(new Separator());
 		manager.add(buildTargetAction);
+		manager.add(buildLastTargetAction);
 
 		// Other plug-ins can contribute there actions here
 		// manager.add(new Separator(IWorkbenchActionConstants.MB_ADDITIONS));
-	}
-
-	protected void handleDeleteKeyPressed() {
-		deleteTargetAction.run();
 	}
 
 	protected void handleDoubleClick(DoubleClickEvent event) {
@@ -361,6 +371,7 @@ public class MakeView extends ViewPart {
 	void updateActions(IStructuredSelection sel) {
 		newTargetAction.selectionChanged(sel);
 		buildTargetAction.selectionChanged(sel);
+		buildLastTargetAction.selectionChanged(sel);
 		deleteTargetAction.selectionChanged(sel);
 		editTargetAction.selectionChanged(sel);
 		copyTargetAction.selectionChanged(sel);
@@ -376,7 +387,41 @@ public class MakeView extends ViewPart {
 			clipboard.dispose();
 			clipboard = null;
 		}
+		
+		if (bindingService != null) {
+			bindingService.removeBindingManagerListener(bindingManagerListener);
+			bindingService = null;
+		}
+		
 		super.dispose();
 	}
 
+	private IBindingManagerListener bindingManagerListener = new IBindingManagerListener() {
+
+		public void bindingManagerChanged(BindingManagerEvent event) {
+			
+			if (event.isActiveBindingsChanged()) {
+				String keyBinding = bindingService.getBestActiveBindingFormattedFor(IWorkbenchCommandConstants.FILE_RENAME);
+				if (keyBinding != null) editTargetAction.setText(
+						MakeUIPlugin.getResourceString("EditTargetAction.label")+"\t"+ keyBinding); //$NON-NLS-1$ //$NON-NLS-2$
+				
+				keyBinding = bindingService.getBestActiveBindingFormattedFor(IWorkbenchCommandConstants.EDIT_COPY);
+				if (keyBinding != null) copyTargetAction.setText(
+						MakeUIPlugin.getResourceString("CopyTargetAction.label")+"\t"+ keyBinding); //$NON-NLS-1$ //$NON-NLS-2$
+				
+				keyBinding = bindingService.getBestActiveBindingFormattedFor(IWorkbenchCommandConstants.EDIT_PASTE);
+				if (keyBinding != null) pasteTargetAction.setText(
+						MakeUIPlugin.getResourceString("PasteTargetAction.label")+"\t"+ keyBinding); //$NON-NLS-1$ //$NON-NLS-2$
+				
+				keyBinding = bindingService.getBestActiveBindingFormattedFor(IWorkbenchCommandConstants.EDIT_DELETE);
+				if (keyBinding != null) deleteTargetAction.setText(
+						MakeUIPlugin.getResourceString("DeleteTargetAction.label")+"\t"+ keyBinding); //$NON-NLS-1$ //$NON-NLS-2$
+				
+				keyBinding = bindingService.getBestActiveBindingFormattedFor(TARGET_BUILD_LAST_COMMAND);
+				if (keyBinding != null) buildLastTargetAction.setText(
+						MakeUIPlugin.getResourceString("BuildLastTargetAction.label")+"\t"+ keyBinding); //$NON-NLS-1$ //$NON-NLS-2$
+			}
+		}
+	};
+	
 }

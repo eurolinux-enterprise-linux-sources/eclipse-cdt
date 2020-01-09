@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -87,8 +87,9 @@ public class DsfMemoryBlock extends PlatformObject implements IMemoryBlockExtens
      * @param address      - the actual memory block start address
      * @param word_size    - the number of bytes per address
      * @param length       - the requested block length (could be 0)
+     * @since 2.1
      */
-    DsfMemoryBlock(DsfMemoryBlockRetrieval retrieval, IMemoryDMContext context, String modelId, String expression, BigInteger address, int word_size, long length) {
+    protected DsfMemoryBlock(DsfMemoryBlockRetrieval retrieval, IMemoryDMContext context, String modelId, String expression, BigInteger address, int word_size, long length) {
     	fLaunch      = retrieval.getLaunch();
     	fDebugTarget = retrieval.getDebugTarget();
         fRetrieval   = retrieval;
@@ -121,7 +122,7 @@ public class DsfMemoryBlock extends PlatformObject implements IMemoryBlockExtens
     /* (non-Javadoc)
      * @see org.eclipse.core.runtime.PlatformObject#getAdapter(java.lang.Class)
      */
-    @SuppressWarnings("unchecked")
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@Override
     public Object getAdapter(Class adapter) {
         if (adapter.isAssignableFrom(DsfMemoryBlockRetrieval.class)) {
@@ -297,120 +298,190 @@ public class DsfMemoryBlock extends PlatformObject implements IMemoryBlockExtens
 		return false;
 	}
 	
-	/* (non-Javadoc)
-	 * @see org.eclipse.debug.core.model.IMemoryBlockExtension#getBytesFromAddress(java.math.BigInteger, long)
-	 */
-	public MemoryByte[] getBytesFromAddress(BigInteger address, long units) throws DebugException {
+    /* (non-Javadoc)
+     * @see org.eclipse.debug.core.model.IMemoryBlockExtension#getBytesFromAddress(java.math.BigInteger, long)
+     */
+    @SuppressWarnings("null")
+    public MemoryByte[] getBytesFromAddress(BigInteger address, long units) throws DebugException {
 
-		if (isUseCacheData() && fBlockAddress.compareTo(address) == 0 && units * getAddressableSize() <= fBlock.length)
-			return fBlock;
-		
-		MemoryByte[] newBlock = fetchMemoryBlock(address, units);
-		int newLength = (newBlock != null) ? newBlock.length : 0;
+        if (isUseCacheData() && fBlockAddress.compareTo(address) == 0 && units * getAddressableSize() <= fBlock.length)
+            return fBlock;
+        
+        MemoryByte[] newBlock = fetchMemoryBlock(address, units);
+        int newLength = (newBlock != null) ? newBlock.length : 0;
 
-		// If the retrieved block overlaps with the cached block, flag the changed bytes
-		// so they can be properly highlighted in the platform Memory view. 
-		// Note: In the standard Memory view, the values are displayed in cells of 4 bytes
-		// (on 4-bytes address boundaries) and all 4 bytes have to be flagged so the
-		// cell is highlighted (and the delta sigh is shown).
-		if (fBlock != null && newLength > 0) {
-			switch (fBlockAddress.compareTo(address))	{
-				// Cached block begins before the retrieved block location
-				// If there is no overlap, there are no bytes to flag
-				case -1:
-				{
-					// Determine the distance between the cached and the
-					// requested block addresses 
-					BigInteger bigDistance = address.subtract(fBlockAddress);
+        // If the retrieved block overlaps with the cached block, flag the changed bytes
+        // so they can be properly highlighted in the platform Memory view. 
+        // Note: In the standard Memory view, the values are displayed in cells of 4 bytes
+        // (on 4-bytes address boundaries) and all 4 bytes have to be flagged so the
+        // cell is highlighted (and the delta sigh is shown).
+        if (fBlock != null && newLength > 0) {
+            switch (fBlockAddress.compareTo(address))    {
+                // case : Cached block begins before the retrieved block location
+                //          
+                //          <--- fLength -------------------------------------------------->
+                //          +--------------------------------------------------------------+
+                //          | Cached data from previous retrieve                           |
+                //          |                                                              |
+                //          |     <------------------ length ----------------------->      |
+                //          |     +-------------------------------------------------+      |
+                //          |     |<----------------- newLength ------------------->|      |
+                //          |     |          Newly retrieved data                   |      |
+                //          |<-+->+-------------------------------------------------+      |
+                //          |  |   address                                                 |
+                //          |  |                                                           |
+                //          |  +--- bigDistance/distance                                   |
+                //          |                                                              |
+                //          |     <------------------ length ----------------------------->|
+                //          |     +--------------------------------------------------------+
+                //          |     |<----------------- newLength -------------------------->|
+                //          |     |          Newly retrieved data                          |
+                //          |<-+->+--------------------------------------------------------+
+                //          |  |   address                                                 |
+                //          |  |                                                           |
+                //          |  +--- bigDistance/distance                                   |
+                //          |                                                              |
+                //          |     <------------------ length ----------------------------->|
+                //          |     +---------------------------------------------------------------+
+                //          |     |<----------------- newLength --------------------------------->|
+                //          |     |          Newly retrieved data                                 |
+                //          |<-+->+---------------------------------------------------------------+
+                //          |  |   address                                                 |
+                //          |  |                                                           |
+                //          |  +--- bigDistance/distance                                   |
+                //          |                                                              |
+                //          +--------------------------------------------------------------+
+                //          fBlockAddress
+                case -1:
+                {
+                    // Determine the distance between the cached and the requested block addresses
+                	// If the distance does not exceed the length of the cached block,  then there 
+                	// is some overlap between the blocks and we have to mark the changed bytes.
+                    BigInteger bigDistance = address.subtract(fBlockAddress);
+                    if (bigDistance.compareTo(BigInteger.valueOf(fLength)) == -1) {
+                    	// Calculate the length of the data we are going to examine/update
+                        int distance = bigDistance.intValue(); 
+                        int length   = fLength - distance;
+                        if ( length > newLength ) {
+                            length = newLength;
+                        }
 
-					// If the distance does not exceed the length of the cached block,
-					// then there is some overlap between the blocks and we have to
-					// mark the changed bytes (if applicable)
-					if (bigDistance.compareTo(BigInteger.valueOf(fLength)) == -1) {
-						// Here we can reasonably assume that java integers are OK
-						int distance = bigDistance.intValue(); 
-						int length = fLength - distance;
+                        // Process each cell, updating the status and history/change
+                        for (int i = 0; i < length; i++) {
+                        	if ( i < newLength ) {
+                        		newBlock[i].setFlags(fBlock[distance + i].getFlags());
+                        		if (newBlock[i].getValue() != fBlock[distance + i].getValue()) {
+                        			newBlock[i].setHistoryKnown(true);
+                        			newBlock[i].setChanged(true);
+                        		}
+                        	}
+                        }
+                    }
+                    break;
+                }
 
-						// Work by cells of 4 bytes
-						for (int i = 0; i < length; i += 4) {
-							// Determine if any byte within the cell was modified
-							boolean changed = false;
-							for (int j = i; j < (i + 4) && j < length; j++) {
-								if ( j < fBlock.length ) {
-									newBlock[j].setFlags(fBlock[distance + j].getFlags());
-									if (newBlock[j].getValue() != fBlock[distance + j].getValue())
-										changed = true;
-								}
-							}
-							// If so, flag the whole cell as modified
-							if (changed)
-								for (int j = i; j < (i + 4) && j < length; j++) {
-									newBlock[j].setHistoryKnown(true);
-									newBlock[j].setChanged(true);
-								}
-						}
-						
-					}
-					break;
-				}
+                // The cached block starts at the same address as the retrieved data
+                // or it starts after the retrieved block and the retrieved block runs
+                // in to it.
+                //
+                // Case 0:
+                //          <--- fLength -------------------------------------------------->
+                //          +--------------------------------------------------------------+
+                //          | Cached data from previous retrieve                           |
+                //          |                                                              |
+                //          |<-- length ---------------->                                  |
+                //          +---------------------------+                                  |
+                //          |<-- newLength ------------>|                                  |
+                //          | Newly retrieve data       |                                  |
+                //          +---------------------------+                                  |
+                //          |address                                                       |
+                //          |                                                              |
+                //          |<--------------------- length ------------------------------->|
+                //          +--------------------------------------------------------------+
+                //          |<--------------------- newLength ---------------------------->|
+                //          | Newly retrieve data                                          |
+                //          +--------------------------------------------------------------+
+                //          |address                                                       |
+                //          |                                                              |
+                //          +--------------------------------------------------------------+
+                //          fBlockAddress
+                //          bigDistance/distance = 0
+                //
+                // Case 1:
+                //          <--- fLength -------------------------------------------------->
+                //          +--------------------------------------------------------------+
+                //          | Cached data from previous retrieve                           |
+                //          |                                                              |
+                //          |<-- length ----->                                             |
+                //   +-----------------------+                                             |
+                //   |<----- newLength ----->|                                             |
+                //   | Newly retrieved data  |                                             |
+                //   +-----------------------+                                             |
+                //   address|                                                              |
+                //          |                                                              |
+                //          |<----------------------- length ----------------------------->|
+                //   +---------------------------------------------------------------------+
+                //   |<------------------------------ newLength -------------------------->|
+                //   | Newly retrieved data                                                |
+                //   +---------------------------------------------------------------------+
+                //   address|                                                              |
+                //          |                                                              |
+                //          |<----------------------- length ----------------------------->|
+                //   +---------------------------------------------------------------------------+
+                //   |<------------------------------ newLength -------------------------------->|
+                //   | Newly retrieved data                                                      |
+                //   +---------------------------------------------------------------------------+
+                //   address|                                                              |
+                //   <--+-->|                                                              |
+                //      |   +--------------------------------------------------------------+
+                //      |   fBlockAddress
+                //      +---bigDistance/distance
+                case 0:
+                case 1:
+                {
+                    // Determine the distance between the requested block  and the cache block
+                	// If the distance does not exceed the length of the new block, then there
+                	// is some overlap between the blocks and we have to update the blanks and
+                	// possibly note they are changed.
+                    BigInteger bigDistance = fBlockAddress.subtract(address);
+                    if (bigDistance.compareTo(BigInteger.valueOf(newLength)) == -1) {
+                        // Calculate the length of the data we are going to examine/update
+                        int distance = bigDistance.intValue(); 
+                        int length   = newLength - distance;
+                        if ( length > fBlock.length ) {
+                            length = fBlock.length;
+                        }
 
-				// Cached block begins before the retrieved block location
-				// If there is no overlap, there are no bytes to flag
-				// (this block of code is symmetric with the previous one)
-				case 0:
-				case 1:
-				{
-					// Determine the distance between the cached and the
-					// requested block addresses 
-					BigInteger bigDistance = fBlockAddress.subtract(address);
+                        // Process each cell, updating the status and history/change
+                        for (int i = 0; i < length; i++) {
+                        	if ( (distance + i) < newLength ) {
+                        		newBlock[distance + i].setFlags(fBlock[i].getFlags());
+                        		if (newBlock[distance + i].getValue() != fBlock[i].getValue()) {
+                        			newBlock[distance + i].setHistoryKnown(true);
+                        			newBlock[distance + i].setChanged(true);
+                        		}
+                        	}
+                        }
+                    }
+                    break;
+                }
+            }
+        }
 
-					// If the distance does not exceed the length of the new block,
-					// then there is some overlap between the blocks and we have to
-					// mark the changed bytes (if applicable)
-					if (bigDistance.compareTo(BigInteger.valueOf(newLength)) == -1) {
-						// Here we can reasonably assume that java integers are OK
-						int distance = bigDistance.intValue(); 
-						int length = newLength - distance;
-						
-						// Work by cells of 4 bytes
-						for (int i = 0; i < length; i += 4) {
-							// Determine if any byte within the cell was modified
-							boolean changed = false;
-							for (int j = i; j < (i + 4) && j < length; j++) {
-								if ( j < fBlock.length ) {
-									newBlock[distance + j].setFlags(fBlock[j].getFlags());
-									if (newBlock[distance + j].getValue() != fBlock[j].getValue())
-										changed = true;
-								}
-							}
-							// If so, flag the whole cell as modified
-							if (changed)
-								for (int j = i; j < (i + 4) && j < length; j++) {
-									newBlock[distance + j].setHistoryKnown(true);
-									newBlock[distance + j].setChanged(true);
-								}
-						}
-					}
-					break;
-				}
+        // Update the internal state
+        fBlock        = newBlock;
+        fBlockAddress = address;
+        fLength       = newLength;
+        
+        if (fUpdatePolicy.equals(DsfMemoryBlock.UPDATE_POLICY_BREAKPOINT)) {
+            fUseCachedData = true;
+        } 
+        else if (fUpdatePolicy.equals(DsfMemoryBlock.UPDATE_POLICY_MANUAL)) {
+            fUseCachedData = true;
+        }
 
-				default:
-					break;
-			}
-		}
-
-		// Update the internal state
-		fBlock = newBlock;
-		fBlockAddress = address;
-		fLength = newLength;
-		
-		if (fUpdatePolicy.equals(DsfMemoryBlock.UPDATE_POLICY_BREAKPOINT))
-			fUseCachedData = true;
-		else if (fUpdatePolicy.equals(DsfMemoryBlock.UPDATE_POLICY_MANUAL))
-			fUseCachedData = true;
-
-		return fBlock;
-	}
+        return fBlock;
+    }
 
 	/* (non-Javadoc)
 	 * @see org.eclipse.debug.core.model.IMemoryBlockExtension#setValue(java.math.BigInteger, byte[])
@@ -487,7 +558,7 @@ public class DsfMemoryBlock extends PlatformObject implements IMemoryBlockExtens
     // Helper functions
     ///////////////////////////////////////////////////////////////////////////
 
-    /*
+    /**
 	 * The real thing. Since the original call is synchronous (from a platform
 	 * Job), we use a Query that will patiently wait for the underlying
 	 * asynchronous calls to complete before returning.
@@ -496,8 +567,9 @@ public class DsfMemoryBlock extends PlatformObject implements IMemoryBlockExtens
 	 * @param length 
 	 * @return MemoryByte[] 
 	 * @throws DebugException
+	 * @since 2.1
 	 */
-    private MemoryByte[] fetchMemoryBlock(BigInteger bigAddress, final long length) throws DebugException {
+    protected MemoryByte[] fetchMemoryBlock(BigInteger bigAddress, final long length) throws DebugException {
 
     	// For the IAddress interface
     	final Addr64 address = new Addr64(bigAddress);
@@ -522,7 +594,6 @@ public class DsfMemoryBlock extends PlatformObject implements IMemoryBlockExtens
 				else {
 			    	drm.done();
 			    }
-				
 			}
         };
         fRetrieval.getExecutor().execute(query);
@@ -530,23 +601,21 @@ public class DsfMemoryBlock extends PlatformObject implements IMemoryBlockExtens
 		try {
             return query.get();
         } catch (InterruptedException e) {
-    		throw new DebugException(new Status(IStatus.ERROR,
-    				DsfPlugin.PLUGIN_ID, DebugException.INTERNAL_ERROR,
-    				"Error reading memory block (InterruptedException)", e)); //$NON-NLS-1$
+    		throw new DebugException(new Status(IStatus.ERROR, DsfPlugin.PLUGIN_ID, DebugException.INTERNAL_ERROR, "Error reading memory block (InterruptedException)", e)); //$NON-NLS-1$
         } catch (ExecutionException e) {
-    		throw new DebugException(new Status(IStatus.ERROR,
-    				DsfPlugin.PLUGIN_ID, DebugException.INTERNAL_ERROR,
-    				"Error reading memory block (ExecutionException)", e)); //$NON-NLS-1$
+    		throw new DebugException(new Status(IStatus.ERROR, DsfPlugin.PLUGIN_ID, DebugException.INTERNAL_ERROR, "Error reading memory block (ExecutionException)", e)); //$NON-NLS-1$
         }
     }
 
-	/* Writes an array of bytes to memory.
+	/**
+	 *  Writes an array of bytes to memory.
      * 
      * @param offset
      * @param bytes
      * @throws DebugException
-     */
-    private void writeMemoryBlock(final long offset, final byte[] bytes) throws DebugException {
+	 * @since 2.1
+	 */
+    protected void writeMemoryBlock(final long offset, final byte[] bytes) throws DebugException {
 
     	// For the IAddress interface
     	final Addr64 address = new Addr64(fBaseAddress);
@@ -642,4 +711,13 @@ public class DsfMemoryBlock extends PlatformObject implements IMemoryBlockExtens
     public String getUpdatePolicyDescription(String id) {
 		return id;
 	}
+    
+    /**
+     * Get the context specified at construction.
+     * 
+	 * @since 2.1
+	 */
+    protected IMemoryDMContext getContext() {
+    	return fContext;
+    }
 }

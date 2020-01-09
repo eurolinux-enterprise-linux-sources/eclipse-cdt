@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -40,7 +40,6 @@ import org.eclipse.ui.texteditor.TextEditorAction;
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.formatter.DefaultCodeFormatterConstants;
 import org.eclipse.cdt.core.model.ICProject;
-import org.eclipse.cdt.core.model.ITranslationUnit;
 import org.eclipse.cdt.ui.CUIPlugin;
 import org.eclipse.cdt.ui.text.ICPartitions;
 
@@ -50,6 +49,7 @@ import org.eclipse.cdt.internal.ui.editor.CEditor;
 import org.eclipse.cdt.internal.ui.editor.IndentUtil;
 import org.eclipse.cdt.internal.ui.text.CHeuristicScanner;
 import org.eclipse.cdt.internal.ui.text.CIndenter;
+import org.eclipse.cdt.internal.ui.util.EditorUtility;
 
 
 /**
@@ -210,7 +210,7 @@ public class IndentAction extends TextEditorAction {
 			ITypedRegion partition= TextUtilities.getPartition(document, ICPartitions.C_PARTITIONING, offset, true);
 			ITypedRegion startingPartition= TextUtilities.getPartition(document, ICPartitions.C_PARTITIONING, offset, false);
 			String type= partition.getType();
-			if (type.equals(ICPartitions.C_MULTI_LINE_COMMENT)) {
+			if (type.equals(ICPartitions.C_MULTI_LINE_COMMENT) || type.equals(ICPartitions.C_MULTI_LINE_DOC_COMMENT)) {
 				indent= computeCommentIndent(document, line, scanner, startingPartition);
 			} else if (startingPartition.getType().equals(ICPartitions.C_PREPROCESSOR)) {
 				indent= computePreprocessorIndent(document, line, startingPartition);
@@ -275,7 +275,10 @@ public class IndentAction extends TextEditorAction {
 		// then just shift to the right
 		if (fIsTabAction && caret == end && whiteSpaceLength(currentIndent) >= whiteSpaceLength(indent)) {
 			int indentWidth= whiteSpaceLength(currentIndent) + getIndentSize();
-			String replacement= IndentUtil.changePrefix(currentIndent.trim(), indentWidth, getTabSize(), useSpaces());
+			if (useTabsAndSpaces()) {
+				currentIndent = trimSpacesRight(currentIndent);
+			}
+			String replacement= IndentUtil.changePrefix(currentIndent, indentWidth, getTabSize(), useSpaces());
 			document.replace(offset, length, replacement);
 			fCaretOffset= offset + replacement.length();
 			return true;
@@ -293,6 +296,20 @@ public class IndentAction extends TextEditorAction {
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Strip trailing space characters.
+	 * 
+	 * @param indent
+	 * @return string with trailing spaces removed
+	 */
+	private String trimSpacesRight(String indent) {
+		int i = indent.length() - 1;
+		while (i >= 0 && indent.charAt(i) == ' ') {
+			--i;
+		}
+		return indent.substring(0, i+1);
 	}
 
 	/**
@@ -343,6 +360,16 @@ public class IndentAction extends TextEditorAction {
 	 */
 	private boolean useSpaces() {
 		return CCorePlugin.SPACE.equals(getCoreFormatterOption(DefaultCodeFormatterConstants.FORMATTER_TAB_CHAR));
+	}
+	
+	/**
+	 * Returns whether mixed tabs/spaces should be used for indentation, depending on the editor and
+	 * formatter preferences.
+	 * 
+	 * @return <code>true</code> if tabs and spaces should be used
+	 */
+	private boolean useTabsAndSpaces() {
+		return DefaultCodeFormatterConstants.MIXED.equals(getCoreFormatterOption(DefaultCodeFormatterConstants.FORMATTER_TAB_CHAR));
 	}
 	
 	/**
@@ -424,10 +451,7 @@ public class IndentAction extends TextEditorAction {
 		if (editor == null)
 			return null;
 		
-		ITranslationUnit cu= CUIPlugin.getDefault().getWorkingCopyManager().getWorkingCopy(editor.getEditorInput());
-		if (cu == null)
-			return null;
-		return cu.getCProject();
+		return EditorUtility.getCProject(editor.getEditorInput());
 	}
 
 	/**

@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: %pluginName
 Bundle-SymbolicName: org.eclipse.cdt.ui; singleton:=true
-Bundle-Version: 5.1.2.qualifier
+Bundle-Version: 5.2.1.qualifier
 Bundle-Activator: org.eclipse.cdt.ui.CUIPlugin
 Bundle-Vendor: %providerName
 Bundle-Localization: plugin
@@ -34,8 +34,8 @@ Export-Package: org.eclipse.cdt.internal.corext;x-internal:=true,
  org.eclipse.cdt.internal.ui.refactoring;x-friends:="org.eclipse.cdt.ui.tests",
  org.eclipse.cdt.internal.ui.refactoring.dialogs;x-internal:=true,
  org.eclipse.cdt.internal.ui.refactoring.extractconstant;x-friends:="org.eclipse.cdt.ui.tests",
- org.eclipse.cdt.internal.ui.refactoring.extractlocalvariable;x-friends:="org.eclipse.cdt.ui.tests",
  org.eclipse.cdt.internal.ui.refactoring.extractfunction;x-friends:="org.eclipse.cdt.ui.tests",
+ org.eclipse.cdt.internal.ui.refactoring.extractlocalvariable;x-friends:="org.eclipse.cdt.ui.tests",
  org.eclipse.cdt.internal.ui.refactoring.gettersandsetters;x-friends:="org.eclipse.cdt.ui.tests",
  org.eclipse.cdt.internal.ui.refactoring.hidemethod;x-friends:="org.eclipse.cdt.ui.tests",
  org.eclipse.cdt.internal.ui.refactoring.implementmethod;x-friends:="org.eclipse.cdt.ui.tests",
@@ -77,6 +77,7 @@ Export-Package: org.eclipse.cdt.internal.corext;x-internal:=true,
  org.eclipse.cdt.ui.templateengine,
  org.eclipse.cdt.ui.templateengine.event,
  org.eclipse.cdt.ui.templateengine.pages,
+ org.eclipse.cdt.ui.templateengine.processes,
  org.eclipse.cdt.ui.templateengine.uitree,
  org.eclipse.cdt.ui.templateengine.uitree.uiwidgets,
  org.eclipse.cdt.ui.text,
@@ -99,7 +100,7 @@ Require-Bundle: org.eclipse.ui.ide;bundle-version="[3.3.0,4.0.0)",
  org.eclipse.core.resources;bundle-version="[3.2.0,4.0.0)",
  org.eclipse.search;bundle-version="[3.2.0,4.0.0)",
  org.eclipse.compare;bundle-version="[3.3.0,4.0.0)",
- org.eclipse.cdt.core;bundle-version="[5.0.0,6.0.0)",
+ org.eclipse.cdt.core;bundle-version="[5.2.0,6.0.0)",
  org.eclipse.ui.console;bundle-version="[3.1.100,4.0.0)",
  org.eclipse.core.runtime;bundle-version="[3.2.0,4.0.0)",
  org.eclipse.help;bundle-version="[3.2.0,4.0.0)",

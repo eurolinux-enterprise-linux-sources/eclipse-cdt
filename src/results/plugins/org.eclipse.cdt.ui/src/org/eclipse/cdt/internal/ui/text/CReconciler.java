@@ -51,8 +51,6 @@ import org.eclipse.cdt.core.model.IWorkingCopy;
 import org.eclipse.cdt.ui.CUIPlugin;
 import org.eclipse.cdt.ui.IWorkingCopyManager;
 
-import org.eclipse.cdt.internal.core.index.IndexChangeEvent;
-
 /**
  * A single strategy C reconciler.
  * 
@@ -268,8 +266,7 @@ public class CReconciler extends MonoReconciler {
 		 */
 		public void indexChanged(IIndexChangeEvent event) {
 			if (!fIndexChanged && isRelevantProject(event.getAffectedProject())) {
-				if (!fIgnoreChanges || event.isCleared() || event.isReloaded() || 
-						((event instanceof IndexChangeEvent) && ((IndexChangeEvent)event).hasNewFile())) {
+				if (!fIgnoreChanges || event.isCleared() || event.isReloaded() || event.hasNewFile()) {
 					fIndexChanged= true;
 				}
 			}

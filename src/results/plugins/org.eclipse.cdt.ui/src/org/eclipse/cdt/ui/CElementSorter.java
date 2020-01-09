@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -227,6 +227,8 @@ public class CElementSorter extends ViewerSorter {
 			switch (type) {
 			case CElementGrouping.INCLUDES_GROUPING:
 				return INCLUDES;
+			case CElementGrouping.MACROS_GROUPING:
+				return MACROS;
 			case CElementGrouping.CLASS_GROUPING:
 				return TYPES;
 			case CElementGrouping.NAMESPACE_GROUPING:

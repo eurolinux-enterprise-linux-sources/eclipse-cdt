@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2008 Rational Software Corporation and others.
+ * Copyright (c) 2002, 2009 Rational Software Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -178,7 +178,7 @@ implements IExecutableExtension, IWizardWithMemory, ICDTCommonProjectWizard
 		try {
 			getContainer().run(true, true, op);
 		} catch (InvocationTargetException e) {
-			CUIPlugin.errorDialog(getShell(), title, message, e.getTargetException(), false);
+			CUIPlugin.errorDialog(getShell(), title, message, e.getTargetException(), true);
 			clearProject();
 			return false;
 		} catch  (InterruptedException e) {

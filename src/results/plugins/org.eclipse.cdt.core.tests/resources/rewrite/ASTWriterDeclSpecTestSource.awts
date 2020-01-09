@@ -12,7 +12,7 @@ extern int b;
 static int c;
 int foo()
 {
-    auto int i = 1;
+    int i = 1;
     return i;
 }
 
@@ -161,4 +161,22 @@ wchar_t wc;
 //!ICPPSimpleDeclSpecifier mutable Bug 40
 //%CPP
 mutable int n;
+
+//!C++0x auto keyword Bug 318588
+//%CPP
+auto var = 42;
+
+//!C++0x long long keyword Bug 318588
+//%CPP
+long long int i;
+
+//!C++0x decltype
+//%CPP
+int i;
+decltype(i) j = 3;
+
+//!C++0x typeof
+//%CPP
+int i;
+typeof i j = 3;
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -40,8 +40,14 @@ import org.eclipse.ui.actions.WorkspaceModifyDelegatingOperation;
 import org.eclipse.ui.dialogs.PropertyPage;
 
 /**
- * @see PropertyPage
+ * C/C++ Project Paths page for 3.X projects.
+ * 
+ * @deprecated as of CDT 4.0. This property page was used to set properties
+ * "C/C++ Make Project" for 3.X style projects.
+ * This page lives dormant as of writing (CDT 7.0) but may get activated for
+ * {@code org.eclipse.cdt.make.core.makeNature} project (3.X style).
  */
+@Deprecated
 public class CPathPropertyPage extends PropertyPage implements IStatusChangeListener{
 
 	private static final String PAGE_SETTINGS = "CPathsPropertyPage"; //$NON-NLS-1$

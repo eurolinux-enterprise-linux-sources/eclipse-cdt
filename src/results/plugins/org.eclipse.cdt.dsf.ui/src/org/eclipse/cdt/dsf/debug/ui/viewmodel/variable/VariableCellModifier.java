@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,7 @@
  *******************************************************************************/
 package org.eclipse.cdt.dsf.debug.ui.viewmodel.variable;
 
+import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
 import org.eclipse.cdt.dsf.debug.service.IFormattedValues;
 import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionDMContext;
 import org.eclipse.cdt.dsf.debug.ui.viewmodel.IDebugVMConstants;
@@ -42,6 +43,9 @@ public class VariableCellModifier extends WatchExpressionCellModifier {
         return null;
     }
 
+    /* (non-Javadoc)
+     * @see org.eclipse.cdt.dsf.debug.ui.viewmodel.expression.WatchExpressionCellModifier#canModify(java.lang.Object, java.lang.String)
+     */
     @Override
     public boolean canModify(Object element, String property) {
         // If we're in the column value, modify the register data.  Otherwise, call the super-class to edit
@@ -60,6 +64,9 @@ public class VariableCellModifier extends WatchExpressionCellModifier {
         return super.canModify(element, property);
     }
 
+    /* (non-Javadoc)
+     * @see org.eclipse.cdt.dsf.debug.ui.viewmodel.expression.WatchExpressionCellModifier#getValue(java.lang.Object, java.lang.String)
+     */
     @Override
     public Object getValue(Object element, String property) {
         // If we're in the column value, modify the variable value.  Otherwise, call the super-class to edit
@@ -83,7 +90,7 @@ public class VariableCellModifier extends WatchExpressionCellModifier {
                 formatId = IFormattedValues.NATURAL_FORMAT;
             }
             
-            String value = fDataAccess.getFormattedValue(element, formatId);
+            String value = fDataAccess.getEditableValue(element, formatId);
             
             if (value == null) {
                 return "...";  //$NON-NLS-1$
@@ -95,12 +102,18 @@ public class VariableCellModifier extends WatchExpressionCellModifier {
         return super.getValue(element, property);
     }
 
+    /* (non-Javadoc)
+     * @see org.eclipse.cdt.dsf.debug.ui.viewmodel.expression.WatchExpressionCellModifier#modify(java.lang.Object, java.lang.String, java.lang.Object)
+     */
     @Override
-    public void modify(Object element, String property, Object value) {
-        /* 
-         * If we're in the column value, modify the register data.  Otherwise, call the super-class to edit
-         * the watch expression.
-         */ 
+    public void modify(final Object element, String property, Object value) {
+		/*
+		 * If we're in the Value column, modify the variable/register data. The
+		 * other columns in the Variables and Registers view are non-modifiable.
+		 * If we're called for another column, pass the request to our super
+		 * class; the column is likely a column it handles (Expression, for
+		 * example).
+		 */ 
         if (IDebugVMConstants.COLUMN_ID__VALUE.equals(property)) {
             if (value instanceof String) {
                 /*
@@ -121,7 +134,11 @@ public class VariableCellModifier extends WatchExpressionCellModifier {
                 }
                 
                 fDataAccess.writeVariable(element, (String) value, formatId);
-                fProvider.handleEvent(new UserEditEvent(element));
+                fProvider.getExecutor().execute(new DsfRunnable() {
+                    public void run() {
+                        fProvider.handleEvent(new UserEditEvent(element));
+                    }
+                });
             }
         }
         else {

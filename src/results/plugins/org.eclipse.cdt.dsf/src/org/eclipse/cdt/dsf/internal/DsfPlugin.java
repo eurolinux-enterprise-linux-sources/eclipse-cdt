@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -73,13 +73,28 @@ public class DsfPlugin extends Plugin {
     public static BundleContext getBundleContext() {
         return fgBundleContext;
     }
-    
+
+	/**
+	 * Writes [message] to stdout, but only if the top level 'debug' tracing
+	 * option for this plugin has been turned on
+	 * 
+	 * @param message
+	 */
     public static void debug(String message) {
         if (DEBUG) {
             System.out.println(message);
         }
     }
-    
+
+	/**
+	 * Returns a relative timestamp in the form "seconds,milliseconds". Each
+	 * segment is zero-padded to three digits, ensuring a consistent length of
+	 * seven characters. The timestamp has no absolute meaning. It is merely the
+	 * elapsed time since January 1, 1970 UT truncated at 999 seconds. Do not
+	 * use this for production code, especially for mathematically determining
+	 * the relative time between two events, since the counter will flip to zero
+	 * roughly every 16 minutes.
+	 */
     public static String getDebugTime() {
         StringBuilder traceBuilder = new StringBuilder();
         

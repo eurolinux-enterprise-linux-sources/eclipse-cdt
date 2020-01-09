@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -36,7 +36,7 @@ public final class ScannerConfigProfileManager {
 	public static final String SI_PROFILE_SIMPLE_ID = "ScannerConfigurationDiscoveryProfile";	//$NON-NLS-1$
 	public static final String PER_PROJECT_PROFILE_ID = MakeCorePlugin.getUniqueIdentifier() + ".GCCStandardMakePerProjectProfile"; //$NON-NLS-1$
 	public static final String NULL_PROFILE_ID = "";//$NON-NLS-1$
-	public static final String DEFAULT_SI_PROFILE_ID = PER_PROJECT_PROFILE_ID;
+	public static final String DEFAULT_SI_PROFILE_ID = NULL_PROFILE_ID;
 	
 	private final Map<IProject, Map<InfoContext, Object>> projectToProfileInstanceMap;
 	private List<String> profileIds;
@@ -73,8 +73,6 @@ public final class ScannerConfigProfileManager {
 	/**
 	 * For projects that do not have profile id specified in .project file.
 	 * For example managed projects.
-	 * @param project
-	 * @param profile
 	 */
 	public void addProfile(IProject project, ScannerConfigProfile profile) {
 		addProfile(project, new InfoContext(project), profile);
@@ -102,9 +100,8 @@ public final class ScannerConfigProfileManager {
 	}
 	
 	/**
-	 * @param project
 	 * @param profileId - if null, get the one associated with the project
-	 * @return Returns the scannerConfigProfile instance for a project.
+	 * @return the scannerConfigProfile instance for a project.
 	 */
 	public SCProfileInstance getSCProfileInstance(IProject project, String profileId) {
 		return getSCProfileInstance(project, new InfoContext(project), profileId);
@@ -128,10 +125,6 @@ public final class ScannerConfigProfileManager {
 		}
 	}
 
-    /**
-     * @param profileId
-     * @return
-     */
     public SCProfileInstance getSCProfileInstance(String profileId) {
         SCProfileInstance profileInstance = null;
         if (profileId != NULL_PROFILE_ID) {
@@ -171,7 +164,6 @@ public final class ScannerConfigProfileManager {
 	}
 	
 	/**
-	 * @param context
 	 * @return the list of profile IDs supported for this context
 	 */
 	public List<String> getProfileIds(InfoContext context){
@@ -203,10 +195,6 @@ public final class ScannerConfigProfileManager {
 	
 	/**
      * Set selectedProfile to profileId 
-     * @param project
-     * @param profileId
-     * @return
-     * @throws CoreException
 	 */
     public static IScannerConfigBuilderInfo2 createScannerConfigBuildInfo2(IProject project, String profileId) throws CoreException {
 		return ScannerConfigInfoFactory2.create(project, profileId);
@@ -214,9 +202,6 @@ public final class ScannerConfigProfileManager {
 
     /**
      * Use stored selectedProfile
-     * @param project
-     * @return
-     * @throws CoreException
      */
     public static IScannerConfigBuilderInfo2 createScannerConfigBuildInfo2(IProject project) throws CoreException {
         return ScannerConfigInfoFactory2.create(project, ScannerConfigProfileManager.NULL_PROFILE_ID);
@@ -240,10 +225,6 @@ public final class ScannerConfigProfileManager {
 
 	/**
      * Set selectedProfile to profileId 
-     * @param prefs
-     * @param profileId
-     * @param useDefaults
-     * @return
 	 */
     public static IScannerConfigBuilderInfo2 createScannerConfigBuildInfo2(Preferences prefs, String profileId, boolean useDefaults) {
 		return ScannerConfigInfoFactory2.create(prefs, profileId, useDefaults);
@@ -251,9 +232,6 @@ public final class ScannerConfigProfileManager {
 
     /**
      * Use stored selectedProfile
-     * @param prefs
-     * @param useDefaults
-     * @return
      */
     public static IScannerConfigBuilderInfo2 createScannerConfigBuildInfo2(Preferences prefs, boolean useDefaults) {
         return ScannerConfigInfoFactory2.create(prefs, ScannerConfigProfileManager.NULL_PROFILE_ID, useDefaults);

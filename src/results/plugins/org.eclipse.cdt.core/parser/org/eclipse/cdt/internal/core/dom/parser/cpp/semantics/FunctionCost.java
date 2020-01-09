@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2009, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,12 +10,13 @@
  *******************************************************************************/ 
 package org.eclipse.cdt.internal.core.dom.parser.cpp.semantics;
 
+import java.util.BitSet;
+
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IFunction;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionTemplate;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPSpecialization;
-import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.Cost.Rank;
 
 /**
  * Cost for the entire function call
@@ -23,12 +24,20 @@ import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.Cost.Rank;
 class FunctionCost {
 	private final IFunction fFunction;
 	private final Cost[] fCosts;
+	private final BitSet fSourceIsLValue;
 	
 	public FunctionCost(IFunction fn, int paramCount) {
 		fFunction= fn;
 		fCosts= new Cost[paramCount];
+		fSourceIsLValue= new BitSet(paramCount);
 	}
 	
+	public FunctionCost(IFunction fn, Cost cost) {
+		fFunction= fn;
+		fCosts= new Cost[] {cost};
+		fSourceIsLValue= null; // no udc will be performed
+	}
+
 	public int getLength() {
 		return fCosts.length;
 	}
@@ -37,8 +46,9 @@ class FunctionCost {
 		return fCosts[idx];
 	}
 	
-	public void setCost(int idx, Cost cost) {
+	public void setCost(int idx, Cost cost, boolean sourceIsLValue) {
 		fCosts[idx]= cost;
+		fSourceIsLValue.set(idx, sourceIsLValue);
 	}
 
 	public IFunction getFunction() {
@@ -55,6 +65,8 @@ class FunctionCost {
 
 	public boolean hasDeferredUDC() {
 		for (Cost cost : fCosts) {
+			if (!cost.converts())
+				return false;
 			if (cost.isDeferredUDC())
 				return true;
 		}
@@ -65,11 +77,12 @@ class FunctionCost {
 		for (int i = 0; i < fCosts.length; i++) {
 			Cost cost = fCosts[i];
 			if (cost.isDeferredUDC()) {
-				Cost udcCost= Conversions.checkUserDefinedConversionSequence(cost.source, cost.target, false);
-				if (udcCost == null) {
+				Cost udcCost = Conversions.checkUserDefinedConversionSequence(fSourceIsLValue.get(i),
+						cost.source, cost.target, false, false);
+				fCosts[i] = udcCost;
+				if (!udcCost.converts()) {
 					return false;
 				}
-				fCosts[i]= udcCost;
 			}
 		}
 		return true;
@@ -91,7 +104,7 @@ class FunctionCost {
 		int idxOther= other.getLength() - 1;
 		for (; idx >= 0 && idxOther >= 0; idx--, idxOther--) {
 			Cost cost= getCost(idx);
-			if (cost.getRank() == Rank.NO_MATCH) {
+			if (!cost.converts()) {
 				haveWorse = true;
 				haveBetter = false;
 				break;
@@ -144,7 +157,7 @@ class FunctionCost {
 		int idxOther= other.getLength() - 1;
 		for (; idx >= 0 && idxOther >= 0; idx--, idxOther--) {
 			Cost cost= getCost(idx);
-			if (cost.getRank() == Rank.NO_MATCH) 
+			if (!cost.converts()) 
 				return true;
 			
 			Cost otherCost= other.getCost(idxOther);

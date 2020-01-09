@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Symbian Software Systems and others.
+ * Copyright (c) 2006, 2010 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -99,6 +99,9 @@ public abstract class IndexBindingResolutionTestBase extends BaseTestCase {
 	 * @return the associated name's binding
 	 */
 	protected <T> T getBindingFromASTName(String section, int len, Class<T> clazz, Class ... cs) {
+		if (len < 1) {
+			len= section.length()+len;
+		}
 		IASTName name= findName(section, len);
 		assertNotNull("name not found for \""+section+"\"", name);
 		assertEquals(section.substring(0, len), name.getRawSignature());
@@ -114,6 +117,9 @@ public abstract class IndexBindingResolutionTestBase extends BaseTestCase {
 	 * @see IndexBindingResolutionTestBase#getBindingFromASTName(Class, String, int)
 	 */
 	protected <T extends IBinding> T getBindingFromASTName(String section, int len) {
+		if (len <= 0)
+			len+= section.length();
+		
 		IASTName name= findName(section, len);
 		assertNotNull("name not found for \""+section+"\"", name);
 		assertEquals(section.substring(0, len), name.getRawSignature());
@@ -224,19 +230,81 @@ public abstract class IndexBindingResolutionTestBase extends BaseTestCase {
 	}
 	
 	protected static void assertTypeContainer(IType conType, String expQN, Class containerType, Class expContainedType, String expContainedTypeQN) {
-		try {
-			assertInstance(conType, ITypeContainer.class);
-			assertInstance(conType, containerType);
-			IType containedType= ((ITypeContainer)conType).getType();
-			assertInstance(containedType, expContainedType);
-			if (expContainedTypeQN != null) {
-				assertInstance(containedType, IBinding.class);
-				assertQNEquals(expContainedTypeQN, (IBinding) containedType);
-			}
-		} catch (DOMException de) {
-			fail(de.getMessage());
+		assertInstance(conType, ITypeContainer.class);
+		assertInstance(conType, containerType);
+		IType containedType= ((ITypeContainer)conType).getType();
+		assertInstance(containedType, expContainedType);
+		if (expContainedTypeQN != null) {
+			assertInstance(containedType, IBinding.class);
+			assertQNEquals(expContainedTypeQN, (IBinding) containedType);
 		}
 	}
+	
+	class SinglePDOMTestFirstASTStrategy implements ITestStrategy {
+		private IIndex index;
+		private ICProject cproject;
+		private StringBuffer[] testData;
+		private IASTTranslationUnit ast;
+		private boolean cpp;
+
+		public SinglePDOMTestFirstASTStrategy(boolean cpp) {
+			this.cpp = cpp;
+		}
+
+		public ICProject getCProject() {
+			return cproject;
+		}
+		
+		public StringBuffer[] getTestData() {
+			return testData;
+		}
+
+		public IASTTranslationUnit getAst() {
+			return ast;
+		}
+
+		public void setUp() throws Exception {
+			cproject = cpp ? CProjectHelper.createCCProject(getName()+System.currentTimeMillis(), "bin", IPDOMManager.ID_NO_INDEXER) 
+					: CProjectHelper.createCProject(getName()+System.currentTimeMillis(), "bin", IPDOMManager.ID_NO_INDEXER);
+			Bundle b = CTestPlugin.getDefault().getBundle();
+			testData = TestSourceReader.getContentsForTest(b, "parser", IndexBindingResolutionTestBase.this.getClass(), getName(), 2);
+
+			if (testData.length < 2)
+				return;
+			IFile file = TestSourceReader.createFile(cproject.getProject(), new Path("header.h"), testData[0].toString());
+			CCorePlugin.getIndexManager().setIndexerId(cproject, IPDOMManager.ID_FAST_INDEXER);
+			assertTrue(CCorePlugin.getIndexManager().joinIndexer(360000, new NullProgressMonitor()));
+
+			if (DEBUG) {
+				System.out.println("Project PDOM: "+getName());
+				((PDOM)CCoreInternals.getPDOMManager().getPDOM(cproject)).accept(new PDOMPrettyPrinter());
+			}
+
+			index= CCorePlugin.getIndexManager().getIndex(cproject);
+
+			index.acquireReadLock();
+			IFile cppfile= TestSourceReader.createFile(cproject.getProject(), new Path("references.c" + (cpp ? "pp" : "")), testData[1].toString());
+			ast = TestSourceReader.createIndexBasedAST(index, cproject, cppfile);
+		}
+
+		public void tearDown() throws Exception {
+			if (index != null) {
+				index.releaseReadLock();
+			}
+			if (cproject != null) {
+				cproject.getProject().delete(IResource.FORCE | IResource.ALWAYS_DELETE_PROJECT_CONTENT, new NullProgressMonitor());
+			}
+		}
+
+		public IIndex getIndex() {
+			return index;
+		}
+		
+		public boolean isCompositeIndex() {
+			return false;
+		}
+	}
+
 
 	class SinglePDOMTestStrategy implements ITestStrategy {
 		private IIndex index;

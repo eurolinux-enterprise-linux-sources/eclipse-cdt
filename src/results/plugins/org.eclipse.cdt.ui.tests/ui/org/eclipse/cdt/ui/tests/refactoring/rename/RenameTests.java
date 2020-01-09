@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2008 Wind River Systems, Inc.
+ * Copyright (c) 2005, 2010 Wind River Systems, Inc.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
  * which accompanies this distribution, and is available at 
@@ -143,6 +143,7 @@ public class RenameTests extends RefactoringTests {
     
 	protected void waitForIndexer() throws InterruptedException {
 		final IIndexManager im = CCorePlugin.getIndexManager();
+		assertTrue(im.joinIndexer(10000, NPM));
 		int sleep= 1;
 		while (im.isIndexerSetupPostponed(cproject)) {
 			Thread.sleep(sleep);
@@ -150,5 +151,13 @@ public class RenameTests extends RefactoringTests {
 			assertTrue(sleep < 2000);
 		}
 		assertTrue(im.joinIndexer(10000, NPM));
+	}
+
+	@Override
+	protected IFile importFile(String fileName, String contents)
+			throws Exception {
+		IFile result= super.importFile(fileName, contents);
+		waitForIndexer();
+		return result;
 	}
 }

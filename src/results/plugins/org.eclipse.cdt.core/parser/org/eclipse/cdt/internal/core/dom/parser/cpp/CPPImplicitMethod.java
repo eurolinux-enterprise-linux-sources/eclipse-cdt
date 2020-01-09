@@ -19,10 +19,8 @@ import org.eclipse.cdt.core.dom.ast.IASTFunctionDefinition;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
-import org.eclipse.cdt.core.dom.ast.IBasicType;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IFunctionType;
-import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTFunctionDeclarator;
@@ -32,17 +30,19 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassScope;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameter;
 import org.eclipse.cdt.core.parser.util.CharArrayUtils;
 import org.eclipse.cdt.internal.core.dom.parser.ASTInternal;
 import org.eclipse.cdt.internal.core.dom.parser.ASTQueries;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.SemanticUtil;
 
 /**
  * Binding for implicit methods, base class for implicit constructors.
  */
 public class CPPImplicitMethod extends CPPImplicitFunction implements ICPPMethod {
     
-    public CPPImplicitMethod(ICPPClassScope scope, char[] name, ICPPFunctionType type, IParameter[] params) {
+    public CPPImplicitMethod(ICPPClassScope scope, char[] name, ICPPFunctionType type, ICPPParameter[] params) {
 		super(name, scope, type, params, false);
 	}
    
@@ -85,7 +85,7 @@ public class CPPImplicitMethod extends CPPImplicitFunction implements ICPPMethod
 	public IASTDeclaration getPrimaryDeclaration() throws DOMException {
 		// first check if we already know it
 		if (declarations != null) {
-			for (ICPPASTFunctionDeclarator dtor : declarations) {
+			for (IASTDeclarator dtor : declarations) {
 				if (dtor == null)
 					break;
 
@@ -138,9 +138,7 @@ public class CPPImplicitMethod extends CPPImplicitFunction implements ICPPMethod
 							ok = idx == ps.length;
 						} else if (ps.length == 0) {
 							if (params.length == 1) {
-								IType t1 = params[0];
-								ok = (t1 instanceof IBasicType)
-										&& ((IBasicType) t1).getType() == IBasicType.t_void;
+								ok = SemanticUtil.isVoidType(params[0]);
 							}
 						}
 					} else {

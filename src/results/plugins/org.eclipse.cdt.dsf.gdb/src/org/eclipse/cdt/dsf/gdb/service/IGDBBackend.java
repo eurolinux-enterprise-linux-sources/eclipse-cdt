@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Nokia Corporation.
+ * Copyright (c) 2008, 2010 Nokia Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,7 +12,9 @@
 package org.eclipse.cdt.dsf.gdb.service;
 
 import java.util.List;
+import java.util.Properties;
 
+import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.mi.service.IMIBackend;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
@@ -37,6 +39,12 @@ import org.eclipse.core.runtime.IPath;
  * @since 1.1
  */
 public interface IGDBBackend extends IMIBackend {
+
+	/** 
+	 * ID to use when requesting that the interruptAndWait call wait for an
+	 * implementation-specific default.
+	 * @since 3.0 */
+	public final static int INTERRUPT_TIMEOUT_DEFAULT = 0;
 
 	/**
 	 * Get path of the debugged program on host.
@@ -79,12 +87,52 @@ public interface IGDBBackend extends IMIBackend {
 	 */
 	public List<String> getSharedLibraryPaths() throws CoreException;
 
+	/**
+	 * Returns the list of user-specified variables.
+	 * If no variables are specified, should return an empty list.
+	 * Should not return null.
+	 * 
+	 *  @since 3.0 
+	 */
+	public Properties getEnvironmentVariables() throws CoreException;
+	
+	/** 
+	 * Returns whether the native environment should be cleared before
+	 * setting the user-specified environment variables.
+	 * 
+	 * @since 3.0 */
+	public boolean getClearEnvironment() throws CoreException;
 	
 	/**
 	 * Sends an interrupt signal to the GDB process.
 	 */
 	public void interrupt();
 	
+	/**
+	 * Interrupts the backend and wait to confirm the interrupt 
+	 * succeeded.  The request monitor indicates to the caller if 
+	 * the interrupt succeeded or not.
+	 * 
+	 * @param timeout Maximum number of milliseconds to wait to confirm
+	 *                that the backend has been interrupted.  A value
+	 *                of INTERRUPT_TIMEOUT_DEFAULT specifies to use an 
+	 *                implementation-specific default value.
+	 *                Using a value of 0 or a negative value has unspecified
+	 *                behavior. 
+ 	 *
+	 * @since 3.0
+	 */
+	public void interruptAndWait(int timeout, RequestMonitor rm);
+
+	/**
+	 * Same as {@link #interruptAndWait(int, RequestMonitor)}, except the
+	 * inferior process is directly interrupted.
+	 *
+	 * @param pid the PID of the inferior
+	 * @since 3.0
+	 */
+	public void interruptInferiorAndWait(long pid, int timeout, RequestMonitor rm);
+
 	/**
 	 * @return The type of the session currently ongoing with the backend
 	 */
@@ -94,4 +142,18 @@ public interface IGDBBackend extends IMIBackend {
 	 * @return true if the ongoing session is attaching to a remote target.
 	 */	
 	public boolean getIsAttachSession();
+
+	/**
+	 * Indicates whether the CDT debugger should ask gdb for the target
+	 * program's thread list on each suspend event (breakpoint-hit, step, etc).
+	 * Normally, this isn't necessary, as GDB sends notifications in realtime
+	 * when a thread is created or destroyed. However, some lightweight GDB
+	 * remote stubs won't send these notifications. As such, the CDT debugger
+	 * doesn't find out about new or destroyed threads unless it polls gdb. The
+	 * user will enable this behavior if he is debugging such a target
+	 * (typically an embedded one)
+	 * 
+	 * @since 3.0
+	 */
+	public boolean getUpdateThreadListOnSuspend() throws CoreException;
 }

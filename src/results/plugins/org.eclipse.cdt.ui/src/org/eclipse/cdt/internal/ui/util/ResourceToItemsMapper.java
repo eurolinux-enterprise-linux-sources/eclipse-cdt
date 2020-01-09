@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 IBM Corporation and others.
+ * Copyright (c) 2000, 2009 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -141,7 +141,7 @@ public class ResourceToItemsMapper {
 			} else if (existingMapping instanceof Item) {
 				fResourceToItem.remove(resource);
 			} else { // List
-				@SuppressWarnings("unchecked")
+				@SuppressWarnings({ "unchecked", "rawtypes" })
 				List<Item> list= (List) existingMapping;
 				list.remove(item);
 				if (list.isEmpty()) {

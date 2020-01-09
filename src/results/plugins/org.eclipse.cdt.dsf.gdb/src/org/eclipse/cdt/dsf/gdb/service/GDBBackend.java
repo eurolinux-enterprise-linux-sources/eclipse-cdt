@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems, Nokia and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Nokia and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,6 +22,7 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.cdt.core.model.ICProject;
@@ -35,7 +36,9 @@ import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
 import org.eclipse.cdt.dsf.gdb.launching.LaunchUtils;
 import org.eclipse.cdt.dsf.gdb.service.command.GDBControl.InitializationShutdownStep;
 import org.eclipse.cdt.dsf.mi.service.IMIBackend;
+import org.eclipse.cdt.dsf.mi.service.command.events.MIStoppedEvent;
 import org.eclipse.cdt.dsf.service.AbstractDsfService;
+import org.eclipse.cdt.dsf.service.DsfServiceEventHandler;
 import org.eclipse.cdt.dsf.service.DsfSession;
 import org.eclipse.cdt.utils.spawner.ProcessFactory;
 import org.eclipse.cdt.utils.spawner.Spawner;
@@ -52,7 +55,10 @@ import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.core.variables.VariablesPlugin;
 import org.eclipse.debug.core.DebugException;
+import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.ILaunchConfiguration;
+import org.eclipse.debug.core.ILaunchConfigurationWorkingCopy;
+import org.eclipse.debug.core.ILaunchManager;
 import org.osgi.framework.BundleContext;
 
 /**
@@ -77,6 +83,7 @@ public class GDBBackend extends AbstractDsfService implements IGDBBackend {
 	private List<String> fSharedLibPaths;
 	private String fProgramArguments;
 	
+	private Properties fEnvVariables;
 	private SessionType fSessionType;
     private Boolean fAttach;
 
@@ -93,6 +100,14 @@ public class GDBBackend extends AbstractDsfService implements IGDBBackend {
     private Process fProcess;
     private int fGDBExitValue;
     private int fGDBLaunchTimeout = 30;
+    
+    /**
+     * A Job that will set a failed status
+     * in the proper request monitor, if the interrupt
+     * did not succeed after a certain time.
+     */
+    private MonitorInterruptJob fInterruptFailedJob;
+
     
 	public GDBBackend(DsfSession session, ILaunchConfiguration lc) {
 		super(session);
@@ -139,7 +154,14 @@ public class GDBBackend extends AbstractDsfService implements IGDBBackend {
                 new MonitorJobStep(InitializationShutdownStep.Direction.SHUTTING_DOWN),
                 new GDBProcessStep(InitializationShutdownStep.Direction.SHUTTING_DOWN),
             };
-        Sequence shutdownSequence = new Sequence(getExecutor(), requestMonitor) {
+        Sequence shutdownSequence = 
+        	new Sequence(getExecutor(), 
+        				 new RequestMonitor(getExecutor(), requestMonitor) {
+        					@Override
+        					protected void handleCompleted() {
+        						GDBBackend.super.shutdown(requestMonitor);
+        					}
+        				}) {
             @Override public Step[] getSteps() { return shutdownSteps; }
         };
         getExecutor().execute(shutdownSequence);
@@ -265,6 +287,62 @@ public class GDBBackend extends AbstractDsfService implements IGDBBackend {
 		return fSharedLibPaths;
 	}
 
+	/** @since 3.0 */
+	public Properties getEnvironmentVariables() throws CoreException {
+		if (fEnvVariables == null) {
+			fEnvVariables = new Properties();
+			
+			// if the attribute ATTR_APPEND_ENVIRONMENT_VARIABLES is set,
+			// the LaunchManager will return both the new variables and the existing ones.
+			// That would force us to delete all the variables in GDB, and then re-create then all
+			// that is not very efficient.  So, let's fool the LaunchManager into returning just the
+			// list of new variables.
+			
+			boolean append = fLaunchConfiguration.getAttribute(ILaunchManager.ATTR_APPEND_ENVIRONMENT_VARIABLES, true);
+
+			String[] properties;
+			if (append) {
+				ILaunchConfigurationWorkingCopy wc = fLaunchConfiguration.copy(""); //$NON-NLS-1$
+				// Don't save this change, it is just temporary, and in just a copy of our launchConfig.
+				wc.setAttribute(ILaunchManager.ATTR_APPEND_ENVIRONMENT_VARIABLES, false);
+				properties = DebugPlugin.getDefault().getLaunchManager().getEnvironment(wc);
+			} else {
+				// We're getting rid of the environment anyway, so this call will only yield the new variables.
+				properties = DebugPlugin.getDefault().getLaunchManager().getEnvironment(fLaunchConfiguration);
+			}
+			
+			if (properties == null) {
+				properties = new String[0];
+			}
+			
+			for (String property : properties) {
+				int idx = property.indexOf('=');
+				if (idx != -1) {
+					String key = property.substring(0, idx);
+					String value = property.substring(idx + 1);
+					fEnvVariables.setProperty(key, value);
+				} else {
+					fEnvVariables.setProperty(property, ""); //$NON-NLS-1$
+				}
+			}
+		}
+		
+		return fEnvVariables;
+	}
+	
+	/** @since 3.0 */
+	public boolean getClearEnvironment() throws CoreException {
+		return !fLaunchConfiguration.getAttribute(ILaunchManager.ATTR_APPEND_ENVIRONMENT_VARIABLES, true);
+	}
+	
+	/** @since 3.0 */
+	public boolean getUpdateThreadListOnSuspend() throws CoreException {
+		return fLaunchConfiguration
+				.getAttribute(
+						IGDBLaunchConfigurationConstants.ATTR_DEBUGGER_UPDATE_THREADLIST_ON_SUSPEND,
+						IGDBLaunchConfigurationConstants.DEBUGGER_UPDATE_THREADLIST_ON_SUSPEND_DEFAULT);
+	}
+	
 	/*
 	 * Launch GDB process. 
 	 * Allow subclass to override.
@@ -272,7 +350,7 @@ public class GDBBackend extends AbstractDsfService implements IGDBBackend {
 	protected Process launchGDBProcess(String commandLine) throws CoreException {
         Process proc = null;
 		try {
-			proc = ProcessFactory.getFactory().exec(commandLine);
+			proc = ProcessFactory.getFactory().exec(commandLine, LaunchUtils.getLaunchEnvironment(fLaunchConfiguration));
 		} catch (IOException e) {
             String message = "Error while launching command " + commandLine;   //$NON-NLS-1$
             throw new CoreException(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, message, e));
@@ -300,7 +378,57 @@ public class GDBBackend extends AbstractDsfService implements IGDBBackend {
     public void interrupt() {
         if (fProcess instanceof Spawner) {
             Spawner gdbSpawner = (Spawner) fProcess;
-            gdbSpawner.interrupt();
+            
+			// Cygwin gdb 6.8 is capricious when it comes to interrupting the
+			// target. The same logic here will work with MinGW, though. And on
+			// linux it's irrelevant since interruptCTRLC()==interrupt(). So,
+			// one odd size fits all.
+			// See https://bugs.eclipse.org/bugs/show_bug.cgi?id=304096#c54
+            if (getSessionType() == SessionType.REMOTE) { 
+               	gdbSpawner.interrupt();
+            }
+            else {
+            	gdbSpawner.interruptCTRLC();
+            }
+        }
+    }
+
+    /**
+	 * @since 3.0
+	 */
+    public void interruptAndWait(int timeout, RequestMonitor rm) {
+        if (fProcess instanceof Spawner) {
+            Spawner gdbSpawner = (Spawner) fProcess;
+
+			// Cygwin gdb 6.8 is capricious when it comes to interrupting the
+			// target. The same logic here will work with MinGW, though. And on
+			// linux it's irrelevant since interruptCTRLC()==interrupt(). So,
+			// one odd size fits all.
+			// See https://bugs.eclipse.org/bugs/show_bug.cgi?id=304096#c54            
+            if (getSessionType() == SessionType.REMOTE) { 
+               	gdbSpawner.interrupt();
+            }
+            else {
+            	gdbSpawner.interruptCTRLC();
+            }
+            fInterruptFailedJob = new MonitorInterruptJob(timeout, rm);
+        } else {
+            rm.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, IDsfStatusConstants.NOT_SUPPORTED, "Cannot interrupt.", null)); //$NON-NLS-1$
+            rm.done();
+        }
+    }
+
+    /**
+	 * @since 3.0
+	 */
+    public void interruptInferiorAndWait(long pid, int timeout, RequestMonitor rm) {
+        if (fProcess instanceof Spawner) {
+            Spawner gdbSpawner = (Spawner) fProcess;
+            gdbSpawner.raise((int)pid, gdbSpawner.INT);
+            fInterruptFailedJob = new MonitorInterruptJob(timeout, rm);
+        } else {
+            rm.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, IDsfStatusConstants.NOT_SUPPORTED, "Cannot interrupt.", null)); //$NON-NLS-1$
+            rm.done();
         }
     }
 
@@ -498,6 +626,8 @@ public class GDBBackend extends AbstractDsfService implements IGDBBackend {
                               IGDBBackend.class.getName() }, 
                 new Hashtable<String,String>());
             
+            getSession().addServiceEventListener(GDBBackend.this, null);
+
             /*
 			 * This event is not consumed by any one at present, instead it's
 			 * the GDBControlInitializedDMEvent that's used to indicate that GDB
@@ -514,6 +644,7 @@ public class GDBBackend extends AbstractDsfService implements IGDBBackend {
         @Override
         protected void shutdown(RequestMonitor requestMonitor) {
             unregister();
+            getSession().removeServiceEventListener(GDBBackend.this);
             requestMonitor.done();
         }
     }
@@ -565,4 +696,81 @@ public class GDBBackend extends AbstractDsfService implements IGDBBackend {
         }
     }   
 
+    /**
+     * Stores the request monitor that must be dealt with for 
+     * the result of the interrupt operation.  If the interrupt
+     * successfully suspends the backend, the request monitor can
+     * be retrieved and completed successfully, and then this job
+     * should be canceled.  If this job is not canceled before 
+     * the time is up, it will imply the interrupt did not 
+     * successfully suspend the backend, and the current job will 
+     * indicate this in the request monitor.
+     * 
+     * The specified timeout is used to indicate how many milliseconds
+     * this job should wait for. INTERRUPT_TIMEOUT_DEFAULT indicates
+     * to use the default of 5 seconds.  The default is also use if the 
+     * timeout value is 0 or negative.
+     * 
+     * @since 3.0
+     */
+    protected class MonitorInterruptJob extends Job {
+    	// Bug 310274.  Until we have a preference to configure timeouts,
+    	// we need a large enough default timeout to accommodate slow
+    	// remote sessions.
+    	private final static int TIMEOUT_DEFAULT_VALUE = 5000;
+        private final RequestMonitor fRequestMonitor;
+
+        public MonitorInterruptJob(int timeout, RequestMonitor rm) {
+            super("Interrupt monitor job."); //$NON-NLS-1$
+            setSystem(true);
+            fRequestMonitor = rm;
+            
+            if (timeout == INTERRUPT_TIMEOUT_DEFAULT || timeout <= 0) {
+            	timeout = TIMEOUT_DEFAULT_VALUE; // default of 5 seconds
+            }
+            
+           	schedule(timeout);
+        }
+
+        @Override
+        protected IStatus run(IProgressMonitor monitor) {
+        	getExecutor().submit(
+                    new DsfRunnable() {
+                        public void run() {
+                        	fInterruptFailedJob = null;
+                        	fRequestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, IDsfStatusConstants.REQUEST_FAILED, "Interrupt failed.", null)); //$NON-NLS-1$
+                        	fRequestMonitor.done();
+                        }
+                    });
+        	return Status.OK_STATUS;
+        }
+
+        public RequestMonitor getRequestMonitor() { return fRequestMonitor; }
+    }
+
+	/**
+	 * We use this handler to determine if the SIGINT we sent to GDB has been
+	 * effective. We must listen for an MI event and not a higher-level
+	 * ISuspendedEvent. The reason is that some ISuspendedEvent are not sent
+	 * when the target stops, in cases where we don't want to views to update.
+	 * For example, if we want to interrupt the target to set a breakpoint, this
+	 * interruption is done silently; we will receive the MI event though.
+	 * 
+	 * <p>
+	 * Though we send a SIGINT, we may not specifically get an MISignalEvent.
+	 * Typically we will, but not always, so wait for an MIStoppedEvent. See
+	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=305178#c21
+	 * 
+	 * @since 3.0
+	 * 
+	 */
+    @DsfServiceEventHandler
+    public void eventDispatched(final MIStoppedEvent e) {
+    	if (fInterruptFailedJob != null) {
+    		if (fInterruptFailedJob.cancel()) {
+    			fInterruptFailedJob.getRequestMonitor().done();
+    		}
+    		fInterruptFailedJob = null;
+    	}
+    }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -9,6 +9,7 @@
  *    Markus Schorn - initial API and implementation
  *    Bryan Wilkinson (QNX)
  *    Andrew Ferguson (Symbian)
+ *    Sergey Prigogin (Google)
  *******************************************************************************/ 
 package org.eclipse.cdt.internal.core.index;
 
@@ -78,6 +79,11 @@ public interface IIndexFragment {
 	 */
 	public static final String PROPERTY_FRAGMENT_FORMAT_VERSION= "org.eclipse.cdt.internal.core.index.fragment.format.version"; //$NON-NLS-1$
 	
+	/**
+	 * Property key for storing whether indexer has to resume or not.
+	 */
+	public static final String PROPERTY_RESUME_INDEXER= "org.eclipse.cdt.internal.core.index.resume"; //$NON-NLS-1$
+		
 	/**
 	 * Returns the file for the given location and linkage. 
 	 * May return <code>null</code>, if no such file exists.
@@ -185,6 +191,11 @@ public interface IIndexFragment {
 	 */
 	void releaseReadLock();
 	
+	/**
+	 * @return <code>true</code> if there are threads waiting for read locks.
+	 */
+	public boolean hasWaitingReaders();
+
 	/**
 	 * Returns the timestamp of the last modification to the index.
 	 */

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -15,6 +15,8 @@ import java.text.NumberFormat;
 import java.util.Collection;
 import java.util.Iterator;
 
+import com.ibm.icu.text.MessageFormat;
+
 import org.eclipse.cdt.core.dom.ILinkage;
 import org.eclipse.cdt.core.model.AbstractLanguage;
 import org.eclipse.cdt.core.model.ILanguage;
@@ -26,8 +28,6 @@ import org.eclipse.cdt.internal.core.pdom.IndexerProgress;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
-
-import com.ibm.icu.text.MessageFormat;
 
 /**
  * A task for index updates.
@@ -185,7 +185,7 @@ public abstract class StandaloneIndexerTask extends AbstractIndexerTask {
 	 */
 	@Override
 	protected IStatus createStatus(String msg) {
-		return new Status(IStatus.ERROR, "org.eclipse.cdt.core", IStatus.ERROR, msg, null); //$NON-NLS-1$
+		return new Status(IStatus.ERROR, "org.eclipse.cdt.core", msg, null); //$NON-NLS-1$
 	}
 	
 	
@@ -195,7 +195,7 @@ public abstract class StandaloneIndexerTask extends AbstractIndexerTask {
 	 */
 	@Override
 	protected IStatus createStatus(String msg, Throwable e) {
-		return new Status(IStatus.ERROR, "org.eclipse.cdt.core", IStatus.ERROR, msg, e); //$NON-NLS-1$
+		return new Status(IStatus.ERROR, "org.eclipse.cdt.core", msg, e); //$NON-NLS-1$
 	}
 
 	/* (non-Javadoc)
@@ -276,7 +276,8 @@ public abstract class StandaloneIndexerTask extends AbstractIndexerTask {
 	 * @see org.eclipse.cdt.internal.core.pdom.PDOMWriter#trace(java.lang.String)
 	 */
 	@Override
-	protected void trace(String message) {
+	protected void trace(String message) {		
 		getLogService().traceLog(message);
-	}	
+	}
+
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2008, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,6 +14,7 @@ import java.util.List;
 
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.dom.IName;
+import org.eclipse.cdt.core.dom.ast.ASTGenericVisitor;
 import org.eclipse.cdt.core.dom.ast.ASTVisitor;
 import org.eclipse.cdt.core.dom.ast.IASTComment;
 import org.eclipse.cdt.core.dom.ast.IASTDeclaration;
@@ -37,7 +38,7 @@ import org.eclipse.cdt.core.index.IIndexFileSet;
 import org.eclipse.cdt.core.parser.util.ArrayUtil;
 import org.eclipse.cdt.internal.core.parser.scanner.ILocationResolver;
 import org.eclipse.cdt.internal.core.parser.scanner.ISkippedIndexedFilesListener;
-import org.eclipse.cdt.internal.core.parser.scanner.IncludeFileContent;
+import org.eclipse.cdt.internal.core.parser.scanner.InternalFileContent;
 import org.eclipse.cdt.internal.core.parser.scanner.Lexer.LexerOptions;
 import org.eclipse.core.runtime.CoreException;
 
@@ -54,13 +55,14 @@ public abstract class ASTTranslationUnit extends ASTNode implements IASTTranslat
 
     private IASTDeclaration[] fAllDeclarations = null;
     private IASTDeclaration[] fActiveDeclarations= null;
-	private int fLastDeclaration=-1;
+	private int fLastDeclaration= -1;
 
 	protected ILocationResolver fLocationResolver;
 	private IIndex fIndex;
 	private boolean fIsHeader= true;
 	private IIndexFileSet fIndexFileSet;
 	private INodeFactory fNodeFactory;
+	private boolean fForContentAssist;
 	
 	
     @Override
@@ -72,7 +74,7 @@ public abstract class ASTTranslationUnit extends ASTNode implements IASTTranslat
 		if (d != null) {
 			d.setParent(this);
 			d.setPropertyInParent(OWNED_DECLARATION);
-			fAllDeclarations = (IASTDeclaration[]) ArrayUtil.append( IASTDeclaration.class, fAllDeclarations, ++fLastDeclaration, d);
+			fAllDeclarations = (IASTDeclaration[]) ArrayUtil.append(IASTDeclaration.class, fAllDeclarations, ++fLastDeclaration, d);
 			fActiveDeclarations= null;
 		}
 	}
@@ -253,12 +255,12 @@ public abstract class ASTTranslationUnit extends ASTNode implements IASTTranslat
 	}
 	
 	 @Override
-	public final boolean accept( ASTVisitor action ){
+	public final boolean accept(ASTVisitor action) {
 		if (action.shouldVisitTranslationUnit) {
 			switch (action.visit(this)) {
-	            case ASTVisitor.PROCESS_ABORT : return false;
-	            case ASTVisitor.PROCESS_SKIP  : return true;
-	            default : break;
+	            case ASTVisitor.PROCESS_ABORT: return false;
+	            case ASTVisitor.PROCESS_SKIP: return true;
+	            default: break;
 	        }
 		}
 		IASTDeclaration[] decls = getDeclarations(action.includeInactiveNodes);
@@ -275,7 +277,7 @@ public abstract class ASTTranslationUnit extends ASTNode implements IASTTranslat
 	public final IASTFileLocation flattenLocationsToFile(IASTNodeLocation[] nodeLocations) {
         if (fLocationResolver == null)
             return null;
-        return fLocationResolver.flattenLocations( nodeLocations );
+        return fLocationResolver.flattenLocations(nodeLocations);
     }
 
     public final IDependencyTree getDependencyTree() {
@@ -287,7 +289,7 @@ public abstract class ASTTranslationUnit extends ASTNode implements IASTTranslat
 	public final String getContainingFilename(int offset) {
 		if (fLocationResolver == null)
 			return EMPTY_STRING;
-		return fLocationResolver.getContainingFilePath( offset );
+		return fLocationResolver.getContainingFilePath(offset);
 	}
 
     public final IIndex getIndex() {
@@ -316,7 +318,7 @@ public abstract class ASTTranslationUnit extends ASTNode implements IASTTranslat
 		return new IASTComment[0];
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public final Object getAdapter(Class adapter) {
 		if (adapter.isAssignableFrom(fLocationResolver.getClass())) {
 			return fLocationResolver;
@@ -338,10 +340,18 @@ public abstract class ASTTranslationUnit extends ASTNode implements IASTTranslat
 		fIsHeader= headerUnit;
 	}
 	
+	public boolean isForContentAssist() {
+		return fForContentAssist;
+	}
+
+	public final void setIsForContentAssist(boolean forContentAssist) {
+		fForContentAssist= forContentAssist;
+	}
+
 	/* (non-Javadoc)
 	 * @see org.eclipse.cdt.internal.core.parser.scanner.ISkippedIndexedFilesListener#skippedFile(org.eclipse.cdt.internal.core.parser.scanner.IncludeFileContent)
 	 */
-	public void skippedFile(int offset, IncludeFileContent fileContent) {
+	public void skippedFile(int offset, InternalFileContent fileContent) {
 		if (fIndexFileSet != null) {
 			List<IIndexFile> files= fileContent.getFilesIncluded();
 			for (IIndexFile indexFile : files) {
@@ -377,10 +387,21 @@ public abstract class ASTTranslationUnit extends ASTNode implements IASTTranslat
 		copy.setIsHeaderUnit(fIsHeader);
 		copy.setASTNodeFactory(fNodeFactory);
 		copy.setLocationResolver(fLocationResolver);
+		copy.setIsForContentAssist(fForContentAssist);
 		
 		for(IASTDeclaration declaration : getDeclarations())
 			copy.addDeclaration(declaration == null ? null : declaration.copy());
 		
 		copy.setOffsetAndLength(this);
+	}
+	
+	public final void freeze() {
+		accept(new ASTGenericVisitor(true) {
+			@Override
+			protected int genericVisit(IASTNode node) {
+				((ASTNode) node).setIsFrozen();
+				return PROCESS_CONTINUE;
+			}
+		});
 	}
 }

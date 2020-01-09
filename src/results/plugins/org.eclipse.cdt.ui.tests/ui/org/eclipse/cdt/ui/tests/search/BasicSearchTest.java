@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Symbian Software Systems and others.
+ * Copyright (c) 2007, 2010 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -82,7 +82,7 @@ public class BasicSearchTest extends BaseUITestCase {
 	@Override
 	protected void tearDown() throws Exception {
 		if (fCProject != null) {
-			fCProject.getProject().delete(true, NPM);
+			fCProject.getProject().delete(true, npm());
 		}
 		super.tearDown();
 	}
@@ -145,7 +145,7 @@ public class BasicSearchTest extends BaseUITestCase {
 	
 	public void testNoIndexerEnabled_158955() throws Exception {
 		// rebuild the index with no indexer
-		CCorePlugin.getIndexManager().setIndexerId(fCProject, IIndexManager.ID_NO_INDEXER);
+		CCorePlugin.getIndexManager().setIndexerId(fCProject, IPDOMManager.ID_NO_INDEXER);
 		CCorePlugin.getIndexManager().reindex(fCProject);
 		assertTrue(CCorePlugin.getIndexManager().joinIndexer(360000, new NullProgressMonitor()));
 		
@@ -255,14 +255,13 @@ public class BasicSearchTest extends BaseUITestCase {
 				Object node = nodeElements[0];
 				if (!(node instanceof IStatus))
 					node = nodeElements[1];
-				if (node instanceof IStatus)
-				{
+				if (node instanceof IStatus) {
 					IStatus firstRootNode = (IStatus) node;				
 					assertEquals(IStatus.WARNING, firstRootNode.getSeverity());
 					// can't really verify text in case message is localized...
-				}
-				else
+				} else {
 					fail("can't get status");
+				}
 			}
 		} else {
 			// must NOT have the IStatus
@@ -294,7 +293,7 @@ public class BasicSearchTest extends BaseUITestCase {
 			public void run(boolean fork, boolean cancelable,
 					IRunnableWithProgress runnable)
 					throws InvocationTargetException, InterruptedException {
-				runnable.run(NPM);
+				runnable.run(npm());
 			}
 		}, query);
 		assertTrue(result[0] instanceof PDOMSearchResult);
@@ -309,16 +308,16 @@ public class BasicSearchTest extends BaseUITestCase {
 	// }
 	public void testNewResultsOnSearchAgainA() throws Exception {
 		PDOMSearchQuery query= makeProjectQuery("foo");
-		assertOccurences(query, 2);
-		assertOccurences(query, 2);
+		assertOccurrences(query, 2);
+		assertOccurrences(query, 2);
 		
 		String newContent= "void bar() {}";
 		IFile file = fCProject.getProject().getFile(new Path("references.cpp"));
-		file.setContents(new ByteArrayInputStream(newContent.getBytes()), IResource.FORCE, NPM);
+		file.setContents(new ByteArrayInputStream(newContent.getBytes()), IResource.FORCE, npm());
 		Job.getJobManager().join(ResourcesPlugin.FAMILY_AUTO_REFRESH, null);
 		assertTrue(CCorePlugin.getIndexManager().joinIndexer(360000, new NullProgressMonitor()));
 
-		assertOccurences(query, 1);
+		assertOccurrences(query, 1);
 	}
 	
 	// void foo() {}
@@ -326,35 +325,35 @@ public class BasicSearchTest extends BaseUITestCase {
 	// void bar() {foo();foo();foo();}
 	public void testNewResultsOnSearchAgainB() throws Exception {
 		PDOMSearchQuery query= makeProjectQuery("foo");
-		assertOccurences(query, 4);
-		assertOccurences(query, 4);
+		assertOccurrences(query, 4);
+		assertOccurrences(query, 4);
 		
 		// whitespace s.t. new match offset is same as older 
 		String newContent= "void bar() {      foo();      }";
 		IFile file = fCProject.getProject().getFile(new Path("references.cpp"));
-		file.setContents(new ByteArrayInputStream(newContent.getBytes()), IResource.FORCE, NPM);
+		file.setContents(new ByteArrayInputStream(newContent.getBytes()), IResource.FORCE, npm());
 		runEventQueue(1000);
 		IIndexManager indexManager = CCorePlugin.getIndexManager();
 		indexManager.update(new ICElement[] {fCProject}, IIndexManager.UPDATE_ALL);
 		assertTrue(indexManager.joinIndexer(360000, new NullProgressMonitor()));
 
-		assertOccurences(query, 2);
+		assertOccurrences(query, 2);
 		
 		String newContent2= "void bar() {foo(); foo();}";
-		file.setContents(new ByteArrayInputStream(newContent2.getBytes()), IResource.FORCE, NPM);
+		file.setContents(new ByteArrayInputStream(newContent2.getBytes()), IResource.FORCE, npm());
 		Job.getJobManager().join(ResourcesPlugin.FAMILY_AUTO_REFRESH, null);
 		assertTrue(indexManager.joinIndexer(360000, new NullProgressMonitor()));
 
-		assertOccurences(query, 3);
+		assertOccurrences(query, 3);
 	}
 	
-	protected PDOMSearchQuery makeProjectQuery(String pattern) {
+	private PDOMSearchQuery makeProjectQuery(String pattern) {
 		String scope1= "Human Readable Description";
-		return new PDOMSearchPatternQuery(new ICElement[] {fCProject}, scope1, pattern, true, PDOMSearchQuery.FIND_ALL_OCCURANCES | PDOMSearchPatternQuery.FIND_ALL_TYPES);
+		return new PDOMSearchPatternQuery(new ICElement[] {fCProject}, scope1, pattern, true, PDOMSearchQuery.FIND_ALL_OCCURRENCES | PDOMSearchPatternQuery.FIND_ALL_TYPES);
 	}
 	
-	protected void assertOccurences(PDOMSearchQuery query, int expected) {
-		query.run(NPM);
+	private void assertOccurrences(PDOMSearchQuery query, int expected) {
+		query.run(npm());
 		PDOMSearchResult result= (PDOMSearchResult) query.getSearchResult();
 		assertEquals(expected, result.getMatchCount());
 	}

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 IBM Corporation.
+ * Copyright (c) 2006, 2010 IBM Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -64,7 +64,7 @@ public class CPPFunctionTests extends PDOMTestBase {
 	
 	public void testPointerToFunctionType() throws Exception {
 		assertDeclarationCount(pdom, "int2intPtr", 1);
-		IIndexFragmentBinding[] b= pdom.findBindings(new char[][] {"int2intPtr".toCharArray()}, IndexFilter.ALL, NPM);
+		IIndexFragmentBinding[] b= pdom.findBindings(new char[][] {"int2intPtr".toCharArray()}, IndexFilter.ALL, npm());
 		assertEquals(1, b.length);
 		assertInstance(b[0], ICPPVariable.class);
 		ICPPVariable v= (ICPPVariable) b[0];
@@ -118,7 +118,6 @@ public class CPPFunctionTests extends PDOMTestBase {
 		IParameter[] parameters = function.getParameters();
 		assertEquals(2, parameters.length);
 		assertEquals(true, parameters[0].isRegister());
-		assertEquals(true, parameters[1].isAuto());
 	}
 	
 	public void testExternCPPFunction() throws Exception {
@@ -126,14 +125,14 @@ public class CPPFunctionTests extends PDOMTestBase {
 		assertEquals(1, bindings.length);
 		assertTrue(((ICPPFunction) bindings[0]).isExtern());
 	}
-	
+
 	public void testStaticCPPFunction() throws Exception {
 		// static elements cannot be found on global scope, see bug 161216
 		IBinding[] bindings = findUnqualifiedName(pdom, "staticCPPFunction");
 		assertEquals(1, bindings.length);
 		assertTrue(((ICPPFunction) bindings[0]).isStatic());
 	}
-	
+
 	public void testInlineCPPFunction() throws Exception {
 		IBinding[] bindings = findQualifiedName(pdom, "inlineCPPFunction");
 		assertEquals(1, bindings.length);
@@ -203,8 +202,8 @@ public class CPPFunctionTests extends PDOMTestBase {
 			}
 		}
 
-		for (int i = 0; i < seen.length; i++) {
-			assertTrue(seen[i]);
+		for (boolean element : seen) {
+			assertTrue(element);
 		}
 	}
 

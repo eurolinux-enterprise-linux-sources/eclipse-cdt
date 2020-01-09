@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2009 IBM Corporation and others.
+ * Copyright (c) 2003, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -33,6 +33,7 @@ import org.eclipse.cdt.internal.core.model.CoreModelMessages;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.Path;
 
 /**
  * Creates labels for ICElement objects.
@@ -125,6 +126,13 @@ public class CElementBaseLabels {
 	 * e.g. <code>namespace::ClassName</code>
 	 */
 	public final static int T_FULLY_QUALIFIED= 1 << 13;
+
+	/**
+	 * Instances and specializations are qualified with arguments, templates with template parameter names.
+	 * The flag overrides {@link #TEMPLATE_PARAMETERS}.
+	 * @since 5.2
+	 */
+	public final static int TEMPLATE_ARGUMENTS= 1 << 14;
 
 	/**
 	 * Append base class specifications to type names.
@@ -358,7 +366,7 @@ public class CElementBaseLabels {
 		if( getFlag( flags, M_FULLY_QUALIFIED ) ){
 			ICElement parent = method.getParent();
 			if (parent != null && parent.exists() && !(parent instanceof ITranslationUnit)) {
-				getTypeLabel( parent, T_FULLY_QUALIFIED, buf );
+				getTypeLabel( parent, T_FULLY_QUALIFIED | (flags & TEMPLATE_ARGUMENTS), buf );
 				buf.append( "::" ); //$NON-NLS-1$
 			}
 		}
@@ -417,7 +425,7 @@ public class CElementBaseLabels {
 		// post qualification
 		if( getFlag(flags, M_POST_QUALIFIED)) {
 			buf.append( CONCAT_STRING );
-			getTypeLabel( method.getParent(), T_FULLY_QUALIFIED, buf );
+			getTypeLabel( method.getParent(), T_FULLY_QUALIFIED | (flags & TEMPLATE_ARGUMENTS), buf );
 		}
 		if( getFlag(flags, MF_POST_FILE_QUALIFIED)) {
 			IPath path= method.getPath();
@@ -438,7 +446,7 @@ public class CElementBaseLabels {
 	 * @return a "simple" name
 	 */
 	private static String getSimpleName(String elementName) {
-		int idx = elementName.indexOf("::"); //$NON-NLS-1$
+		int idx = elementName.lastIndexOf("::"); //$NON-NLS-1$
 		if (idx >= 0) {
 			return elementName.substring(idx+2);
 		}
@@ -446,19 +454,25 @@ public class CElementBaseLabels {
 	}
 
 	private static void getTemplateParameters(ITemplate template, int flags, StringBuffer buf) {
-		if (getFlag(flags, TEMPLATE_PARAMETERS)) {
-			String[] types = template.getTemplateParameterTypes();
-			buf.append('<');
-			if (types != null) {
-				for (int i= 0; i < types.length; i++) {
-					if (i > 0) {
-						buf.append( ',' );
-					}
-					buf.append( types[i] );
-				}
-			}
-			buf.append('>');
+		String[] args= null;
+		if (getFlag(flags, TEMPLATE_ARGUMENTS)) {
+			args = template.getTemplateArguments();
+		} else if (getFlag(flags, TEMPLATE_PARAMETERS)) {
+			args= template.getTemplateParameterTypes();
+		} else {
+			return;
 		}
+		
+		buf.append('<');
+		if (args != null) {
+			for (int i= 0; i < args.length; i++) {
+				if (i > 0) {
+					buf.append( ',' );
+				}
+				buf.append( args[i] );
+			}
+		}
+		buf.append('>');
 	}
 
 	/**
@@ -479,7 +493,7 @@ public class CElementBaseLabels {
 		if( getFlag( flags, F_FULLY_QUALIFIED ) ){
 			ICElement parent = field.getParent();
 			if (parent != null && parent.exists()) {
-				getTypeLabel( parent, T_FULLY_QUALIFIED, buf );
+				getTypeLabel( parent, T_FULLY_QUALIFIED | (flags & TEMPLATE_PARAMETERS), buf );
 				buf.append( "::" ); //$NON-NLS-1$
 			}
 		}
@@ -498,7 +512,7 @@ public class CElementBaseLabels {
 		// post qualification
 		if( getFlag(flags, F_POST_QUALIFIED)) {
 			buf.append( CONCAT_STRING );
-			getTypeLabel( field.getParent(), T_FULLY_QUALIFIED, buf );
+			getTypeLabel( field.getParent(), T_FULLY_QUALIFIED | (flags & TEMPLATE_PARAMETERS), buf );
 		}
 		if( getFlag(flags, MF_POST_FILE_QUALIFIED)) {
 			IPath path= field.getPath();
@@ -758,7 +772,14 @@ public class CElementBaseLabels {
 		if (rootQualified) {
 			buf.append(container.getPath().makeRelative().toString());
 		} else {
+			if (CCorePlugin.showSourceRootsAtTopOfProject()) {
 			buf.append(container.getElementName());
+			}
+			else {
+				String elementName = container.getElementName();
+				IPath path = new Path(elementName);
+				buf.append(path.lastSegment());
+			}
 			if (getFlag(flags, ROOT_QUALIFIED)) {
 				if (resource != null && container instanceof ISourceRoot && isReferenced((ISourceRoot)container)) {
 					buf.append(CONCAT_STRING);

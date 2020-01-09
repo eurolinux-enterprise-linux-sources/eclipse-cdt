@@ -24,6 +24,7 @@
             adaptableType="org.eclipse.cdt.examples.dsf.pda.launch.PDALaunch">
          <adapter type="org.eclipse.debug.internal.ui.viewers.model.provisional.IElementContentProvider"/>
          <adapter type="org.eclipse.debug.internal.ui.viewers.model.provisional.IModelProxyFactory"/>
+         <adapter type="org.eclipse.debug.ui.contexts.ISuspendTrigger"/>
       </factory>
    </extension>
 
@@ -69,7 +70,7 @@
 	         point="org.eclipse.debug.ui.contextViewBindings">
 	      <contextViewBinding
 	            contextId="org.eclipse.cdt.examples.dsf.pda.debugging"
-	            viewId="org.eclipse.cdt.examples.dsf.pda.dataStackView"/>
+	            viewId="org.eclipse.debug.ui.ExpressionView"/>
 	   </extension>
 
 	<extension

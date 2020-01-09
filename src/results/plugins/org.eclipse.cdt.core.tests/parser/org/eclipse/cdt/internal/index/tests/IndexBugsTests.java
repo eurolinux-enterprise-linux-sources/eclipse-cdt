@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -71,18 +71,25 @@ import org.eclipse.cdt.core.model.CoreModel;
 import org.eclipse.cdt.core.model.ICElement;
 import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.model.ITranslationUnit;
+import org.eclipse.cdt.core.settings.model.CSourceEntry;
+import org.eclipse.cdt.core.settings.model.ICProjectDescription;
+import org.eclipse.cdt.core.settings.model.ICSettingEntry;
+import org.eclipse.cdt.core.settings.model.ICSourceEntry;
 import org.eclipse.cdt.core.testplugin.CProjectHelper;
 import org.eclipse.cdt.core.testplugin.CTestPlugin;
 import org.eclipse.cdt.core.testplugin.TestScannerProvider;
 import org.eclipse.cdt.core.testplugin.util.BaseTestCase;
 import org.eclipse.cdt.core.testplugin.util.TestSourceReader;
 import org.eclipse.cdt.internal.core.dom.parser.ASTNode;
+import org.eclipse.cdt.internal.core.pdom.CModelListener;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Path;
 
@@ -273,12 +280,13 @@ public class IndexBugsTests extends BaseTestCase {
 
 	private void waitForIndexer() throws InterruptedException {
 		final IIndexManager indexManager = CCorePlugin.getIndexManager();
+		assertTrue(indexManager.joinIndexer(INDEX_WAIT_TIME, npm()));
 		long waitms= 1;
 		while (waitms < 2000 && indexManager.isIndexerSetupPostponed(fCProject)) {
 			Thread.sleep(waitms);
 			waitms *= 2;
 		}
-		assertTrue(indexManager.joinIndexer(INDEX_WAIT_TIME, NPM));
+		assertTrue(indexManager.joinIndexer(INDEX_WAIT_TIME, npm()));
 	}
 
 	protected Pattern[] getPattern(String qname) {
@@ -349,7 +357,7 @@ public class IndexBugsTests extends BaseTestCase {
 	public void test154563() throws Exception {
 		// Because of fix for http://bugs.eclipse.org/193779 this test case passes.
 		// However http://bugs.eclipse.org/154563 remains to be fixed.
-		String[] content= getContentsForTest(3);
+		String[] content= getContentsForTest(2);
 		
 		IFile file= createFile(getProject(), "header.h", content[0]);
 		waitUntilFileIsIndexed(file, INDEX_WAIT_TIME);
@@ -357,7 +365,7 @@ public class IndexBugsTests extends BaseTestCase {
 		IIndex index= CCorePlugin.getIndexManager().getIndex(fCProject);
 		index.acquireReadLock();
 		try {
-			IBinding[] bs= index.findBindings("A".toCharArray(), IndexFilter.ALL, NPM);
+			IBinding[] bs= index.findBindings("A".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bs.length); 
 			assertTrue(bs[0] instanceof ICPPClassType);
 			assertEquals(2, ((ICPPClassType)bs[0]).getDeclaredMethods().length);
@@ -365,13 +373,13 @@ public class IndexBugsTests extends BaseTestCase {
 			index.releaseReadLock();
 		}
 		
-		file.setContents(new ByteArrayInputStream(content[1].getBytes()), true, false, NPM);
+		file= createFile(getProject(), "header.h", content[1]);
 		waitUntilFileIsIndexed(file, INDEX_WAIT_TIME);
 		
 		index= CCorePlugin.getIndexManager().getIndex(fCProject);
 		index.acquireReadLock();
 		try {
-			IBinding[] bs= index.findBindings("A".toCharArray(), IndexFilter.ALL, NPM);
+			IBinding[] bs= index.findBindings("A".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bs.length); 
 			assertTrue(bs[0] instanceof ICPPClassType);
 			assertEquals(3, ((ICPPClassType)bs[0]).getDeclaredMethods().length);
@@ -392,13 +400,13 @@ public class IndexBugsTests extends BaseTestCase {
     	content.append("unsigned int arrayDataSize = sizeof(arrayData);\n");
 		int indexOfDecl = content.indexOf(varName);
 
-		assertTrue(CCorePlugin.getIndexManager().joinIndexer(INDEX_WAIT_TIME, NPM));
+		assertTrue(CCorePlugin.getIndexManager().joinIndexer(INDEX_WAIT_TIME, npm()));
 		IFile file= createFile(getProject(), fileName, content.toString());
 		// must be done in a reasonable amount of time
 		waitUntilFileIsIndexed(file, INDEX_WAIT_TIME);
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings= fIndex.findBindings(getPattern("arrayDataSize"), true, IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings= fIndex.findBindings(getPattern("arrayDataSize"), true, IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			
 			IIndexBinding binding= bindings[0];
@@ -422,7 +430,7 @@ public class IndexBugsTests extends BaseTestCase {
 
 		fIndex.acquireReadLock();
 		try {
-			IBinding[] bindings= fIndex.findBindings("e20070206".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), NPM);
+			IBinding[] bindings= fIndex.findBindings("e20070206".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof IEnumerator);
 		} finally {
@@ -475,7 +483,7 @@ public class IndexBugsTests extends BaseTestCase {
 			assertEquals(true, i.isSystemInclude());
 			assertEquals(0, i.getNameOffset());
 			assertEquals(0, i.getNameLength());
-			IIndexBinding[] bindings= fIndex.findBindings("y".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings= fIndex.findBindings("y".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof IVariable);
 		} finally {
@@ -514,7 +522,7 @@ public class IndexBugsTests extends BaseTestCase {
 
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings= fIndex.findBindings(getPattern("ns162011::function162011"), true, IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings= fIndex.findBindings(getPattern("ns162011::function162011"), true, IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			
 			IIndexBinding binding= bindings[0];
@@ -617,6 +625,7 @@ public class IndexBugsTests extends BaseTestCase {
 	// // header.h	
 	// enum E {A,B,C};
 	public void test171834() throws Exception {
+		CModelListener.sSuppressUpdateOfLastRecentlyUsed= false;
 		waitForIndexer();
 
 		ICProject cproject = CProjectHelper.createCCProject("seq1", "bin", IPDOMManager.ID_FAST_INDEXER);
@@ -669,7 +678,7 @@ public class IndexBugsTests extends BaseTestCase {
 
 		fIndex.acquireReadLock();
 		try {
-			IBinding[] bindings= fIndex.findBindings("S20070201".toCharArray(), IndexFilter.getFilter(ILinkage.C_LINKAGE_ID), NPM);
+			IBinding[] bindings= fIndex.findBindings("S20070201".toCharArray(), IndexFilter.getFilter(ILinkage.C_LINKAGE_ID), npm());
 			assertEquals(2, bindings.length);
 			
 			IBinding struct, typedef;
@@ -703,7 +712,7 @@ public class IndexBugsTests extends BaseTestCase {
 
 		fIndex.acquireReadLock();
 		try {
-			IBinding[] bindings= fIndex.findBindings("S20070201".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), NPM);
+			IBinding[] bindings= fIndex.findBindings("S20070201".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), npm());
 			assertEquals(2, bindings.length);
 			
 			IBinding struct, typedef;
@@ -738,7 +747,7 @@ public class IndexBugsTests extends BaseTestCase {
 
 		fIndex.acquireReadLock();
 		try {
-			IBinding[] bindings= fIndex.findBindings("T20070213".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), NPM);
+			IBinding[] bindings= fIndex.findBindings("T20070213".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			ITypedef td= (ITypedef) bindings[0];
@@ -758,10 +767,10 @@ public class IndexBugsTests extends BaseTestCase {
 		fIndex.acquireReadLock();
 		try {
 			// double check if file was indexed
-			IBinding[] bindings= fIndex.findBindings("UPDATED20070213".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), NPM);
+			IBinding[] bindings= fIndex.findBindings("UPDATED20070213".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), npm());
 			assertEquals(1, bindings.length);
 			
-			bindings= fIndex.findBindings("T20070213".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), NPM);
+			bindings= fIndex.findBindings("T20070213".toCharArray(), IndexFilter.getFilter(ILinkage.CPP_LINKAGE_ID), npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			ITypedef td= (ITypedef) bindings[0];
@@ -791,7 +800,7 @@ public class IndexBugsTests extends BaseTestCase {
 		IIndex index= CCorePlugin.getIndexManager().getIndex(fCProject);
 		index.acquireReadLock();
 		try {
-			IBinding[] bs= index.findBindings("var".toCharArray(), IndexFilter.ALL, NPM);
+			IBinding[] bs= index.findBindings("var".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bs.length); 
 			assertTrue(bs[0] instanceof ICPPVariable);
 			assertTrue(((ICPPVariable)bs[0]).getType() instanceof ICPPClassType);
@@ -800,13 +809,13 @@ public class IndexBugsTests extends BaseTestCase {
 			index.releaseReadLock();
 		}
 		
-		file.setContents(new ByteArrayInputStream(content[1].getBytes()), true, false, NPM);
+		file= createFile(getProject(), "header.h", content[1]);
 		waitUntilFileIsIndexed(file, INDEX_WAIT_TIME);
 		
 		index= CCorePlugin.getIndexManager().getIndex(fCProject);
 		index.acquireReadLock();
 		try {
-			IBinding[] bs= index.findBindings("var".toCharArray(), IndexFilter.ALL, NPM);
+			IBinding[] bs= index.findBindings("var".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bs.length); 
 			assertTrue(bs[0] instanceof ICPPVariable);
 			assertTrue(((ICPPVariable)bs[0]).getType() instanceof ICPPClassType);
@@ -1046,7 +1055,7 @@ public class IndexBugsTests extends BaseTestCase {
 				}
 			};
 			
-			IBinding[] bindings= fIndex.findBindings(new char[][]{{'a'},{'b'},{'c'},{'f'}}, NON_CLASS, NPM);
+			IBinding[] bindings= fIndex.findBindings(new char[][]{{'a'},{'b'},{'c'},{'f'}}, NON_CLASS, npm());
 			assertEquals(1,bindings.length);
 		} finally {
 			fIndex.releaseReadLock();
@@ -1076,7 +1085,7 @@ public class IndexBugsTests extends BaseTestCase {
 			IIndex index= CCorePlugin.getIndexManager().getIndex(new ICProject[]{fCProject, p2});
 			index.acquireReadLock();
 			try {
-				IIndexBinding[] bindings= index.findBindings("StructA_T".toCharArray(), IndexFilter.ALL, NPM);
+				IIndexBinding[] bindings= index.findBindings("StructA_T".toCharArray(), IndexFilter.ALL, npm());
 				assertEquals(1, bindings.length);
 				IIndexBinding binding= bindings[0];
 				IIndexName[] names= index.findReferences(binding);
@@ -1125,7 +1134,7 @@ public class IndexBugsTests extends BaseTestCase {
 		IIndex index= indexManager.getIndex(fCProject);
 		index.acquireReadLock();
 		try {
-			IIndexBinding[] bindings = index.findBindings("v".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings = index.findBindings("v".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			IIndexBinding binding = bindings[0];
 			assertTrue(binding instanceof IVariable);
@@ -1146,61 +1155,6 @@ public class IndexBugsTests extends BaseTestCase {
 		}
 	}
 	
-	// int globalVar;
-	
-	// #include "../__bugsTest__/common.h"
-	// void func() {
-	//    globalVar++;
-	// }
-	public void testDependentProjectsWithFullIndexer_Bug197311() throws Exception {
-		String[] contents= getContentsForTest(2);
-		final IIndexManager indexManager = CCorePlugin.getIndexManager();
-		indexManager.setIndexerId(fCProject, IPDOMManager.ID_FULL_INDEXER);
-		ICProject p2 = CProjectHelper.createCCProject("bug197311", "bin", IPDOMManager.ID_FULL_INDEXER);
-		IProject[] refs = new IProject[] {fCProject.getProject()};
-		IProjectDescription pd = p2.getProject().getDescription();
-		pd.setReferencedProjects(refs);
-		p2.getProject().setDescription(pd, new NullProgressMonitor());
-		try {
-			IFile f1= TestSourceReader.createFile(fCProject.getProject(), "common.h", contents[0]);
-			IFile f2= TestSourceReader.createFile(fCProject.getProject(), "src.cpp", contents[1]);
-			IFile f3= TestSourceReader.createFile(p2.getProject(), "src.cpp", contents[1]);
-			waitForIndexer();
-
-			IIndex index= indexManager.getIndex(p2, IIndexManager.ADD_DEPENDENCIES);
-			index.acquireReadLock();
-			try {
-				IIndexBinding[] bindings= index.findBindings("globalVar".toCharArray(), IndexFilter.ALL, NPM);
-				assertEquals(1, bindings.length);
-				IIndexBinding binding= bindings[0];
-				IIndexName[] names= index.findReferences(binding);
-				assertEquals(2, names.length);
-				names= index.findDeclarations(binding);
-				assertEquals(1, names.length);
-			} finally {
-				index.releaseReadLock();
-			}
-			
-			indexManager.reindex(p2);
-			waitForIndexer();
-
-			index= indexManager.getIndex(p2, IIndexManager.ADD_DEPENDENCIES);
-			index.acquireReadLock();
-			try {
-				IIndexBinding[] bindings= index.findBindings("globalVar".toCharArray(), IndexFilter.ALL, NPM);
-				assertEquals(1, bindings.length);
-				IIndexBinding binding= bindings[0];
-				IIndexName[] names= index.findReferences(binding);
-				assertEquals(2, names.length);
-				names= index.findDeclarations(binding);
-				assertEquals(1, names.length);
-			} finally {
-				index.releaseReadLock();
-			}
-		} finally {
-			CProjectHelper.delete(p2);
-		}
-	}
 	
 	// #define MAC(...) Bug200239
 	
@@ -1219,7 +1173,7 @@ public class IndexBugsTests extends BaseTestCase {
 
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings= fIndex.findBindings("Bug200239".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings= fIndex.findBindings("Bug200239".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			IIndexName[] refs= fIndex.findReferences(bindings[0]);
 			assertEquals(3, refs.length);
@@ -1245,7 +1199,7 @@ public class IndexBugsTests extends BaseTestCase {
 
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings= fIndex.findBindings("Bug200239".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings= fIndex.findBindings("Bug200239".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			IIndexName[] refs= fIndex.findReferences(bindings[0]);
 			assertEquals(3, refs.length);
@@ -1264,12 +1218,12 @@ public class IndexBugsTests extends BaseTestCase {
 		waitForIndexer();
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings= fIndex.findBindings("bug200553_A".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings= fIndex.findBindings("bug200553_A".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			checkTypedefDepth((ITypedef) bindings[0]);
 
-			bindings= fIndex.findBindings("bug200553_B".toCharArray(), IndexFilter.ALL, NPM);
+			bindings= fIndex.findBindings("bug200553_B".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			checkTypedefDepth((ITypedef) bindings[0]);
@@ -1281,12 +1235,12 @@ public class IndexBugsTests extends BaseTestCase {
 		waitForIndexer();
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings= fIndex.findBindings("bug200553_A".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings= fIndex.findBindings("bug200553_A".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			checkTypedefDepth((ITypedef) bindings[0]);
 
-			bindings= fIndex.findBindings("bug200553_B".toCharArray(), IndexFilter.ALL, NPM);
+			bindings= fIndex.findBindings("bug200553_B".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			checkTypedefDepth((ITypedef) bindings[0]);
@@ -1313,12 +1267,12 @@ public class IndexBugsTests extends BaseTestCase {
 		waitForIndexer();
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings= fIndex.findBindings("bug200553_A".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings= fIndex.findBindings("bug200553_A".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			checkTypedefDepth((ITypedef) bindings[0]);
 
-			bindings= fIndex.findBindings("bug200553_B".toCharArray(), IndexFilter.ALL, NPM);
+			bindings= fIndex.findBindings("bug200553_B".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			checkTypedefDepth((ITypedef) bindings[0]);
@@ -1330,12 +1284,12 @@ public class IndexBugsTests extends BaseTestCase {
 		waitForIndexer();
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings= fIndex.findBindings("bug200553_A".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings= fIndex.findBindings("bug200553_A".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			checkTypedefDepth((ITypedef) bindings[0]);
 
-			bindings= fIndex.findBindings("bug200553_B".toCharArray(), IndexFilter.ALL, NPM);
+			bindings= fIndex.findBindings("bug200553_B".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			assertTrue(bindings[0] instanceof ITypedef);
 			checkTypedefDepth((ITypedef) bindings[0]);
@@ -1387,7 +1341,7 @@ public class IndexBugsTests extends BaseTestCase {
 		fIndex.acquireReadLock();
 		try {
 			IIndexBinding[] bindings = fIndex.findBindings("func_209049".toCharArray(),
-					IndexFilter.ALL, NPM);
+					IndexFilter.ALL, npm());
 			IFunctionType ft = ((IFunction) bindings[0]).getType();
 			assertEquals("void (long long int)", ASTTypeUtil.getType(ft));
 		} finally {
@@ -1412,7 +1366,7 @@ public class IndexBugsTests extends BaseTestCase {
 		fIndex.acquireReadLock();
 		try {
 			IIndexBinding[] bindings = fIndex.findBindings("staticInHeader".toCharArray(),
-					IndexFilter.ALL, NPM);
+					IndexFilter.ALL, npm());
 			IFunction func = (IFunction) bindings[0];
 			assertTrue(func.isStatic());
 			IIndexName[] refs = fIndex.findReferences(func);
@@ -1439,7 +1393,7 @@ public class IndexBugsTests extends BaseTestCase {
 		fIndex.acquireReadLock();
 		try {
 			IIndexBinding[] bindings = fIndex.findBindings("staticConstInHeader".toCharArray(),
-					IndexFilter.ALL, NPM);
+					IndexFilter.ALL, npm());
 			IVariable var = (IVariable) bindings[0];
 			assertTrue(var.isStatic());
 			IIndexName[] refs = fIndex.findReferences(var);
@@ -1466,7 +1420,7 @@ public class IndexBugsTests extends BaseTestCase {
 		fIndex.acquireReadLock();
 		try {
 			IIndexBinding[] bindings = fIndex.findBindings("staticInHeader".toCharArray(),
-					IndexFilter.C_DECLARED_OR_IMPLICIT, NPM);
+					IndexFilter.C_DECLARED_OR_IMPLICIT, npm());
 			IFunction func = (IFunction) bindings[0];
 			assertTrue(func.isStatic());
 			IIndexName[] refs = fIndex.findReferences(func);
@@ -1493,7 +1447,7 @@ public class IndexBugsTests extends BaseTestCase {
 		fIndex.acquireReadLock();
 		try {
 			IIndexBinding[] bindings = fIndex.findBindings("staticConstInHeader".toCharArray(),
-					IndexFilter.C_DECLARED_OR_IMPLICIT, NPM);
+					IndexFilter.C_DECLARED_OR_IMPLICIT, npm());
 			IVariable var = (IVariable) bindings[0];
 			assertTrue(var.isStatic());
 			IIndexName[] refs = fIndex.findReferences(var);
@@ -1515,7 +1469,7 @@ public class IndexBugsTests extends BaseTestCase {
 		waitForIndexer();
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings = fIndex.findBindings("ok".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings = fIndex.findBindings("ok".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 		} finally {
 			fIndex.releaseReadLock();
@@ -1541,7 +1495,7 @@ public class IndexBugsTests extends BaseTestCase {
 		fIndex.acquireReadLock();
 		try {
 			IIndexBinding[] bindings = fIndex.findBindings(new char[][] { "MyClass".toCharArray(),
-					"method".toCharArray() }, IndexFilter.ALL, NPM);
+					"method".toCharArray() }, IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			IIndexName[] decls = fIndex.findDeclarations(bindings[0]);
 			assertEquals(2, decls.length);
@@ -1573,7 +1527,7 @@ public class IndexBugsTests extends BaseTestCase {
 		fIndex.acquireReadLock();
 		try {
 			IIndexBinding[] bindings = fIndex.findBindings(new char[][] { "unrelated".toCharArray(),
-					"b".toCharArray() }, IndexFilter.ALL, NPM);
+					"b".toCharArray() }, IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			IIndexName[] decls = fIndex.findNames(bindings[0], IIndex.FIND_ALL_OCCURRENCES);
 			assertEquals(2, decls.length);
@@ -1601,9 +1555,9 @@ public class IndexBugsTests extends BaseTestCase {
 		waitForIndexer();
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings = fIndex.findBindings("bug227088".toCharArray(), IndexFilter.ALL, NPM);
+			IIndexBinding[] bindings = fIndex.findBindings("bug227088".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(0, bindings.length);
-			bindings = fIndex.findBindings("ok".toCharArray(), IndexFilter.ALL, NPM);
+			bindings = fIndex.findBindings("ok".toCharArray(), IndexFilter.ALL, npm());
 			assertEquals(1, bindings.length);
 			IIndexName[] decls = fIndex.findNames(bindings[0], IIndex.FIND_ALL_OCCURRENCES);
 			assertEquals(2, decls.length);
@@ -1789,7 +1743,7 @@ public class IndexBugsTests extends BaseTestCase {
 		waitUntilFileIsIndexed(file, 4000);
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings = fIndex.findBindings("a".toCharArray(), false, IndexFilter.ALL_DECLARED, NPM);
+			IIndexBinding[] bindings = fIndex.findBindings("a".toCharArray(), false, IndexFilter.ALL_DECLARED, npm());
 			assertEquals(1, bindings.length);
 			IIndexName[] refs = fIndex.findNames(bindings[0], IIndex.FIND_REFERENCES);
 			assertEquals(2, refs.length);
@@ -1810,7 +1764,7 @@ public class IndexBugsTests extends BaseTestCase {
 		waitUntilFileIsIndexed(file, 4000);
 		fIndex.acquireReadLock();
 		try {
-			IIndexBinding[] bindings = fIndex.findBindings("Y".toCharArray(), false, IndexFilter.ALL_DECLARED, NPM);
+			IIndexBinding[] bindings = fIndex.findBindings("Y".toCharArray(), false, IndexFilter.ALL_DECLARED, npm());
 			assertEquals(1, bindings.length);
 			ICPPClassType ct= (ICPPClassType) bindings[0];
 			final ICPPBase[] bases = ct.getBases();
@@ -2223,4 +2177,105 @@ public class IndexBugsTests extends BaseTestCase {
 		}
 	}
 
+	//  // a.h
+	//	struct Error{};
+	
+	//  // b.h
+	//	void Error(int errCode) {}
+
+	//  // source1.cpp
+	// #include "a.h" 
+	// Error d;
+
+	//  // source2.cpp
+	// Error d;  // Problem, without inclusion we need to prefer the function.
+	public void testDisambiguateObjectVsType_304479() throws Exception {
+		waitForIndexer();
+		String[] testData = getContentsForTest(4);
+		TestSourceReader.createFile(fCProject.getProject(), "a.h", testData[0]);
+		TestSourceReader.createFile(fCProject.getProject(), "b.h", testData[1]);
+		IFile s1= TestSourceReader.createFile(fCProject.getProject(), "s1.cpp", testData[2]);
+		IFile s2= TestSourceReader.createFile(fCProject.getProject(), "s2.cpp", testData[3]);
+		final IIndexManager indexManager = CCorePlugin.getIndexManager();
+		indexManager.reindex(fCProject);
+		waitForIndexer();
+		IIndex index= indexManager.getIndex(fCProject);
+		index.acquireReadLock();
+		try {
+			IASTTranslationUnit tu = TestSourceReader.createIndexBasedAST(index, fCProject, s1);
+			IASTSimpleDeclaration sdecl= (IASTSimpleDeclaration) tu.getDeclarations()[0];
+			IVariable var= (IVariable) sdecl.getDeclarators()[0].getName().resolveBinding();
+			assertFalse(var.getType() instanceof IProblemBinding);
+			assertTrue(var.getType() instanceof ICPPClassType);
+
+			tu = TestSourceReader.createIndexBasedAST(index, fCProject, s2);
+			sdecl= (IASTSimpleDeclaration) tu.getDeclarations()[0];
+			var= (IVariable) sdecl.getDeclarators()[0].getName().resolveBinding();
+			assertTrue(var.getType() instanceof IProblemBinding);
+		} finally {
+			index.releaseReadLock();
+		}
+	}
+
+	public void testUpdateNonSrcFolderHeader_283080() throws Exception {
+		IIndexBinding[] r;
+		
+		final IProject prj = fCProject.getProject();
+		final IFolder src= prj.getFolder("src");
+		final IFolder h= prj.getFolder("h");
+		src.create(true, false, null);
+		h.create(true, false, null);
+		assertTrue(src.exists());
+		assertTrue(h.exists());
+
+		ICProjectDescription desc= CCorePlugin.getDefault().getProjectDescription(prj);
+		assertNotNull(desc);
+		desc.getActiveConfiguration().setSourceEntries(new ICSourceEntry[] {
+				new CSourceEntry(src, new IPath[0], ICSettingEntry.SOURCE_PATH)
+		});
+		CCorePlugin.getDefault().setProjectDescription(prj, desc);
+		TestSourceReader.createFile(h, "a.h", "int version1;");
+		waitForIndexer(fCProject);
+		
+		final IIndex index= CCorePlugin.getIndexManager().getIndex(fCProject);
+		index.acquireReadLock();
+		try {
+			r = index.findBindings("version1".toCharArray(), IndexFilter.ALL_DECLARED, null);
+			assertEquals(0, r.length);
+		} finally {
+			index.releaseReadLock();
+		}
+		
+		IFile s= TestSourceReader.createFile(h, "a.h", "int version2;");
+		waitForIndexer(fCProject);
+		index.acquireReadLock();
+		try {
+			r = index.findBindings("version2".toCharArray(), IndexFilter.ALL_DECLARED, null);
+			assertEquals(0, r.length);
+		} finally {
+			index.releaseReadLock();
+		}
+
+		s= TestSourceReader.createFile(src, "source.cpp", "#include \"../h/a.h\"");
+		waitUntilFileIsIndexed(s, INDEX_WAIT_TIME);
+		index.acquireReadLock();
+		try {
+			r = index.findBindings("version2".toCharArray(), IndexFilter.ALL_DECLARED, null);
+			assertEquals(1, r.length);
+		} finally {
+			index.releaseReadLock();
+		}
+		
+		s= TestSourceReader.createFile(h, "a.h", "int version3;");
+		waitUntilFileIsIndexed(s, INDEX_WAIT_TIME);
+		index.acquireReadLock();
+		try {
+			r = index.findBindings("version2".toCharArray(), IndexFilter.ALL_DECLARED, null);
+			assertEquals(0, r.length);
+			r = index.findBindings("version3".toCharArray(), IndexFilter.ALL_DECLARED, null);
+			assertEquals(1, r.length);
+		} finally {
+			index.releaseReadLock();
+		}
+	}
 }

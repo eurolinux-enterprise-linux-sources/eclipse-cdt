@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     John Camelon (IBM) - Initial API and implementation
+ *     Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
 
@@ -24,14 +25,12 @@ import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPSemantics;
 
 
 public class CPPASTDeleteExpression extends ASTNode implements ICPPASTDeleteExpression {
-
     private IASTExpression operand;
     private boolean isGlobal;
     private boolean isVectored;
 
     private IASTImplicitName[] implicitNames = null;
-    
-    
+
     public CPPASTDeleteExpression() {
 	}
 
@@ -81,17 +80,17 @@ public class CPPASTDeleteExpression extends ASTNode implements ICPPASTDeleteExpr
     public boolean isVectored() {
         return isVectored;
     }
-    
+
     /**
      * Try to resolve both the destructor and operator delete.
      */
     public IASTImplicitName[] getImplicitNames() {
-    	if(implicitNames == null) {
+    	if (implicitNames == null) {
 	    	List<IASTImplicitName> names = new ArrayList<IASTImplicitName>();
 	    	
-	    	if(!isVectored) {
-		    	ICPPFunction destructor = CPPSemantics.findDestructor(this);
-		    	if(destructor != null) {
+	    	if (!isVectored) {
+		    	ICPPFunction destructor = CPPSemantics.findImplicitlyCalledDestructor(this);
+		    	if (destructor != null) {
 		    		CPPASTImplicitName destructorName = new CPPASTImplicitName(destructor.getNameCharArray(), this);
 		    		destructorName.setBinding(destructor);
 		    		destructorName.computeOperatorOffsets(operand, false);
@@ -99,9 +98,9 @@ public class CPPASTDeleteExpression extends ASTNode implements ICPPASTDeleteExpr
 		    	}
 	    	}
 	    	
-	    	if(!isGlobal) {
+	    	if (!isGlobal) {
 		    	ICPPFunction deleteOperator = CPPSemantics.findOverloadedOperator(this);
-		    	if(deleteOperator != null) {
+		    	if (deleteOperator != null) {
 		    		CPPASTImplicitName deleteName = new CPPASTImplicitName(deleteOperator.getNameCharArray(), this);
 		    		deleteName.setOperator(true);
 		    		deleteName.setBinding(deleteOperator);
@@ -110,7 +109,7 @@ public class CPPASTDeleteExpression extends ASTNode implements ICPPASTDeleteExpr
 		    	}
 	    	}
 	    	
-	    	if(names.isEmpty())
+	    	if (names.isEmpty())
 	    		implicitNames = IASTImplicitName.EMPTY_NAME_ARRAY;
 	    	else
 	    		implicitNames = names.toArray(new IASTImplicitName[names.size()]);
@@ -119,36 +118,41 @@ public class CPPASTDeleteExpression extends ASTNode implements ICPPASTDeleteExpr
     	return implicitNames;    	
 	}
 
-    
     @Override
-	public boolean accept( ASTVisitor action ){
-        if( action.shouldVisitExpressions ){
-		    switch( action.visit( this ) ){
-	            case ASTVisitor.PROCESS_ABORT : return false;
-	            case ASTVisitor.PROCESS_SKIP  : return true;
-	            default : break;
+	public boolean accept(ASTVisitor action) {
+        if (action.shouldVisitExpressions) {
+		    switch (action.visit(this)) {
+	            case ASTVisitor.PROCESS_ABORT: return false;
+	            case ASTVisitor.PROCESS_SKIP: return true;
+	            default: break;
 	        }
 		}
-        
-        if(action.shouldVisitImplicitNames) { 
-        	for(IASTImplicitName name : getImplicitNames()) {
-        		if(!name.accept(action)) return false;
+
+        if (action.shouldVisitImplicitNames) { 
+        	for (IASTImplicitName name : getImplicitNames()) {
+        		if (!name.accept(action))
+        			return false;
         	}
         }
-        
-        if( operand != null ) if( !operand.accept( action ) ) return false;
-        
-        if( action.shouldVisitExpressions ){
-		    switch( action.leave( this ) ){
-	            case ASTVisitor.PROCESS_ABORT : return false;
-	            case ASTVisitor.PROCESS_SKIP  : return true;
-	            default : break;
+
+        if (operand != null && !operand.accept(action))
+        	return false;
+
+        if (action.shouldVisitExpressions) {
+		    switch (action.leave(this)) {
+	            case ASTVisitor.PROCESS_ABORT: return false;
+	            case ASTVisitor.PROCESS_SKIP:  return true;
+	            default: break;
 	        }
 		}
         return true;
     }
-    
+
     public IType getExpressionType() {
     	return CPPSemantics.VOID_TYPE;
     }
+
+	public boolean isLValue() {
+		return false;
+	}
 }

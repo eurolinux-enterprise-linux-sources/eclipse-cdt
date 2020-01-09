@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -37,12 +37,12 @@ import org.eclipse.cdt.dsf.debug.service.IRunControl.IContainerSuspendedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IResumedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.ISuspendedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.StateChangeReason;
+import org.eclipse.cdt.dsf.debug.service.command.BufferedCommandControl;
 import org.eclipse.cdt.dsf.debug.service.command.CommandCache;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
 import org.eclipse.cdt.dsf.mi.service.MIExpressions.ExpressionChangedEvent;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIDataReadMemory;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIDataWriteMemory;
+import org.eclipse.cdt.dsf.mi.service.command.CommandFactory;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIDataReadMemoryInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIDataWriteMemoryInfo;
 import org.eclipse.cdt.dsf.service.AbstractDsfService;
@@ -77,6 +77,8 @@ public class MIMemory extends AbstractDsfService implements IMemory, ICachingSer
 
 	// Back-end commands cache
 	private CommandCache fCommandCache;
+	private CommandFactory fCommandFactory;
+
 	// Map of memory caches
     private Map<IMemoryDMContext, MIMemoryCache> fMemoryCaches;
 
@@ -127,7 +129,19 @@ public class MIMemory extends AbstractDsfService implements IMemory, ICachingSer
     private void doInitialize(final RequestMonitor requestMonitor) {
     	// Create the command cache
         ICommandControlService commandControl = getServicesTracker().getService(ICommandControlService.class);
-    	fCommandCache = new CommandCache(getSession(), commandControl);
+        BufferedCommandControl bufferedCommandControl = new BufferedCommandControl(commandControl, getExecutor(), 2);
+		
+        fCommandFactory = getServicesTracker().getService(IMICommandControl.class).getCommandFactory();
+
+		// This cache stores the result of a command when received; also, this cache
+		// is manipulated when receiving events.  Currently, events are received after
+		// three scheduling of the executor, while command results after only one.  This
+		// can cause problems because command results might be processed before an event
+		// that actually arrived before the command result.
+		// To solve this, we use a bufferedCommandControl that will delay the command
+		// result by two scheduling of the executor.
+		// See bug 280461
+    	fCommandCache = new CommandCache(getSession(), bufferedCommandControl);
     	fCommandCache.setContextAvailable(commandControl.getContext(), true);
 
     	// Register this service
@@ -314,7 +328,7 @@ public class MIMemory extends AbstractDsfService implements IMemory, ICachingSer
     	Character asChar = null;
 
     	fCommandCache.execute(
-    			new MIDataReadMemory(dmc, offset, address.toString(), mode, word_size, nb_rows, nb_cols, asChar),
+    			fCommandFactory.createMIDataReadMemory(dmc, offset, address.toString(), mode, word_size, nb_rows, nb_cols, asChar),
     			new DataRequestMonitor<MIDataReadMemoryInfo>(getExecutor(), drm) {
     				@Override
     				protected void handleSuccess() {
@@ -362,7 +376,7 @@ public class MIMemory extends AbstractDsfService implements IMemory, ICachingSer
     	for (int i = 0; i < count; i++) {
     		String value = new Byte(buffer[i]).toString();
     		fCommandCache.execute(
-    				new MIDataWriteMemory(dmc, offset + i, baseAddress, format, word_size, value),
+    				fCommandFactory.createMIDataWriteMemory(dmc, offset + i, baseAddress, format, word_size, value),
     				new DataRequestMonitor<MIDataWriteMemoryInfo>(getExecutor(), countingRM)
     		);
     	}

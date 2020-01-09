@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2009 Symbian Software Systems and others.
+ * Copyright (c) 2008, 2010 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,17 +12,22 @@
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
 
-import com.ibm.icu.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.eclipse.cdt.core.dom.ast.ASTVisitor;
+import org.eclipse.cdt.core.dom.ast.IASTDeclSpecifier;
+import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IASTIdExpression;
+import org.eclipse.cdt.core.dom.ast.IASTName;
+import org.eclipse.cdt.core.dom.ast.IASTNamedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IASTTypeId;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTAmbiguousTemplateArgument;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTPackExpansionExpression;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateId;
 import org.eclipse.cdt.internal.core.dom.parser.ASTAmbiguousNode;
-import org.eclipse.cdt.internal.core.parser.ParserMessages;
+import org.eclipse.core.runtime.Assert;
 
 /**
  * Ambiguity node for deciding between type-id and id-expression in a template argument.
@@ -32,27 +37,69 @@ public class CPPASTAmbiguousTemplateArgument extends ASTAmbiguousNode implements
 	private List<IASTNode> fNodes;
 	
 	/**
-	 * @param nodes  nodes of type {@link IASTTypeId} or {@link IASTIdExpression}
-	 */
-	/*
-	 * We can replace this with a version taking ICPPASTTemplateArgument...
-	 * in the future
+	 * @param nodes  nodes of type {@link IASTTypeId}, {@link IASTIdExpression} or {@link ICPPASTPackExpansionExpression}.
 	 */
 	public CPPASTAmbiguousTemplateArgument(IASTNode... nodes) {
 		fNodes= new ArrayList<IASTNode>(2);
 		for(IASTNode node : nodes) {
-			if(node instanceof IASTTypeId || node instanceof IASTIdExpression) {
+			if (node instanceof IASTTypeId || node instanceof IASTIdExpression) {
 				fNodes.add(node);
+			} else if (node instanceof ICPPASTPackExpansionExpression) {
+				final IASTExpression pattern = ((ICPPASTPackExpansionExpression) node).getPattern();
+				if (pattern instanceof IASTIdExpression) {
+					fNodes.add(node);
+				} else {
+					Assert.isLegal(false, pattern == null ? "null" : pattern.getClass().getName()); //$NON-NLS-1$
+				}
 			} else {
-				String ns= node == null ? "null" : node.getClass().getName(); //$NON-NLS-1$
-				String msg= MessageFormat.format(ParserMessages.getString("CPPASTAmbiguousTemplateArgument_InvalidConstruction"), new Object[] {ns}); //$NON-NLS-1$
-				throw new IllegalArgumentException(msg);
+				Assert.isLegal(false, node == null ? "null" : node.getClass().getName()); //$NON-NLS-1$
 			}
 		}
 	}
 
+	
+	@Override
+	protected void beforeAlternative(IASTNode node) {
+		// The name may be shared between the alternatives make sure it's parent is set correctly
+		if (node instanceof IASTTypeId) {
+			IASTDeclSpecifier declSpec = ((IASTTypeId) node).getDeclSpecifier();
+			if (declSpec instanceof IASTNamedTypeSpecifier) {
+				IASTNamedTypeSpecifier namedTypeSpec= (IASTNamedTypeSpecifier) declSpec;
+				final IASTName name = namedTypeSpec.getName();
+				name.setBinding(null);
+				namedTypeSpec.setName(name);
+			}
+		} else if (node instanceof IASTIdExpression) {
+			IASTIdExpression id= (IASTIdExpression) node;
+			final IASTName name = id.getName();
+			name.setBinding(null);
+			id.setName(name);
+		}
+	}
+
+
+	@Override
+	protected void afterResolution(ASTVisitor resolver, IASTNode best) {
+		beforeAlternative(best);
+	}
+
+
 	public IASTNode copy() {
-		throw new UnsupportedOperationException();
+		
+		int sizeOfNodes = fNodes.size();
+		IASTNode[] copyNodes = new IASTNode[sizeOfNodes];
+		int arrayIndex = 0;
+		for(IASTNode node : fNodes) {
+			if(node!=null){
+				copyNodes[arrayIndex]=node.copy();
+			}else{
+				copyNodes[arrayIndex]=null;
+			}
+			arrayIndex++;
+		}
+		
+		ICPPASTAmbiguousTemplateArgument ambiguityNode = new CPPASTAmbiguousTemplateArgument(copyNodes);
+		return ambiguityNode;
 	}
 	
 	@Override
@@ -69,7 +116,12 @@ public class CPPASTAmbiguousTemplateArgument extends ASTAmbiguousNode implements
         assertNotFrozen();
 		addNode(idExpression);
 	}
-	
+
+	public void addIdExpression(IASTExpression idExpression) {
+        assertNotFrozen();
+		addNode(idExpression);
+	}
+
 	private void addNode(IASTNode node) {
 		fNodes.add(node);
 		node.setParent(this);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Ericsson and others.
+ * Copyright (c) 2008, 2010 Ericsson and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -27,22 +27,24 @@ import org.eclipse.cdt.dsf.debug.service.command.ICommandControl;
 import org.eclipse.cdt.dsf.gdb.service.command.GDBControl;
 import org.eclipse.cdt.dsf.gdb.service.command.GDBControl_7_0;
 import org.eclipse.cdt.dsf.mi.service.CSourceLookup;
-import org.eclipse.cdt.dsf.mi.service.MIExpressions;
 import org.eclipse.cdt.dsf.mi.service.IMIBackend;
 import org.eclipse.cdt.dsf.mi.service.MIBreakpoints;
 import org.eclipse.cdt.dsf.mi.service.MIBreakpointsManager;
 import org.eclipse.cdt.dsf.mi.service.MIDisassembly;
+import org.eclipse.cdt.dsf.mi.service.MIExpressions;
 import org.eclipse.cdt.dsf.mi.service.MIMemory;
 import org.eclipse.cdt.dsf.mi.service.MIModules;
 import org.eclipse.cdt.dsf.mi.service.MIRegisters;
 import org.eclipse.cdt.dsf.mi.service.MIStack;
+import org.eclipse.cdt.dsf.mi.service.command.CommandFactory;
 import org.eclipse.cdt.dsf.service.DsfSession;
 import org.eclipse.debug.core.ILaunchConfiguration;
 
 public class GdbDebugServicesFactory extends AbstractDsfDebugServicesFactory {
 
 	// This should eventually be "7.0" once GDB 7.0 is released
-	private static final String GDB_7_0_VERSION = "6.8.50.20090218"; //$NON-NLS-1$
+	private static final String GDB_7_0_VERSION = "6.8.50.20090218"; //$NON-NLS-1$	
+	private static final String GDB_7_2_VERSION = "7.1.50"; //$NON-NLS-1$
 	
 	private final String fVersion;
 	
@@ -71,8 +73,13 @@ public class GdbDebugServicesFactory extends AbstractDsfDebugServicesFactory {
 					return (V)createBackendGDBService(session, (ILaunchConfiguration)arg);
 				}
 			}
+		} else if (IGDBTraceControl.class.isAssignableFrom(clazz)) {
+			for (Object arg : optionalArguments) {
+				if (arg instanceof ILaunchConfiguration) {
+					return (V)createTraceControlService(session, (ILaunchConfiguration)arg);
+				}
+			}
 		}
-
 
         return super.createService(clazz, session);
 	}
@@ -83,14 +90,17 @@ public class GdbDebugServicesFactory extends AbstractDsfDebugServicesFactory {
 
 	@Override
 	protected IBreakpoints createBreakpointService(DsfSession session) {
+		if (GDB_7_0_VERSION.compareTo(fVersion) <= 0) {
+			return new GDBBreakpoints_7_0(session);
+		}
 		return new MIBreakpoints(session);
 	}
 	
 	protected ICommandControl createCommandControl(DsfSession session, ILaunchConfiguration config) {
 		if (GDB_7_0_VERSION.compareTo(fVersion) <= 0) {
-			return new GDBControl_7_0(session, config);
+			return new GDBControl_7_0(session, config, new CommandFactory());
 		}
-		return new GDBControl(session, config);
+		return new GDBControl(session, config, new CommandFactory());
 	}
 
 	protected IMIBackend createBackendGDBService(DsfSession session, ILaunchConfiguration lc) {
@@ -150,5 +160,19 @@ public class GdbDebugServicesFactory extends AbstractDsfDebugServicesFactory {
 	@Override
 	protected IStack createStackService(DsfSession session) {
 		return new MIStack(session);
+	}
+	
+	/** @since 3.0 */
+	protected IGDBTraceControl createTraceControlService(DsfSession session, ILaunchConfiguration config) {
+		// This service is available for GDB 7.2. But until that GDB is itself available
+		// there is a pre-release that has a version of 6.8.50.20090414
+		if (GDB_7_2_VERSION.compareTo(fVersion) <= 0 || "6.8.50.20090414".equals(fVersion)) { //$NON-NLS-1$
+			return new GDBTraceControl_7_2(session, config);
+		}
+		// There is currently no implementation of the TraceControl service before GDB 7.2
+		// It could be done with restricted functionality for GDB 7.1 and maybe even 7.0
+		// but the service would have to be properly coded, as some MI commands don't exists
+		// in those older GDB versions.  Also, gdbserver only supports tracing starting with 7.2
+		return null;		
 	}
 }

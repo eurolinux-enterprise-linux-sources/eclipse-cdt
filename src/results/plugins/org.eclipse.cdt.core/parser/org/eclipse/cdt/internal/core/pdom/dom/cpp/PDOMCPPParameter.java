@@ -14,11 +14,12 @@ package org.eclipse.cdt.internal.core.pdom.dom.cpp;
 
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.dom.ast.DOMException;
-import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.IValue;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameter;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameterPackType;
 import org.eclipse.cdt.core.index.IIndexFile;
+import org.eclipse.cdt.core.parser.util.CharArrayUtils;
 import org.eclipse.cdt.internal.core.index.IIndexCPPBindingConstants;
 import org.eclipse.cdt.internal.core.index.IIndexFragment;
 import org.eclipse.cdt.internal.core.index.IIndexScope;
@@ -36,74 +37,58 @@ import org.eclipse.core.runtime.CoreException;
  */
 class PDOMCPPParameter extends PDOMNamedNode implements ICPPParameter, IPDOMBinding {
 
-	/**
-	 * Offset of pointer to the next parameter (relative to the
-	 * beginning of the record).
-	 */
-	private static final int NEXT_PARAM = PDOMNamedNode.RECORD_SIZE + 0;
-	
-	/**
-	 * Offset of pointer to type information for this parameter
-	 * (relative to the beginning of the record).
-	 */
-	private static final int TYPE = PDOMNamedNode.RECORD_SIZE + 4;
-
-	/**
-	 * Offset of annotation information (relative to the beginning of the
-	 * record).
-	 */
-	private static final int ANNOTATIONS = PDOMNamedNode.RECORD_SIZE + 8;
-
-	/**
-	 * Offset of flags
-	 * (relative to the beginning of the record).
-	 */
-	private static final int FLAGS = PDOMNamedNode.RECORD_SIZE + 9;
-
-	
-	/**
-	 * The size in bytes of a PDOMCPPParameter record in the database.
-	 */
+	private static final int NEXT_PARAM = PDOMNamedNode.RECORD_SIZE;
+	private static final int ANNOTATIONS = NEXT_PARAM + Database.PTR_SIZE;
+	private static final int FLAGS = ANNOTATIONS + 1;
 	@SuppressWarnings("hiding")
-	protected static final int RECORD_SIZE = PDOMNamedNode.RECORD_SIZE + 10;
+	protected static final int RECORD_SIZE = FLAGS + 1;
 	static {
 		assert RECORD_SIZE <= 22; // 23 would yield a 32-byte block
 	}
-
+	
 	private static final byte FLAG_DEFAULT_VALUE = 0x1;
 
-	public PDOMCPPParameter(PDOMLinkage linkage, long record) {
+	private final IType fType;
+	public PDOMCPPParameter(PDOMLinkage linkage, long record, IType type) {
 		super(linkage, record);
+		fType= type;
 	}
 
-	public PDOMCPPParameter(PDOMLinkage linkage, PDOMNode parent, IParameter param, long typeRecord)
+	public PDOMCPPParameter(PDOMLinkage linkage, PDOMNode parent, ICPPParameter param, PDOMCPPParameter next)
 			throws CoreException {
 		super(linkage, parent, param.getNameCharArray());
+		fType= null;	// this constructor is used for adding parameters to the database, only.
 		
 		Database db = getDB();
+		db.putByte(record + FLAGS, param.hasDefaultValue() ? FLAG_DEFAULT_VALUE : 0);
+		db.putRecPtr(record + NEXT_PARAM, next == null ? 0 : next.getRecord());
 
-		db.putRecPtr(record + NEXT_PARAM, 0);
-		byte flags= encodeFlags(param);
-		db.putByte(record + FLAGS, flags);
-		
-		db.putRecPtr(record + TYPE, typeRecord);
-		
+		storeAnnotations(db, param);
+	}
+
+	private void storeAnnotations(Database db, ICPPParameter param) throws CoreException {
 		try {
 			byte annotations = PDOMCPPAnnotation.encodeAnnotation(param);
 			db.putByte(record + ANNOTATIONS, annotations);
 		} catch (DOMException e) {
 			// ignore and miss out on some properties of the parameter
 		}
-
 	}
 
-	private byte encodeFlags(IParameter param) {
-		byte flags= 0;
-		if (param instanceof ICPPParameter && 
-				((ICPPParameter) param).hasDefaultValue()) {
-			flags |= FLAG_DEFAULT_VALUE;
+	public void update(ICPPParameter newPar) throws CoreException {
+		final Database db = getDB();
+		// Bug 297438: Don't clear the property of having a default value.
+		if (newPar.hasDefaultValue()) {
+			db.putByte(record + FLAGS, FLAG_DEFAULT_VALUE);
+		} else if (newPar.isParameterPack()) {
+			db.putByte(record + FLAGS, (byte) 0);
+		} 
+		storeAnnotations(db, newPar);
+		
+		final char[] newName = newPar.getNameCharArray();
+		if (!CharArrayUtils.equals(newName, getNameCharArray())) {
+			updateName(newName);
 		}
-		return flags;
 	}
 
 	@Override
@@ -116,26 +101,16 @@ class PDOMCPPParameter extends PDOMNamedNode implements ICPPParameter, IPDOMBind
 		return IIndexCPPBindingConstants.CPPPARAMETER;
 	}
 	
-	public void setNextParameter(PDOMCPPParameter nextParam) throws CoreException {
-		long rec = nextParam != null ? nextParam.getRecord() : 0;
-		getDB().putRecPtr(record + NEXT_PARAM, rec);
-	}
-
-	public PDOMCPPParameter getNextParameter() throws CoreException {
-		long rec = getDB().getRecPtr(record + NEXT_PARAM);
-		return rec != 0 ? new PDOMCPPParameter(getLinkage(), rec) : null;
-	}
-	
 	public String[] getQualifiedName() {
-		throw new PDOMNotImplementedError();
+		return new String[] {getName()};
 	}
 
 	public char[][] getQualifiedNameCharArray() throws DOMException {
-		throw new PDOMNotImplementedError();
+		return new char[][]{getNameCharArray()};
 	}
 
-	public boolean isGloballyQualified() throws DOMException {
-		throw new PDOMNotImplementedError();
+	public boolean isGloballyQualified() {
+		return false;
 	}
 
 	public boolean isMutable() throws DOMException {
@@ -144,13 +119,7 @@ class PDOMCPPParameter extends PDOMNamedNode implements ICPPParameter, IPDOMBind
 	}
 
 	public IType getType() {
-		try {
-			PDOMNode node = getLinkage().getNode(getDB().getRecPtr(record + TYPE));
-			return node instanceof IType ? (IType)node : null;
-		} catch (CoreException e) {
-			CCorePlugin.log(e);
-			return null;
-		}
+		return fType;
 	}
 
 	public boolean isAuto() throws DOMException {
@@ -187,7 +156,7 @@ class PDOMCPPParameter extends PDOMNamedNode implements ICPPParameter, IPDOMBind
 		return null;
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	public Object getAdapter(Class adapter) {
 		return null;
 	}
@@ -204,6 +173,10 @@ class PDOMCPPParameter extends PDOMNamedNode implements ICPPParameter, IPDOMBind
 
 	public boolean hasDefaultValue() {
 		return hasFlag(FLAG_DEFAULT_VALUE, false, FLAGS);
+	}
+
+	public boolean isParameterPack() {
+		return getType() instanceof ICPPParameterPackType;
 	}
 
 	private boolean hasFlag(byte flag, boolean defValue, int offset) {
@@ -240,12 +213,16 @@ class PDOMCPPParameter extends PDOMNamedNode implements ICPPParameter, IPDOMBind
 
 	@Override
 	public void delete(PDOMLinkage linkage) throws CoreException {
-		// the parameter reuses the type from the function type, so do not delete it.
-		PDOMCPPParameter next= getNextParameter();
-		if (next != null) {
-			next.delete(linkage);
+		long rec = getNextPtr();
+		if (rec != 0) {
+			new PDOMCPPParameter(linkage, rec, null).delete(linkage);
 		}
 		super.delete(linkage);
+	}
+
+	public long getNextPtr() throws CoreException {
+		long rec = getDB().getRecPtr(record + NEXT_PARAM);
+		return rec;
 	}
 
 	public boolean isFileLocal() throws CoreException {

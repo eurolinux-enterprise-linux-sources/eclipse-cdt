@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Symbian Software Systems and others.
+ * Copyright (c) 2007, 2009 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,6 +16,7 @@ import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IType;
+import org.eclipse.cdt.core.dom.ast.IValue;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassTemplatePartialSpecialization;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPSpecialization;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateArgument;
@@ -28,7 +29,6 @@ import org.eclipse.cdt.core.parser.util.ObjectMap;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPTemplateArgument;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPTemplateParameterMap;
 import org.eclipse.cdt.internal.core.index.IIndexFragmentBinding;
-import org.eclipse.cdt.internal.core.index.IIndexType;
 import org.eclipse.cdt.internal.core.index.composite.ICompositesFactory;
 
 /**
@@ -41,9 +41,14 @@ public class TemplateInstanceUtil {
 		CPPTemplateParameterMap result= new CPPTemplateParameterMap(keys.length);
 		
 		try {
-			for(int i = 0; i < keys.length; i++) {
-				ICPPTemplateArgument arg= preresult.getArgument(keys[i]);
-				result.put(keys[i], convert(cf, arg));
+			for (Integer key : keys) {
+				ICPPTemplateArgument arg= preresult.getArgument(key);
+				if (arg != null) {
+					result.put(key, convert(cf, arg));
+				} else {
+					ICPPTemplateArgument[] pack= preresult.getPackExpansion(key);
+					result.put(key, convert(cf, pack));
+				}
 			}
 		} catch(DOMException de) {
 			CCorePlugin.log(de);
@@ -92,11 +97,18 @@ public class TemplateInstanceUtil {
 		if (arg == null)
 			return null;
 		if (arg.isNonTypeValue()) {
+			final IType t= arg.getTypeOfNonTypeValue();
+			final IType t2= cf.getCompositeType(t);
+			final IValue v= arg.getNonTypeValue();
+			final IValue v2= cf.getCompositeValue(v);
+			if (t != t2 || v != v2) {
+				return new CPPTemplateArgument(v2, t2);
+			}
 			return arg;
 		}
 		final IType typeValue = arg.getTypeValue();
-		if (typeValue instanceof IIndexType) {
-			IType t= cf.getCompositeType((IIndexType) typeValue);
+		IType t= cf.getCompositeType(typeValue);
+		if (t != typeValue) {
 			return new CPPTemplateArgument(t);
 		}
 		return arg;
@@ -122,7 +134,7 @@ public class TemplateInstanceUtil {
 				IType type= (IType) preresult.get(keys[i]);
 				result.put(
 						cf.getCompositeBinding((IIndexFragmentBinding)keysToAdapt[i]),
-						cf.getCompositeType((IIndexType)type));
+						cf.getCompositeType(type));
 			}
 		} catch(DOMException de) {
 			CCorePlugin.log(de);
@@ -148,12 +160,8 @@ public class TemplateInstanceUtil {
 	
 	@Deprecated
 	private static IType[] getArguments(ICompositesFactory cf, IType[] result) {
-		try {
-			for(int i=0; i<result.length; i++) {
-				result[i] = cf.getCompositeType((IIndexType)result[i]);
-			}
-		} catch(DOMException de) {
-			CCorePlugin.log(de);
+		for(int i=0; i<result.length; i++) {
+			result[i] = cf.getCompositeType(result[i]);
 		}
 		return result;
 	}

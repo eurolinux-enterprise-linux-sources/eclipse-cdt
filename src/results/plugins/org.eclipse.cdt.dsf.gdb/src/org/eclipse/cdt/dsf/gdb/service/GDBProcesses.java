@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Ericsson and others.
+ * Copyright (c) 2008, 2010 Ericsson and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -33,6 +33,8 @@ import org.eclipse.cdt.dsf.mi.service.IMIProcessDMContext;
 import org.eclipse.cdt.dsf.mi.service.IMIProcesses;
 import org.eclipse.cdt.dsf.mi.service.MIProcesses;
 import org.eclipse.cdt.dsf.mi.service.command.MIInferiorProcess;
+import org.eclipse.cdt.dsf.mi.service.command.events.MIStoppedEvent;
+import org.eclipse.cdt.dsf.service.DsfServiceEventHandler;
 import org.eclipse.cdt.dsf.service.DsfSession;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IStatus;
@@ -94,12 +96,15 @@ public class GDBProcesses extends MIProcesses {
 		IContainerDMContext containerDmc = createContainerContext(procDmc, MIProcesses.UNIQUE_GROUP_ID);
 		fGdb.getInferiorProcess().setContainerContext(containerDmc);
 
+		getSession().addServiceEventListener(this, null);		
+
 		requestMonitor.done();
 	}
 
 	@Override
 	public void shutdown(RequestMonitor requestMonitor) {
 		unregister();
+		getSession().removeServiceEventListener(this);		
 		super.shutdown(requestMonitor);
 	}
 	
@@ -138,11 +143,29 @@ public class GDBProcesses extends MIProcesses {
 			}
 			
 			String name = fProcessNames.get(pid);
-			// If we still don't find the name in our list, return the default name of our program
 			if (name == null) {
+				// Hm. Strange. But if the pid is our inferior's, we can just use the binary name
+				MIInferiorProcess inferior = fGdb.getInferiorProcess();
+				if (inferior != null) {
+					String inferiorPidStr = inferior.getPid();
+					if (inferiorPidStr != null && Integer.parseInt(inferiorPidStr) == pid) {
+						IGDBBackend backend = getServicesTracker().getService(IGDBBackend.class);
+						name = backend.getProgramPath().lastSegment();
+					}
+				}
+			}
+			if (name == null) {
+				// Should not happen.
+				name = "Unknown name"; //$NON-NLS-1$
+
+				// Until bug 305385 is fixed, the above code will not work, so we assume we
+				// are looking for our own process
+//				assert false : "Don't have entry for process ID: " + pid; //$NON-NLS-1$
 				IGDBBackend backend = getServicesTracker().getService(IGDBBackend.class);
 				name = backend.getProgramPath().lastSegment();
+
 			}
+		
 			rm.setData(new MIThreadDMData(name, pidStr));
 			rm.done();
 		} else {
@@ -216,20 +239,7 @@ public class GDBProcesses extends MIProcesses {
 	    	inferiorProcess != null && 
 	    	inferiorProcess.getState() != MIInferiorProcess.State.TERMINATED) {
 
-	    	final IMIContainerDMContext containerDmc = DMContexts.getAncestorOfType(dmc, IMIContainerDMContext.class);
-			if (containerDmc == null) {
-				// This service version only handles a single process to debug, therefore, we can simply
-				// create the context describing this process ourselves.
-				ICommandControlDMContext controlDmc = DMContexts.getAncestorOfType(dmc, ICommandControlDMContext.class);
-				String groupId = MIProcesses.UNIQUE_GROUP_ID;
-				IProcessDMContext procDmc = createProcessContext(controlDmc, groupId);
-				IMIContainerDMContext newContainerDmc = createContainerContext(procDmc, groupId);
-				rm.setData(new IContainerDMContext[] {newContainerDmc});
-				rm.done();
-			} else {
-				// List of threads
-    	    	super.getProcessesBeingDebugged(dmc, rm);
-			}
+   	    	super.getProcessesBeingDebugged(dmc, rm);
 	    } else {
 	    	rm.setData(new IDMContext[0]);
 	    	rm.done();
@@ -253,10 +263,11 @@ public class GDBProcesses extends MIProcesses {
 				rm.setData(null);
 			} else {
 				fProcessNames.clear();
-				for (IProcessInfo procInfo : list.getProcessList()) {
+				IProcessInfo[] procInfos = list.getProcessList();
+				for (IProcessInfo procInfo : procInfos) {
 					fProcessNames.put(procInfo.getPid(), procInfo.getName());
 				}
-				rm.setData(makeProcessDMCs(controlDmc, list.getProcessList()));
+				rm.setData(makeProcessDMCs(controlDmc, procInfos));
 			}
 			rm.done();
 		} else {
@@ -285,4 +296,20 @@ public class GDBProcesses extends MIProcesses {
             rm.done();
 	    }
 	}
+	
+    /**
+	 * @since 3.0
+	 */
+    @DsfServiceEventHandler
+    public void eventDispatched(MIStoppedEvent e) {
+
+// Post-poned because 'info program' yields different result on different platforms.
+// https://bugs.eclipse.org/bugs/show_bug.cgi?id=305385#c20
+//
+//    	// Get the PID of the inferior through gdb (if we don't have it already) 
+//    	
+//    	
+//    	fGdb.getInferiorProcess().update();
+    	
+    }
 }

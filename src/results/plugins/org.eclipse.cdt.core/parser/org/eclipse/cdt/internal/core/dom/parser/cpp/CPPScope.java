@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -50,12 +50,15 @@ import org.eclipse.core.runtime.NullProgressMonitor;
 /**
  * Base class for c++-scopes of the ast.
  */
-abstract public class CPPScope implements ICPPScope, ICPPASTInternalScope {
+abstract public class CPPScope implements ICPPASTInternalScope {
 	protected static final char[] CONSTRUCTOR_KEY = "!!!CTOR!!!".toCharArray(); //$NON-NLS-1$
 	private static final IProgressMonitor NPM = new NullProgressMonitor();
+	private static final ICPPNamespace UNINITIALIZED = new CPPNamespace.CPPNamespaceProblem(null, 0, null);
+	
     private IASTNode physicalNode;
 	private boolean isCached = false;
 	protected CharArrayObjectMap bindings = null;
+	private ICPPNamespace fIndexNamespace= UNINITIALIZED;
 
 	public static class CPPScopeProblem extends ProblemBinding implements ICPPScope {
         public CPPScopeProblem(IASTNode node, int id, char[] arg) {
@@ -78,7 +81,7 @@ abstract public class CPPScope implements ICPPScope, ICPPASTInternalScope {
 		return physicalNode;
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked" })
 	public void addName(IASTName name) throws DOMException {
 		// don't add inactive names to the scope
 		if (!name.isActive())
@@ -162,19 +165,26 @@ abstract public class CPPScope implements ICPPScope, ICPPASTInternalScope {
 		        		CCorePlugin.log(e);
 					}
 				} else if (physicalNode instanceof ICPPASTNamespaceDefinition) {
-					ICPPASTNamespaceDefinition nsdef = (ICPPASTNamespaceDefinition)physicalNode;
-					IASTName nsname = nsdef.getName();
-					IBinding nsbinding= nsname.resolveBinding();
-					if (nsbinding instanceof ICPPNamespace) {
-						ICPPNamespace nsbindingAdapted = (ICPPNamespace) index.adaptBinding(nsbinding);
-						if (nsbindingAdapted!=null) {
-							return nsbindingAdapted.getNamespaceScope().getBinding(name, forceResolve, fileSet);
-						}
+					ICPPNamespace nsbinding= getNamespaceIndexBinding((ICPPASTNamespaceDefinition)physicalNode, index);
+					if (nsbinding != null) {
+						return nsbinding.getNamespaceScope().getBinding(name, forceResolve, fileSet);
 					}
 				}
 			}
 		}
 		return binding;
+	}
+
+	private ICPPNamespace getNamespaceIndexBinding(ICPPASTNamespaceDefinition nsdef, IIndex index) {
+		if (fIndexNamespace == UNINITIALIZED) {
+			fIndexNamespace= null;
+			IASTName nsname = nsdef.getName();
+			IBinding nsbinding= nsname.resolveBinding();
+			if (nsbinding != null) {
+				fIndexNamespace= (ICPPNamespace) index.adaptBinding(nsbinding);
+			}
+		}
+		return fIndexNamespace;
 	}
 
 	public IBinding getBindingInAST(IASTName name, boolean forceResolve) throws DOMException {
@@ -239,8 +249,8 @@ abstract public class CPPScope implements ICPPScope, ICPPASTInternalScope {
 	    if (prefixLookup) {
 	    	Object[] keys = bindings != null ? bindings.keyArray() : new Object[0];
 	    	ObjectSet<Object> all= new ObjectSet<Object>(16);
-	    	for (int i = 0; i < keys.length; i++) {
-	    		final char[] key = (char[]) keys[i];
+	    	for (Object key2 : keys) {
+	    		final char[] key = (char[]) key2;
 	    		if (key != CONSTRUCTOR_KEY && CharArrayUtils.equals(key, 0, c.length, c, true)) {
 	    			obj= bindings.get(key);
 	    			if (obj instanceof ObjectSet<?>) {
@@ -318,7 +328,7 @@ abstract public class CPPScope implements ICPPScope, ICPPASTInternalScope {
 	    return CPPSemantics.findBindings(this, name, false);
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked" })
     public void addBinding(IBinding binding) {
         if (bindings == null)
             bindings = new CharArrayObjectMap(1);

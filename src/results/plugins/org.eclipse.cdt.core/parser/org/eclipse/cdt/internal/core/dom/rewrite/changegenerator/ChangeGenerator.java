@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2009 Institute for Software, HSR Hochschule fuer Technik  
+ * Copyright (c) 2008, 2010 Institute for Software, HSR Hochschule fuer Technik  
  * Rapperswil, University of applied sciences and others
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
@@ -181,7 +181,6 @@ public class ChangeGenerator extends CPPASTVisitor {
 				fileLocation = node.getTranslationUnit().flattenLocationsToFile(node.getNodeLocations());
 			}
 		}
-
 		return fileLocation;
 	}
 
@@ -259,8 +258,13 @@ public class ChangeGenerator extends CPPASTVisitor {
 						newNodeCode));
 				break;
 			case APPEND_CHILD:
+				if(modification.getTargetNode() instanceof IASTTranslationUnit && ((IASTTranslationUnit)modification.getTargetNode()).getDeclarations().length > 0) {
+					IASTTranslationUnit tu = (IASTTranslationUnit)modification.getTargetNode();
+					IASTDeclaration lastDecl = tu.getDeclarations()[tu.getDeclarations().length -1];
+					targetLocation = lastDecl.getFileLocation();
+				}
 				String lineDelimiter = FileHelper.determineLineDelimiter(FileHelper.getIFilefromIASTNode(modification.getTargetNode()));
-					edit.addChild(new InsertEdit(targetLocation.getNodeOffset()
+				edit.addChild(new InsertEdit(targetLocation.getNodeOffset()
 						+ targetLocation.getNodeLength(),lineDelimiter + lineDelimiter + newNodeCode));
 				break;
 			}

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -38,6 +38,7 @@ import org.eclipse.cdt.core.dom.ast.IASTFunctionDefinition;
 import org.eclipse.cdt.core.dom.ast.IASTIdExpression;
 import org.eclipse.cdt.core.dom.ast.IASTImplicitName;
 import org.eclipse.cdt.core.dom.ast.IASTImplicitNameOwner;
+import org.eclipse.cdt.core.dom.ast.IASTInitializerClause;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IASTNodeSelector;
@@ -67,16 +68,16 @@ import org.eclipse.cdt.core.dom.parser.cpp.ANSICPPParserExtensionConfiguration;
 import org.eclipse.cdt.core.dom.parser.cpp.GPPParserExtensionConfiguration;
 import org.eclipse.cdt.core.dom.parser.cpp.GPPScannerExtensionConfiguration;
 import org.eclipse.cdt.core.dom.parser.cpp.ICPPParserExtensionConfiguration;
-import org.eclipse.cdt.core.parser.CodeReader;
+import org.eclipse.cdt.core.parser.FileContent;
 import org.eclipse.cdt.core.parser.IParserLogService;
 import org.eclipse.cdt.core.parser.IScanner;
 import org.eclipse.cdt.core.parser.IScannerInfo;
+import org.eclipse.cdt.core.parser.IncludeFileContentProvider;
 import org.eclipse.cdt.core.parser.NullLogService;
 import org.eclipse.cdt.core.parser.ParserLanguage;
 import org.eclipse.cdt.core.parser.ParserMode;
 import org.eclipse.cdt.core.parser.ScannerInfo;
 import org.eclipse.cdt.core.parser.tests.ASTComparer;
-import org.eclipse.cdt.core.parser.tests.scanner.FileCodeReaderFactory;
 import org.eclipse.cdt.core.testplugin.CTestPlugin;
 import org.eclipse.cdt.core.testplugin.util.BaseTestCase;
 import org.eclipse.cdt.core.testplugin.util.TestSourceReader;
@@ -93,6 +94,7 @@ import org.eclipse.cdt.internal.core.parser.scanner.CPreprocessor;
  * @author aniefer
  */
 public class AST2BaseTest extends BaseTestCase {
+	public final static String TEST_CODE = "<testcode>";
     protected static final IParserLogService NULL_LOG = new NullLogService();
 	protected static boolean sValidateCopy;
 
@@ -131,7 +133,7 @@ public class AST2BaseTest extends BaseTestCase {
     
     protected IASTTranslationUnit parse(String code, ParserLanguage lang, boolean useGNUExtensions,
     		boolean expectNoProblems, boolean skipTrivialInitializers) throws ParserException {
-        IScanner scanner = createScanner(new CodeReader(code.toCharArray()), lang, ParserMode.COMPLETE_PARSE, 
+		IScanner scanner = createScanner(FileContent.create(TEST_CODE, code.toCharArray()), lang, ParserMode.COMPLETE_PARSE, 
         		new ScannerInfo());
         configureScanner(scanner);
         AbstractGNUSourceCodeParser parser = null;
@@ -179,7 +181,7 @@ public class AST2BaseTest extends BaseTestCase {
 	protected void configureScanner(IScanner scanner) {
 	}
 
-	public static IScanner createScanner(CodeReader codeReader, ParserLanguage lang, ParserMode mode,
+	public static IScanner createScanner(FileContent codeReader, ParserLanguage lang, ParserMode mode,
 			IScannerInfo scannerInfo) {
 		IScannerExtensionConfiguration configuration = null;
         if (lang == ParserLanguage.C)
@@ -188,7 +190,7 @@ public class AST2BaseTest extends BaseTestCase {
             configuration= GPPScannerExtensionConfiguration.getInstance();
         IScanner scanner;
         scanner= new CPreprocessor(codeReader, scannerInfo, lang, NULL_LOG, configuration, 
-        		FileCodeReaderFactory.getInstance());
+        		IncludeFileContentProvider.getSavedFilesProvider());
 		return scanner;
 	}
 
@@ -355,6 +357,11 @@ public class AST2BaseTest extends BaseTestCase {
         assertEquals(num, count);
     }
 
+	protected void isExpressionStringEqual(IASTInitializerClause exp, String str) {
+		String expressionString = ASTSignatureUtil.getExpressionString((IASTExpression) exp);
+		assertEquals(str, expressionString);
+	}
+
 	protected void isExpressionStringEqual(IASTExpression exp, String str) {
 		String expressionString = ASTSignatureUtil.getExpressionString(exp);
 		assertEquals(str, expressionString);
@@ -485,14 +492,18 @@ public class AST2BaseTest extends BaseTestCase {
     		return tu;
     	}
     	
-    	public IBinding assertProblem(String section, int len) {
+    	public IProblemBinding assertProblem(String section, int len) {
+    		if (len <= 0)
+    			len= section.length()+len;
     		IBinding binding= binding(section, len);
     		assertTrue("Non-ProblemBinding for name: " + section.substring(0, len),
     				binding instanceof IProblemBinding);
-    		return binding;
+    		return (IProblemBinding) binding;
     	}
     	
     	public <T extends IBinding> T assertNonProblem(String section, int len) {
+    		if (len <= 0)
+    			len= section.length()+len;
     		IBinding binding= binding(section, len);
     		if (binding instanceof IProblemBinding) {
     			IProblemBinding problem= (IProblemBinding) binding;

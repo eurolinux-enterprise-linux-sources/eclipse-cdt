@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2008 IBM Corporation and others.
+ * Copyright (c) 2003, 2009 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -68,6 +68,8 @@ public final class CSearchMessages extends NLS {
 	public static String PDOMSearchQuery_refs_result_label;
 	public static String PDOMSearchQuery_defs_result_label;
 	public static String PDOMSearchQuery_decls_result_label;
+	public static String PDOMSearchQuery_decldefs_result_label;
+	public static String PDOMSearchQuery_occurrences_result_label;
 	public static String PDOMSearchElementQuery_something;
 	public static String PDOMSearchPatternQuery_PatternQuery_labelPatternInScope;
 	public static String PDOMSearch_query_pattern_error;

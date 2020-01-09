@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -24,7 +24,7 @@ import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.debug.service.ISourceLookup;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControl;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIEnvironmentDirectory;
+import org.eclipse.cdt.dsf.mi.service.command.CommandFactory;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIInfo;
 import org.eclipse.cdt.dsf.service.AbstractDsfService;
 import org.eclipse.cdt.dsf.service.DsfSession;
@@ -51,6 +51,7 @@ public class CSourceLookup extends AbstractDsfService implements ISourceLookup {
     private Map<ISourceLookupDMContext,CSourceLookupDirector> fDirectors = new HashMap<ISourceLookupDMContext,CSourceLookupDirector>(); 
     
     ICommandControl fConnection;
+    private CommandFactory fCommandFactory;
 
     public CSourceLookup(DsfSession session) {
         super(session);
@@ -71,7 +72,7 @@ public class CSourceLookup extends AbstractDsfService implements ISourceLookup {
         String[] paths = pathList.toArray(new String[pathList.size()]);
         
         fConnection.queueCommand(
-        		new MIEnvironmentDirectory(ctx, paths, false), 
+        		fCommandFactory.createMIEnvironmentDirectory(ctx, paths, false), 
         		new DataRequestMonitor<MIInfo>(getExecutor(), rm));
     }
 
@@ -81,13 +82,21 @@ public class CSourceLookup extends AbstractDsfService implements ISourceLookup {
 		for (int i = 0; i < containers.length; ++i) {
 			if (containers[i] instanceof ProjectSourceContainer) {
 				IProject project = ((ProjectSourceContainer)containers[i]).getProject();
-				if (project != null && project.exists())
-					list.add(project.getLocation().toPortableString());
+				if (project != null && project.exists()) {
+					IPath location = project.getLocation();
+					if (location != null) {
+						list.add(location.toPortableString());
+					}
+				}
 			}
 			if (containers[i] instanceof FolderSourceContainer) {
 				IContainer container = ((FolderSourceContainer)containers[i]).getContainer();
-				if (container != null && container.exists())
-					list.add(container.getLocation().toPortableString());
+				if (container != null && container.exists()) {
+					IPath location = container.getLocation();
+					if (location != null) {
+						list.add(location.toPortableString());
+					}
+				}
 			}
 			if (containers[i] instanceof DirectorySourceContainer) {
 				File dir = ((DirectorySourceContainer)containers[i]).getDirectory();
@@ -121,6 +130,8 @@ public class CSourceLookup extends AbstractDsfService implements ISourceLookup {
     private void doInitialize(final RequestMonitor requestMonitor) {
     	fConnection = getServicesTracker().getService(ICommandControl.class);
     	
+    	fCommandFactory = getServicesTracker().getService(IMICommandControl.class).getCommandFactory();
+
     	// Register this service
         register(new String[] { CSourceLookup.class.getName(), ISourceLookup.class.getName() }, new Hashtable<String, String>());
         

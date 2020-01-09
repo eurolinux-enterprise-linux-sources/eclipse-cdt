@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Institute for Software, HSR Hochschule fuer Technik  
+ * Copyright (c) 2008, 2010 Institute for Software, HSR Hochschule fuer Technik  
  * Rapperswil, University of applied sciences and others
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
@@ -16,10 +16,10 @@ import org.eclipse.cdt.core.dom.ast.IASTDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTElaboratedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier;
+import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier.IASTEnumerator;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IASTNamedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclSpecifier;
-import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier.IASTEnumerator;
 import org.eclipse.cdt.core.dom.ast.c.ICASTCompositeTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.c.ICASTDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.c.ICASTElaboratedTypeSpecifier;
@@ -28,11 +28,12 @@ import org.eclipse.cdt.core.dom.ast.c.ICASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.c.ICASTTypedefNameSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.CPPASTVisitor;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier.ICPPASTBaseSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTElaboratedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTNamedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTSimpleDeclSpecifier;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier.ICPPASTBaseSpecifier;
+import org.eclipse.cdt.core.parser.Keywords;
 import org.eclipse.cdt.internal.core.dom.rewrite.commenthandler.NodeCommentMap;
 
 
@@ -80,62 +81,62 @@ public class DeclSpecWriter extends NodeWriter {
 	}
 
 	private String getCPPSimpleDecSpecifier(ICPPASTSimpleDeclSpecifier simpDeclSpec) {
-		int type = simpDeclSpec.getType();
-		if(type <= IASTSimpleDeclSpecifier.t_last) {
-			return getASTSimpleDecSpecifier(type);
-		}
-		switch (type) {
-		case ICPPASTSimpleDeclSpecifier.t_bool:
-			return CPP_BOOL;
-		case ICPPASTSimpleDeclSpecifier.t_wchar_t:
-			return WCHAR_T;
-		default:
-			System.err.println("Unknow Specifiertype: " + type); //$NON-NLS-1$
-			throw new IllegalArgumentException("Unknow Specifiertype: " + type); //$NON-NLS-1$
-		}
+		return getASTSimpleDecSpecifier(simpDeclSpec.getType(), true);
 	}
 	
 	private String getCSimpleDecSpecifier(ICASTSimpleDeclSpecifier simpDeclSpec) {
-		int type = simpDeclSpec.getType();
-		if(type <= IASTSimpleDeclSpecifier.t_last) {
-			return getASTSimpleDecSpecifier(type);
-		}
-		switch (type) {
-		case ICASTSimpleDeclSpecifier.t_Bool:
-			return _BOOL;
-		default:
-			System.err.println("Unknow Specifiertype: " + type); //$NON-NLS-1$
-			throw new IllegalArgumentException("Unknow Specifiertype: " + type); //$NON-NLS-1$
-		}
+		return getASTSimpleDecSpecifier(simpDeclSpec.getType(), false);
 	}
 
 
-	private String getASTSimpleDecSpecifier(int type) {
+	private String getASTSimpleDecSpecifier(int type, boolean isCpp) {
 
-		if(type <= IASTSimpleDeclSpecifier.t_last) {
-			switch (type) {
-			case IASTSimpleDeclSpecifier.t_unspecified:
-				return ""; //$NON-NLS-1$
-			case IASTSimpleDeclSpecifier.t_void:
-				return VOID;
-			case IASTSimpleDeclSpecifier.t_char:
-				return CHAR;
-			case IASTSimpleDeclSpecifier.t_int:
-				return INT;
+		switch (type) {
+		case IASTSimpleDeclSpecifier.t_unspecified:
+			return ""; //$NON-NLS-1$
+		case IASTSimpleDeclSpecifier.t_void:
+			return VOID;
+		case IASTSimpleDeclSpecifier.t_char:
+			return CHAR;
+		case IASTSimpleDeclSpecifier.t_int:
+			return INT;
 
-			case IASTSimpleDeclSpecifier.t_float:
-				return FLOAT;
-
-			case IASTSimpleDeclSpecifier.t_double:
-				return DOUBLE;
-			default:
-				System.err.println("Unknow Specifiertype: " + type); //$NON-NLS-1$
-			throw new IllegalArgumentException("Unknow Specifiertype: " + type);	 //$NON-NLS-1$
-
-			}
+		case IASTSimpleDeclSpecifier.t_float:
+			return FLOAT;
+		case IASTSimpleDeclSpecifier.t_double:
+			return DOUBLE;
+			
+		case IASTSimpleDeclSpecifier.t_bool:
+			return isCpp ? CPP_BOOL : _BOOL;
+			
+		case IASTSimpleDeclSpecifier.t_wchar_t:
+			if (isCpp)
+				return WCHAR_T;
+			break;
+		case IASTSimpleDeclSpecifier.t_char16_t:
+			if (isCpp)
+				return Keywords.CHAR16_T;
+			break;
+		case IASTSimpleDeclSpecifier.t_char32_t:
+			if (isCpp)
+				return Keywords.CHAR32_T;
+			break;
+		case IASTSimpleDeclSpecifier.t_auto:
+			if (isCpp)
+				return Keywords.AUTO;
+			break;
+		case IASTSimpleDeclSpecifier.t_typeof:
+			if (isCpp)
+				return Keywords.TYPEOF;
+			break;
+		case IASTSimpleDeclSpecifier.t_decltype:
+			if (isCpp)
+				return Keywords.DECLTYPE;
+			break;
 		}
-		System.err.println("Unknow Specifiertype: " + type); //$NON-NLS-1$
-		throw new IllegalArgumentException("Unknow Specifiertype: " + type); //$NON-NLS-1$
+
+		System.err.println("Unknown specifier type: " + type); //$NON-NLS-1$
+		throw new IllegalArgumentException("Unknown specifier type: " + type); //$NON-NLS-1$
 	}
 
 	private void writeCDeclSpec(ICASTDeclSpecifier cDeclSpec) {
@@ -205,7 +206,7 @@ public class DeclSpecWriter extends NodeWriter {
 		if(cppDelcSpec.isFriend()) {
 			scribe.print(FRIEND);
 		}
-		if(cppDelcSpec.getStorageClass() == ICPPASTDeclSpecifier.sc_mutable) {
+		if(cppDelcSpec.getStorageClass() == IASTDeclSpecifier.sc_mutable) {
 			scribe.print(MUTABLE);
 		}
 		
@@ -287,15 +288,15 @@ public class DeclSpecWriter extends NodeWriter {
 		}
 
 		if(hasFreestandingComments(compDeclSpec)) {
-				writeFreeStandingComments(compDeclSpec);			
-			}
-			scribe.decrementIndentationLevel();
-			scribe.print('}');
+			writeFreeStandingComments(compDeclSpec);			
+		}
+		scribe.decrementIndentationLevel();
+		scribe.print('}');
 
 		if(hasTrailingComments(compDeclSpec)) {
-				writeTrailingComments(compDeclSpec);			
-			}
+			writeTrailingComments(compDeclSpec);			
 		}
+	}
 
 	protected IASTDeclaration[] getMembers(IASTCompositeTypeSpecifier compDeclSpec) {
 		return compDeclSpec.getMembers();
@@ -381,6 +382,14 @@ public class DeclSpecWriter extends NodeWriter {
 	private void writeCPPSimpleDeclSpec(ICPPASTSimpleDeclSpecifier simpDeclSpec) {
 		printQualifiers(simpDeclSpec);
 		scribe.print(getCPPSimpleDecSpecifier(simpDeclSpec));
+		if (simpDeclSpec.getType() == IASTSimpleDeclSpecifier.t_typeof) {
+			scribe.printSpace();
+			visitNodeIfNotNull(simpDeclSpec.getDeclTypeExpression());
+		} else if (simpDeclSpec.getType() == IASTSimpleDeclSpecifier.t_decltype) {
+			scribe.print('(');
+			visitNodeIfNotNull(simpDeclSpec.getDeclTypeExpression());
+			scribe.print(')');
+		}
 	}
 	
 	private void printQualifiers(IASTSimpleDeclSpecifier simpDeclSpec) {
@@ -394,12 +403,11 @@ public class DeclSpecWriter extends NodeWriter {
 			scribe.printStringSpace(SHORT);
 		}else if(simpDeclSpec.isLong()) {
 			scribe.printStringSpace(LONG);
+		}else if(simpDeclSpec.isLongLong()) {			
+			scribe.print(LONG_LONG);
 		}
 		if (simpDeclSpec instanceof ICASTSimpleDeclSpecifier) {
 			ICASTSimpleDeclSpecifier cSimpDeclSpec = (ICASTSimpleDeclSpecifier) simpDeclSpec;
-			if (cSimpDeclSpec.isLongLong()) {
-				scribe.print(LONG_LONG);
-			}
 			if (cSimpDeclSpec.isComplex()) {
 				scribe.print(_COMPLEX);
 			}

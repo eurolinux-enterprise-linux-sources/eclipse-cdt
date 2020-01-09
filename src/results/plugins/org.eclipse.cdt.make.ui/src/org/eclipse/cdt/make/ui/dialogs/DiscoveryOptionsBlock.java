@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -32,6 +32,7 @@ import org.eclipse.cdt.make.ui.IMakeHelpContextIds;
 import org.eclipse.cdt.ui.dialogs.ICOptionContainer;
 import org.eclipse.cdt.utils.ui.controls.ControlFactory;
 import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.NullProgressMonitor;
@@ -50,20 +51,27 @@ import org.eclipse.swt.widgets.Label;
 /**
  *  A dialog to set scanner config discovery options.
  * 
+ * @deprecated as of CDT 4.0. This tab was used to set preferences/properties
+ * for 3.X style projects.
+ * 
  * @author vhirsl
  * @since 3.0
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
  */
+@Deprecated
 public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
     private static final String MISSING_BUILDER_MSG = "ScannerConfigOptionsDialog.label.missingBuilderInformation"; //$NON-NLS-1$
 
-    private static final String DIALOG_TITLE = PREFIX + ".title"; //$NON-NLS-1$
-    private static final String DIALOG_DESCRIPTION = PREFIX + ".description"; //$NON-NLS-1$
-    private static final String SC_GROUP_LABEL = PREFIX + ".scGroup.label"; //$NON-NLS-1$
-    private static final String SC_ENABLED_BUTTON = PREFIX + ".scGroup.enabled.button"; //$NON-NLS-1$
-    private static final String SC_PROBLEM_REPORTING_ENABLED_BUTTON = PREFIX + ".scGroup.problemReporting.enabled.button"; //$NON-NLS-1$
-    private static final String SC_SELECTED_PROFILE_COMBO = PREFIX + ".scGroup.selectedProfile.combo"; //$NON-NLS-1$
-//    private static final String BO_PROVIDER_GROUP_LABEL = PREFIX + ".boProvider.group.label"; //$NON-NLS-1$
-    private static final String SC_APPLY_PROGRESS_MESSAGE = PREFIX + ".apply.progressMessage"; //$NON-NLS-1$ 
+    private static final String DIALOG_TITLE = "ScannerConfigOptionsDialog.title"; //$NON-NLS-1$
+    private static final String DIALOG_DESCRIPTION = "ScannerConfigOptionsDialog.description"; //$NON-NLS-1$
+    private static final String SC_GROUP_LABEL = "ScannerConfigOptionsDialog.scGroup.label"; //$NON-NLS-1$
+    private static final String SC_ENABLED_BUTTON = "ScannerConfigOptionsDialog.scGroup.enabled.button"; //$NON-NLS-1$
+    private static final String SC_PROBLEM_REPORTING_ENABLED_BUTTON = "ScannerConfigOptionsDialog.scGroup.problemReporting.enabled.button"; //$NON-NLS-1$
+    private static final String SC_SELECTED_PROFILE_COMBO = "ScannerConfigOptionsDialog.scGroup.selectedProfile.combo"; //$NON-NLS-1$
+//    private static final String BO_PROVIDER_GROUP_LABEL = "ScannerConfigOptionsDialog.boProvider.group.label"; //$NON-NLS-1$
+    private static final String SC_APPLY_PROGRESS_MESSAGE = "ScannerConfigOptionsDialog.apply.progressMessage"; //$NON-NLS-1$ 
     
     private Button scEnabledButton;
     private Button scProblemReportingEnabledButton;
@@ -86,7 +94,8 @@ public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
     /* (non-Javadoc)
      * @see org.eclipse.cdt.ui.dialogs.ICOptionPage#setContainer(org.eclipse.cdt.ui.dialogs.ICOptionContainer)
      */
-    public void setContainer(ICOptionContainer container) {
+    @Override
+	public void setContainer(ICOptionContainer container) {
         super.setContainer(container);
         if (container.getProject() == null) {
             fCreatePathContainer = true;
@@ -96,7 +105,8 @@ public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
     /* (non-Javadoc)
      * @see org.eclipse.jface.dialogs.IDialogPage#createControl(org.eclipse.swt.widgets.Composite)
      */
-    public void createControl(Composite parent) {
+    @Override
+	public void createControl(Composite parent) {
         // Create the composite control for the tab
         int tabColumns = 2;
         Font font = parent.getFont();
@@ -174,7 +184,8 @@ public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
                 : (getBuildInfo().isAutoDiscoveryEnabled()
                     && !getBuildInfo().getSelectedProfileId().equals(ScannerConfigProfileManager.NULL_PROFILE_ID)));
         scEnabledButton.addSelectionListener(new SelectionAdapter() {
-            public void widgetSelected(SelectionEvent e) {
+            @Override
+			public void widgetSelected(SelectionEvent e) {
                 enableAllControls();
             }
         });
@@ -195,14 +206,15 @@ public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
 
         profileComboBox = new Combo(scGroup, SWT.DROP_DOWN | SWT.READ_ONLY);
         profileComboBox.addSelectionListener(new SelectionAdapter() {
-            public void widgetSelected(SelectionEvent e) {
+            @Override
+			public void widgetSelected(SelectionEvent e) {
                 getBuildInfo().setSelectedProfileId(getCurrentProfileId());
                 handleDiscoveryProfileChanged();
             }
         });
         // fill the combobox and set the initial value
-        for (Iterator items = getDiscoveryProfileIdList().iterator(); items.hasNext();) {
-            String profileId = (String)items.next();
+        for (Iterator<String> items = getDiscoveryProfileIdList().iterator(); items.hasNext();) {
+            String profileId = items.next();
             String pageName = getDiscoveryProfileName(profileId);
             if (pageName != null) {
                 profileComboBox.add(pageName);
@@ -229,7 +241,8 @@ public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
     /* (non-Javadoc)
      * @see org.eclipse.jface.dialogs.IDialogPage#setVisible(boolean)
      */
-    public void setVisible(boolean visible) {
+    @Override
+	public void setVisible(boolean visible) {
         if (!visible) {
             if (!checkDialogForChanges()) {
                 createBuildInfo();
@@ -247,7 +260,8 @@ public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
      /* (non-Javadoc)
      * @see org.eclipse.cdt.make.ui.dialogs.AbstractDiscoveryOptionsBlock#getCurrentProfileId()
      */
-    protected String getCurrentProfileId() {
+    @Override
+	protected String getCurrentProfileId() {
         int pos = profileComboBox.getSelectionIndex();
         if (pos >= 0) {
             String selectedProfileName = profileComboBox.getItem(pos);
@@ -259,7 +273,8 @@ public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
     /* (non-Javadoc)
      * @see org.eclipse.cdt.ui.dialogs.ICOptionPage#performApply(org.eclipse.core.runtime.IProgressMonitor)
      */
-    public void performApply(IProgressMonitor monitor) throws CoreException {
+    @Override
+	public void performApply(IProgressMonitor monitor) throws CoreException {
         if (monitor == null) {
             monitor = new NullProgressMonitor();
         }
@@ -310,34 +325,26 @@ public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
         }
     }
 
-    /**
-     * @param project
-     * @param monitor
-     * @throws CModelException
-     */
     private void createDiscoveredPathContainer(IProject project, IProgressMonitor monitor) throws CModelException {
         IPathEntry container = CoreModel.newContainerEntry(DiscoveredPathContainer.CONTAINER_ID);
         ICProject cProject = CoreModel.getDefault().create(project);
         if (cProject != null) {
             IPathEntry[] entries = cProject.getRawPathEntries();
-            List newEntries = new ArrayList(Arrays.asList(entries));
+            List<IPathEntry> newEntries = new ArrayList<IPathEntry>(Arrays.asList(entries));
             if (!newEntries.contains(container)) {
                 newEntries.add(container);
-                cProject.setRawPathEntries((IPathEntry[])newEntries.toArray(new IPathEntry[newEntries.size()]), monitor);
+                cProject.setRawPathEntries(newEntries.toArray(new IPathEntry[newEntries.size()]), monitor);
             }
         }
         // create a new discovered scanner config store
         MakeCorePlugin.getDefault().getDiscoveryManager().removeDiscoveredInfo(project);
    }
 
-    /**
-     * @param project
-     */
     private void changeDiscoveryContainer(IProject project) {
         String profileId = getBuildInfo().getSelectedProfileId();
         ScannerConfigScope profileScope = ScannerConfigProfileManager.getInstance().
                 getSCProfileConfiguration(profileId).getProfileScope();
-        List changedResources = new ArrayList();
+        List<IResource> changedResources = new ArrayList<IResource>();
 //        changedResources.add(project.getFullPath());
         changedResources.add(project);
         MakeCorePlugin.getDefault().getDiscoveryManager().changeDiscoveredContainer(
@@ -357,7 +364,8 @@ public class DiscoveryOptionsBlock extends AbstractDiscoveryOptionsBlock {
      * @see org.eclipse.cdt.ui.dialogs.ICOptionPage#performDefaults()
      */
 
-    public void performDefaults() {
+    @Override
+	public void performDefaults() {
         if (!isInitialized() && !needsSCNature) {
             // Missing builder info on a non-legacy project
             return;

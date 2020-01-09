@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2007 Institute for Software, HSR Hochschule fuer Technik  
+ * Copyright (c) 2006, 2010 Institute for Software, HSR Hochschule fuer Technik  
  * Rapperswil, University of applied sciences and others
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
@@ -16,7 +16,6 @@ import junit.framework.TestSuite;
 
 /**
  * @author Emanuel Graf
- *
  */
 public class AstWriterTestSuite{
 
@@ -33,8 +32,8 @@ public class AstWriterTestSuite{
 				"resources/rewrite/ASTWriterCommentedDeclaratorTestSource.awts"));
 		
 		suite.addTest(SourceRewriteTester.suite("StatementsTests", "resources/rewrite/ASTWriterStatementTestSource.awts"));
-		suite.addTest(SourceRewriteTester
-				.suite("Commented StatementsTests", "resources/rewrite/ASTWriterCommentedStatementTestSource.awts"));
+		suite.addTest(SourceRewriteTester.suite("Commented StatementsTests",
+				"resources/rewrite/ASTWriterCommentedStatementTestSource.awts"));
 		
 		suite.addTest(SourceRewriteTester.suite("NameTests", "resources/rewrite/ASTWriterNameTestSource.awts"));
 		suite.addTest(SourceRewriteTester.suite("Commented NameTests", "resources/rewrite/ASTWriterCommentedNameTestSource.awts"));

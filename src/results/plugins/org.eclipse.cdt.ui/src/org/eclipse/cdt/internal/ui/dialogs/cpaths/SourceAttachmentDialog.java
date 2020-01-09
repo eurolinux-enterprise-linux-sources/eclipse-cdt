@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2008 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,27 +13,31 @@ package org.eclipse.cdt.internal.ui.dialogs.cpaths;
 
 import java.lang.reflect.InvocationTargetException;
 
-import org.eclipse.cdt.core.model.CModelException;
-import org.eclipse.cdt.core.model.ICProject;
-import org.eclipse.cdt.core.model.ILibraryEntry;
-import org.eclipse.cdt.core.model.IPathEntry;
-import org.eclipse.cdt.internal.ui.dialogs.IStatusChangeListener;
-import org.eclipse.cdt.internal.ui.dialogs.StatusDialog;
-import org.eclipse.cdt.internal.ui.util.ExceptionHandler;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.jface.dialogs.ProgressMonitorDialog;
+import org.eclipse.jface.dialogs.StatusDialog;
 import org.eclipse.jface.operation.IRunnableWithProgress;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Shell;
 
+import org.eclipse.cdt.core.model.CModelException;
+import org.eclipse.cdt.core.model.ICProject;
+import org.eclipse.cdt.core.model.ILibraryEntry;
+import org.eclipse.cdt.core.model.IPathEntry;
+
+import org.eclipse.cdt.internal.ui.dialogs.IStatusChangeListener;
+import org.eclipse.cdt.internal.ui.util.ExceptionHandler;
+
 /**
  * A dialog to configure the source attachment of a library (library and zip archive).
  *
- * SourceAttachmentDialog
+ * @deprecated as of CDT 4.0. This class was used for property pages
+ * for 3.X style projects.
  */
+@Deprecated
 public class SourceAttachmentDialog extends StatusDialog {
 	
 	private SourceAttachmentBlock fSourceAttachmentBlock;
@@ -66,6 +70,7 @@ public class SourceAttachmentDialog extends StatusDialog {
 		fSourceAttachmentBlock= new SourceAttachmentBlock(listener, entry, project);			
 	
 		setTitle(CPathEntryMessages.SourceAttachmentDialog_title); 
+		setHelpAvailable(false);
 	}
 	
 	/* (non-Javadoc)

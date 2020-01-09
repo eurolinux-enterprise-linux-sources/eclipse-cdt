@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 Ericsson and others.
+ * Copyright (c) 2009, 2010 Ericsson and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -19,9 +19,9 @@ import org.eclipse.cdt.dsf.mi.service.command.output.MIInfo;
 public class MITargetSelect extends MICommand<MIInfo> {
 
     /**
-	 * @since 2.0
+	 * @since 3.0
 	 */
-    protected MITargetSelect(IDMContext ctx, String[] params) {
+    public MITargetSelect(IDMContext ctx, String[] params) {
         super(ctx, "-target-select", null, params); //$NON-NLS-1$
     }
     

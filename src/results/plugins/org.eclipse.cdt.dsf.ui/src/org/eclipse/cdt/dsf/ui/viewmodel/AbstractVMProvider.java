@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -23,6 +23,8 @@ import org.eclipse.cdt.dsf.concurrent.CountingRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.IDsfStatusConstants;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
+import org.eclipse.cdt.dsf.internal.DsfPlugin;
+import org.eclipse.cdt.dsf.internal.LoggingUtils;
 import org.eclipse.cdt.dsf.internal.ui.DsfUIPlugin;
 import org.eclipse.cdt.dsf.ui.concurrent.SimpleDisplayExecutor;
 import org.eclipse.cdt.dsf.ui.concurrent.ViewerDataRequestMonitor;
@@ -39,8 +41,6 @@ import org.eclipse.debug.internal.ui.viewers.model.provisional.IModelProxy;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IPresentationContext;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IViewerInputProvider;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IViewerInputUpdate;
-import org.eclipse.debug.internal.ui.viewers.provisional.IAsynchronousContentAdapter;
-import org.eclipse.debug.internal.ui.viewers.provisional.IAsynchronousLabelAdapter;
 import org.eclipse.swt.widgets.Display;
 
 /**
@@ -57,14 +57,11 @@ import org.eclipse.swt.widgets.Display;
  * <p/>
  * Clients are intended to extend this class.
  * 
- * @see IAsynchronousContentAdapter
- * @see IAsynchronousLabelAdapter
  * @see IModelProxy
  * @see IVMNode
  * 
  * @since 1.0
  */
-@SuppressWarnings("restriction")
 abstract public class AbstractVMProvider implements IVMProvider, IVMEventListener
 {
     // debug flags
@@ -161,8 +158,17 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
     }
     
     private class ModelProxyEventQueue {
-        EventInfo fCurrentEvent = null;
-        RequestMonitor fCurrentRm = null;
+        /** The event actively being handled */
+        EventInfo fCurrentEvent;
+
+		/**
+		 * The request monitor we created to handle fCurrentEvent. It is
+		 * responsible for calling <code>done</code> on the client RM of that
+		 * event.
+		 */
+        RequestMonitor fCurrentRm;
+        
+        /** The queue */
         List<EventInfo> fEventQueue = new LinkedList<EventInfo>();
     }
     
@@ -249,6 +255,10 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
 	 * @since 1.1
 	 */
     public void handleEvent(final Object event, RequestMonitor rm) {
+        if (DEBUG_DELTA && (DEBUG_PRESENTATION_ID == null || getPresentationContext().getId().equals(DEBUG_PRESENTATION_ID))) {
+        	trace(event, null, null, EventHandlerAction.received);
+        }
+
     	CountingRequestMonitor crm = new CountingRequestMonitor(getExecutor(), rm);
         final List<IVMModelProxy> activeModelProxies= new ArrayList<IVMModelProxy>(getActiveModelProxies());
     	crm.setDoneCount(activeModelProxies.size());
@@ -266,15 +276,10 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
     	    // Also, process the event if it is a result of the user modifying something
     	    // so that the cache is properly updated. 
             if (proxyStrategy.isDeltaEvent(event) || event instanceof UserEditEvent) {
-                if (DEBUG_DELTA && (DEBUG_PRESENTATION_ID == null || getPresentationContext().getId().equals(DEBUG_PRESENTATION_ID))) {
-                    DsfUIPlugin.debug("eventReceived(proxyRoot = " + proxyStrategy .getRootElement() + ", event = " + event + ")" );  //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
-                }
                 if (!fProxyEventQueues.containsKey(proxyStrategy)) {
                     fProxyEventQueues.put(proxyStrategy, new ModelProxyEventQueue());
-                    if (DEBUG_DELTA && (DEBUG_PRESENTATION_ID == null || getPresentationContext().getId().equals(DEBUG_PRESENTATION_ID))) {
-                        DsfUIPlugin.debug("eventQueued(proxyRoot = " + proxyStrategy.getRootElement() + ", event = " + event + ")" );  //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
-                    }
                 }
+                // If the event queue is empty, directly handle the new event. Otherwise queue it. 
                 final ModelProxyEventQueue queue = fProxyEventQueues.get(proxyStrategy);
                 if (queue.fCurrentEvent != null) {
                     assert queue.fCurrentRm != null;
@@ -287,7 +292,7 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
                         
                         if (canSkipHandlingEvent(event, eventToSkipInfo.fEvent)) {
                             if (DEBUG_DELTA && (DEBUG_PRESENTATION_ID == null || getPresentationContext().getId().equals(DEBUG_PRESENTATION_ID))) {
-                                DsfUIPlugin.debug("eventSkipped(proxyRoot = " + proxyStrategy.getRootElement() + ", event = " + eventToSkipInfo + ")" );  //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
+                            	trace(event, eventToSkipInfo.fEvent, proxyStrategy, EventHandlerAction.skipped);
                             }
                             queue.fEventQueue.remove(queue.fEventQueue.size() - 1);
                             eventToSkipInfo.fClientRm.done();
@@ -300,9 +305,13 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
                     // processing 
                     if (queue.fEventQueue.isEmpty() && canSkipHandlingEvent(event, queue.fCurrentEvent.fEvent)) {
                         if (DEBUG_DELTA && (DEBUG_PRESENTATION_ID == null || getPresentationContext().getId().equals(DEBUG_PRESENTATION_ID))) {
-                            DsfUIPlugin.debug("eventCancelled(proxyRoot = " + proxyStrategy.getRootElement() + ", event = " + queue.fCurrentEvent + ")" );  //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
+                        	trace(event, queue.fCurrentEvent.fEvent, proxyStrategy, EventHandlerAction.canceled);
                         }
                         queue.fCurrentRm.cancel();
+                    }
+
+                    if (DEBUG_DELTA && (DEBUG_PRESENTATION_ID == null || getPresentationContext().getId().equals(DEBUG_PRESENTATION_ID))) {
+                    	trace(event, null, proxyStrategy, EventHandlerAction.queued);
                     }
                     queue.fEventQueue.add(new EventInfo(event, crm));
                 } else {
@@ -313,7 +322,7 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
             }
         }
 
-        // Clean up model proxies that were removed.
+        // Discard the event queues of proxies that have been removed
         List<IVMModelProxy> activeProxies = getActiveModelProxies();
         for (Iterator<IVMModelProxy> itr = fProxyEventQueues.keySet().iterator(); itr.hasNext();) {
             if (!activeProxies.contains(itr.next())) {
@@ -323,19 +332,25 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
     }
 
     private void doHandleEvent(final ModelProxyEventQueue queue, final IVMModelProxy proxyStrategy, final EventInfo eventInfo) {
+        // Do handle event is a sort of a recursive asynchronous method.  It 
+        // calls the asynchronous handleEvent() to process the event from the 
+        // eventInfo argument.  When handleEvent() completes, this method 
+        // (doHandleEvent) checks whether there is any more events in the queue
+        // that should be handled.  If there are, doHandleEvent calls itself
+        // to process the next event in the queue.
         assert queue.fCurrentEvent == null && queue.fCurrentRm == null;
         
         queue.fCurrentEvent = eventInfo;
-        queue.fCurrentRm = new RequestMonitor(getExecutor(), null) {
+        queue.fCurrentRm = new RequestMonitor(getExecutor(), eventInfo.fClientRm) {
             @Override
             protected void handleCompleted() {
+                eventInfo.fClientRm.done();
                 queue.fCurrentEvent = null;
                 queue.fCurrentRm = null;
                 if (!queue.fEventQueue.isEmpty()) {
-                    EventInfo eventInfo = queue.fEventQueue.remove(0);
-                    doHandleEvent(queue, proxyStrategy, eventInfo);
+                    EventInfo nextEventInfo = queue.fEventQueue.remove(0);
+                    doHandleEvent(queue, proxyStrategy, nextEventInfo);
                 } 
-                eventInfo.fClientRm.done();
             }
         };
         handleEvent(proxyStrategy, eventInfo.fEvent, queue.fCurrentRm);
@@ -355,26 +370,24 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
      * @param rm Request monitor to call when processing the event is 
      * completed.
      */
-    protected void handleEvent(final IVMModelProxy proxyStrategy, final Object event, RequestMonitor rm) {   
+    protected void handleEvent(final IVMModelProxy proxyStrategy, final Object event, final RequestMonitor rm) {   
         if (!proxyStrategy.isDisposed()) {
             if (DEBUG_DELTA && (DEBUG_PRESENTATION_ID == null || getPresentationContext().getId().equals(DEBUG_PRESENTATION_ID))) {
-                DsfUIPlugin.debug("eventProcessing(proxyRoot = " + proxyStrategy.getRootElement() + ", event = " + event + ")" );  //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
+            	trace(event, null, proxyStrategy, EventHandlerAction.processing);
             }
             proxyStrategy.createDelta(
                 event, 
                 new DataRequestMonitor<IModelDelta>(getExecutor(), rm) {
                     @Override
-                    public void handleCompleted() {
-                        if (isSuccess()) {
-                            proxyStrategy.fireModelChanged(getData());
-                            if (DEBUG_DELTA && (DEBUG_PRESENTATION_ID == null || getPresentationContext().getId().equals(DEBUG_PRESENTATION_ID))) {
-                                DsfUIPlugin.debug("eventDeltaFired(proxyRoot = " + proxyStrategy.getRootElement() + ", event = " + event + ")" );  //$NON-NLS-1$//$NON-NLS-2$ //$NON-NLS-3$
-                            }
+                    public void handleSuccess() {
+                        proxyStrategy.fireModelChanged(getData());
+                        if (DEBUG_DELTA && (DEBUG_PRESENTATION_ID == null || getPresentationContext().getId().equals(DEBUG_PRESENTATION_ID))) {
+                        	trace(event, null, proxyStrategy, EventHandlerAction.firedDeltaFor);
                         }
-                        super.handleCompleted();
+                        rm.done();
                     }
                     @Override public String toString() {
-                        return "Result of a delta for event: '" + event.toString() + "' in VMP: '" + this + "'" + "\n" + getData().toString();  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+                        return "Result of a delta for event: '" + event.toString() + "' in VMP: '" + AbstractVMProvider.this + "'" + "\n" + getData().toString();  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
                     }   
                 });
         } else {
@@ -471,10 +484,11 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
     }
 
     /**
-     * Clears all configured nodes.  This allows a subclass to reset and 
-     * reconfigure its nodes.
+     * Clears all configured nodes, including the root node.  This allows a 
+     * subclass to reset and reconfigure its nodes.
      */
     protected void clearNodes() {
+        clearNodes(true);
         for (IVMNode node : fChildNodesMap.keySet()) {
             node.dispose();
         }
@@ -482,6 +496,27 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
         fRootNode = null;
     }
 
+    /**
+     * Clears all configured nodes.  This allows a subclass to reset and 
+     * reconfigure its nodes.
+     * 
+     * @param clearRootNode Flag indicating whether to also clear the root node.
+     * @since 2.1
+     */
+    protected void clearNodes(boolean clearRootNode) {
+        for (IVMNode node : fChildNodesMap.keySet()) {
+            if ( !clearRootNode || !node.equals(getRootVMNode()) ) { 
+                node.dispose();
+            }
+        }
+        fChildNodesMap.clear();
+        if (clearRootNode) {
+            fRootNode = null;
+        } else {
+            fChildNodesMap.put(getRootVMNode(), EMPTY_NODES_ARRAY);
+        }
+    }
+    
     /**
      * Sets the root node for this provider.  
      */
@@ -507,15 +542,21 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
     public void update(final IChildrenUpdate[] updates) {
         fContentStrategy.update(updates);
     }
-    
-    /**
-     * Calls the given view model node to perform the given updates.  This 
-     * method is called by view model provider and it's helper classes instead
-     * of calling the IVMNode method directly, in order to allow additional
-     * processing of the udpate.  For example the AbstractCachingVMProvider 
-     * overrides this method to optionally return the results for an update from
-     * a cache. 
-     */
+
+	/**
+	 * Calls the given view model node to perform the given updates. This method
+	 * is called by view model provider and its helper classes instead of
+	 * calling the IVMNode method directly, in order to allow additional
+	 * processing of the update. For example the AbstractCachingVMProvider
+	 * overrides this method to optionally return the results for an update from
+	 * a cache.
+	 * 
+	 * [node] represents the type of the child element, not of the parent. In
+	 * other words, the update requests are asking if one or more model elements
+	 * of a particular type (thread, e.g.) have children. But [node] does not
+	 * represent that type. It represents the type of the potential children
+	 * (frame, e.g.)
+	 */
     public void updateNode(final IVMNode node, IHasChildrenUpdate[] updates) {
         IHasChildrenUpdate[] updateProxies = new IHasChildrenUpdate[updates.length];
         for (int i = 0; i < updates.length; i++) {
@@ -525,7 +566,7 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
             }
             updateProxies[i] = new VMHasChildrenUpdate(
                 update,
-                new ViewerDataRequestMonitor<Boolean>(getExecutor(), updates[i]) {
+                new ViewerDataRequestMonitor<Boolean>(getExecutor(), update) {
                     @Override
                     protected void handleSuccess() {
                         update.setHasChilren(getData());
@@ -733,5 +774,49 @@ abstract public class AbstractVMProvider implements IVMProvider, IVMEventListene
     public void update(IViewerInputUpdate update) {
         update.setInputElement(update.getElement());
         update.done();
-    }    
+    }
+    
+    /**
+     * Used for tracing event handling
+     */
+    private enum EventHandlerAction {
+    	received,
+    	queued,
+    	processing,
+    	firedDeltaFor,
+    	skipped,
+    	canceled
+    }
+
+	/**
+	 * Trace that we've reached a particular phase of the handling of an event
+	 * for a particular proxy.
+	 * 
+	 * @param event
+	 *            the event being handled
+	 * @param skippedOrCanceledEvent
+	 *            for a 'skip' or 'cancel' action, this is the event that is
+	 *            being dismissed. Otherwise null
+	 * @param proxy
+	 *            the target proxy; n/a (null) for a 'received' action.
+	 * @param action
+	 *            what phased of the event handling has beeb reached
+	 */
+    private void trace(Object event, Object skippedOrCanceledEvent, IVMModelProxy proxy, EventHandlerAction action) {
+    	assert DEBUG_DELTA;
+        StringBuilder str = new StringBuilder();
+        str.append(DsfPlugin.getDebugTime());
+        str.append(' ');
+        if (action == EventHandlerAction.skipped || action == EventHandlerAction.canceled) {
+	        str.append(LoggingUtils.toString(this) + " " + action.toString() + " event " + LoggingUtils.toString(skippedOrCanceledEvent) + " because of event " + LoggingUtils.toString(event)); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$        	
+        }
+        else {
+	        str.append(LoggingUtils.toString(this) + " " + action.toString() + " event " + LoggingUtils.toString(event)); //$NON-NLS-1$ //$NON-NLS-2$
+        }
+        
+        if (action != EventHandlerAction.received) {
+        	str.append(" for proxy " + LoggingUtils.toString(proxy) + ", whose root is " + LoggingUtils.toString(proxy.getRootElement())); //$NON-NLS-1$ //$NON-NLS-2$
+        }
+        DsfUIPlugin.debug(str.toString());
+    }
 }

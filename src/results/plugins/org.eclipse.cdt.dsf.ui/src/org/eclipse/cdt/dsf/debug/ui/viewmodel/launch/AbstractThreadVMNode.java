@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -29,6 +29,7 @@ import org.eclipse.cdt.dsf.debug.service.IRunControl.IContainerResumedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IContainerSuspendedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IExecutionDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IExecutionDMData;
+import org.eclipse.cdt.dsf.debug.service.IRunControl.IExecutionDMData2;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IResumedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.ISuspendedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.StateChangeReason;
@@ -107,14 +108,16 @@ public abstract class AbstractThreadVMNode extends AbstractDMVMNode
                         ILaunchVMConstants.PROP_ID, 
                         ILaunchVMConstants.PROP_IS_SUSPENDED, 
                         ExecutionContextLabelText.PROP_STATE_CHANGE_REASON_KNOWN, 
-                        ILaunchVMConstants.PROP_STATE_CHANGE_REASON }),
+                        ILaunchVMConstants.PROP_STATE_CHANGE_REASON,
+                        ExecutionContextLabelText.PROP_STATE_CHANGE_DETAILS_KNOWN, 
+                        ILaunchVMConstants.PROP_STATE_CHANGE_DETAILS }),
                 new LabelText(MessagesForLaunchVM.AbstractThreadVMNode_No_columns__Error__label, new String[0]),
                 new LabelImage(DebugUITools.getImageDescriptor(IDebugUIConstants.IMG_OBJS_THREAD_RUNNING)) {
                     { setPropertyNames(new String[] { ILaunchVMConstants.PROP_IS_SUSPENDED }); }
                     
                     @Override
                     public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
-                        return !((Boolean)properties.get(ILaunchVMConstants.PROP_IS_SUSPENDED)).booleanValue();
+                    	return Boolean.FALSE.equals(properties.get(ILaunchVMConstants.PROP_IS_SUSPENDED));
                     };
                 },
                 new LabelImage(DebugUITools.getImageDescriptor(IDebugUIConstants.IMG_OBJS_THREAD_SUSPENDED)),
@@ -207,6 +210,13 @@ public abstract class AbstractThreadVMNode extends AbstractDMVMNode
         StateChangeReason reason = data.getStateChangeReason();
         if (reason != null) {
             update.setProperty(ILaunchVMConstants.PROP_STATE_CHANGE_REASON, data.getStateChangeReason().name());
+        }
+
+        if (data instanceof IExecutionDMData2) {
+        	String details = ((IExecutionDMData2)data).getDetails();
+        	if (details != null) {
+            	update.setProperty(ILaunchVMConstants.PROP_STATE_CHANGE_DETAILS, details);
+        	}
         }
     }
     
@@ -336,8 +346,6 @@ public abstract class AbstractThreadVMNode extends AbstractDMVMNode
             return IModelDelta.CONTENT;            
         } else if (e instanceof ISuspendedDMEvent) {
             return IModelDelta.NO_CHANGE;
-        } else if (e instanceof FullStackRefreshEvent) {
-            return IModelDelta.CONTENT;
         } else if (e instanceof SteppingTimedOutEvent) {
             return IModelDelta.CONTENT;            
         } else if (e instanceof ModelProxyInstalledEvent || e instanceof DataModelInitializedEvent) {
@@ -372,11 +380,6 @@ public abstract class AbstractThreadVMNode extends AbstractDMVMNode
             // priority in updating. The thread will update as a result of 
             // FullStackRefreshEvent. 
         	rm.done();
-        } else if (e instanceof FullStackRefreshEvent) {
-            // Full-stack refresh event is generated following a suspended event 
-            // and a fixed delay.  Refresh the whole thread upon this event.
-            parentDelta.addNode(createVMContext(dmc), IModelDelta.CONTENT);
-            rm.done();
         } else if (e instanceof SteppingTimedOutEvent) {
             // Stepping time-out indicates that a step operation is taking 
             // a long time, and the view needs to be refreshed to show 

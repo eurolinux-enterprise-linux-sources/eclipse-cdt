@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -9,7 +9,6 @@
  *     QNX Software Systems - Initial API and implementation
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.model;
-
  
 import java.util.Enumeration;
 import java.util.Map;
@@ -27,27 +26,26 @@ import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 
-public abstract class Openable extends Parent implements IOpenable, IBufferChangedListener {
-
+public abstract class Openable extends Parent implements IOpenable {
 	protected IResource resource;	
 
-	public Openable (ICElement parent, IPath path, int type) {
+	public Openable(ICElement parent, IPath path, int type) {
 		// Check if the file is under the workspace.
-		this (parent, ResourcesPlugin.getWorkspace().getRoot().getFileForLocation (path),
-			path.lastSegment(), type);
+		this(parent, ResourcesPlugin.getWorkspace().getRoot().getFileForLocation(path),
+				path.lastSegment(), type);
 	}
 
-	public Openable (ICElement parent, IResource resource, int type) {
-		this (parent, resource, resource.getName(), type);
+	public Openable(ICElement parent, IResource resource, int type) {
+		this(parent, resource, resource.getName(), type);
 	}
 	
-	public Openable (ICElement parent, IResource res, String name, int type) {
-		super (parent, name, type);
+	public Openable(ICElement parent, IResource res, String name, int type) {
+		super(parent, name, type);
 		resource = res;
 	}
 
 	@Override
-	public IResource getResource()  {
+	public IResource getResource() {
 		return resource;
 	}
 
@@ -78,7 +76,8 @@ public abstract class Openable extends Parent implements IOpenable, IBufferChang
 	 * if successful, or false if an error is encountered while determining
 	 * the structure of this element.
 	 */
-	protected abstract boolean buildStructure(OpenableInfo info, IProgressMonitor pm, Map<ICElement, CElementInfo> newElements, IResource underlyingResource) throws CModelException;
+	protected abstract boolean buildStructure(OpenableInfo info, IProgressMonitor pm,
+			Map<ICElement, CElementInfo> newElements, IResource underlyingResource) throws CModelException;
 
 	/**
 	 * Close the buffer associated with this element, if any.
@@ -145,7 +144,6 @@ public abstract class Openable extends Parent implements IOpenable, IBufferChang
 	 * @see org.eclipse.cdt.core.model.IOpenable#hasUnsavedChanges()
 	 */
 	public boolean hasUnsavedChanges() throws CModelException{
-	
 		if (isReadOnly() || !isOpen()) {
 			return false;
 		}
@@ -155,13 +153,12 @@ public abstract class Openable extends Parent implements IOpenable, IBufferChang
 		}
 		// for roots and projects must check open buffers
 		// to see if they have an child with unsaved changes
-		if (fType == C_MODEL ||
-			fType == C_PROJECT) {
+		if (fType == C_MODEL ||	fType == C_PROJECT) {
 			Enumeration<IBuffer> openBuffers= getBufferManager().getOpenBuffers();
 			while (openBuffers.hasMoreElements()) {
 				IBuffer buffer= openBuffers.nextElement();
 				if (buffer.hasUnsavedChanges()) {
-					ICElement owner= (ICElement)buffer.getOwner();
+					ICElement owner= (ICElement) buffer.getOwner();
 					if (isAncestorOf(owner)) {
 						return true;
 					}
@@ -171,6 +168,7 @@ public abstract class Openable extends Parent implements IOpenable, IBufferChang
 	
 		return false;
 	}
+
 	/**
 	 * Subclasses must override as required.
 	 * 
@@ -234,9 +232,9 @@ public abstract class Openable extends Parent implements IOpenable, IBufferChang
 	/**
 	 * Open the parent element if necessary.
 	 */
-	protected void openParent(CElementInfo childInfo, Map<ICElement, CElementInfo> newElements, IProgressMonitor pm) throws CModelException {
-
-		Openable openableParent = (Openable)getOpenableParent();
+	protected void openParent(CElementInfo childInfo, Map<ICElement, CElementInfo> newElements,
+			IProgressMonitor pm) throws CModelException {
+		Openable openableParent = (Openable) getOpenableParent();
 		if (openableParent != null && !openableParent.isOpen()){
 			openableParent.generateInfos(openableParent.createElementInfo(), newElements, pm);
 		}
@@ -245,19 +243,17 @@ public abstract class Openable extends Parent implements IOpenable, IBufferChang
 	/* (non-Javadoc)
 	 * @see org.eclipse.cdt.internal.core.model.CElement#generateInfos(java.lang.Object, java.util.Map, org.eclipse.core.runtime.IProgressMonitor)
 	 */
-	/* (non-Javadoc)
-	 * @see org.eclipse.cdt.internal.core.model.CElement#generateInfos(java.lang.Object, java.util.Map, org.eclipse.core.runtime.IProgressMonitor)
-	 */
 	@Override
-	protected void generateInfos(CElementInfo info, Map<ICElement, CElementInfo> newElements, IProgressMonitor monitor) throws CModelException {
-
+	protected void generateInfos(CElementInfo info, Map<ICElement, CElementInfo> newElements,
+			IProgressMonitor monitor) throws CModelException {
 		if (CModelManager.VERBOSE){
 			System.out.println("OPENING Element ("+ Thread.currentThread()+"): " + this); //$NON-NLS-1$//$NON-NLS-2$
 		}
 		
 		// open the parent if necessary
 		openParent(info, newElements, monitor);
-		if (monitor != null && monitor.isCanceled()) return;
+		if (monitor != null && monitor.isCanceled())
+			return;
 
 		 // puts the info before building the structure so that questions to the handle behave as if the element existed
 		 // (case of compilation units becoming working copies)
@@ -265,7 +261,7 @@ public abstract class Openable extends Parent implements IOpenable, IBufferChang
 
 		// build the structure of the openable (this will open the buffer if needed)
 		try {
-			OpenableInfo openableInfo = (OpenableInfo)info;
+			OpenableInfo openableInfo = (OpenableInfo) info;
 			boolean isStructureKnown = buildStructure(openableInfo, monitor, newElements, getResource());
 			openableInfo.setIsStructureKnown(isStructureKnown);
 		} catch (CModelException e) {
@@ -275,7 +271,6 @@ public abstract class Openable extends Parent implements IOpenable, IBufferChang
 		
 		// remove out of sync buffer for this element
 		CModelManager.getDefault().getElementsOutOfSynchWithBuffers().remove(this);
-
 	}
 
 	/**
@@ -306,10 +301,10 @@ public abstract class Openable extends Parent implements IOpenable, IBufferChang
 	public SourceRoot getSourceRoot() {
 		ICElement current = this;
 		do {
-			if (current instanceof SourceRoot) return (SourceRoot)current;
+			if (current instanceof SourceRoot)
+				return (SourceRoot) current;
 			current = current.getParent();
-		} while(current != null);
+		} while (current != null);
 		return null;
 	}
-
 }

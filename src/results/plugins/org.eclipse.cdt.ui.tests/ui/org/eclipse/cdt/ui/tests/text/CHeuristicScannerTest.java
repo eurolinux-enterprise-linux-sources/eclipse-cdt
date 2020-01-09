@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -35,7 +35,7 @@ import org.eclipse.cdt.internal.ui.text.FastCPartitionScanner;
  * Derived from JDT.
  */
 public class CHeuristicScannerTest extends TestCase {
-
+	private static boolean BUG_65463_IS_FIXED = false;
 	private FastPartitioner fPartitioner;
 	private Document fDocument;
 	private CIndenter fScanner;
@@ -50,7 +50,7 @@ public class CHeuristicScannerTest extends TestCase {
 	 */
 	protected void setUp() {
 		if (CCorePlugin.getDefault() != null) {
-			HashMap options= CCorePlugin.getDefaultOptions();
+			HashMap<String, String> options= CCorePlugin.getDefaultOptions();
 			options.put(DefaultCodeFormatterConstants.FORMATTER_TAB_CHAR, CCorePlugin.TAB);
 			options.put(DefaultCodeFormatterConstants.FORMATTER_TAB_SIZE, "4");
 
@@ -117,7 +117,7 @@ public class CHeuristicScannerTest extends TestCase {
 			"");
 		
 		int pos= fScanner.findReferencePosition(29);
-		Assert.assertEquals(28, pos);
+		Assert.assertEquals(21, pos);
 	}
 	
 	public void testPrevIndentationUnit5() {
@@ -331,7 +331,7 @@ public class CHeuristicScannerTest extends TestCase {
 			"\t\treturn a");
 		
 		String indent= fScanner.computeIndentation(28).toString();
-		Assert.assertEquals("\t\t", indent);
+		Assert.assertEquals("\t\t\t", indent);
 	}
 	
 	public void testIndentation3() {
@@ -340,7 +340,7 @@ public class CHeuristicScannerTest extends TestCase {
 			"\t\treturn a;");
 		
 		String indent= fScanner.computeIndentation(29).toString();
-		Assert.assertEquals("\t\t", indent);
+		Assert.assertEquals("\t\t\t", indent);
 	}
 	
 	public void testIndentation4() {
@@ -350,7 +350,7 @@ public class CHeuristicScannerTest extends TestCase {
 			"");
 		
 		String indent= fScanner.computeIndentation(29).toString();
-		Assert.assertEquals("\t\t", indent);
+		Assert.assertEquals("\t\t\t", indent);
 	}
 	
 	public void testIndentation5() {
@@ -815,7 +815,7 @@ public class CHeuristicScannerTest extends TestCase {
 	}
 
 	public void testConditional1() throws Exception {
-		if (true) // XXX enable when https://bugs.eclipse.org/bugs/show_bug.cgi?id=65463 is fixed
+		if (!BUG_65463_IS_FIXED) // Enable when http://bugs.eclipse.org/bugs/show_bug.cgi?id=65463 is fixed
 			return;
     	fDocument.set(
     			"		boolean isPrime() {\n" +
@@ -828,7 +828,7 @@ public class CHeuristicScannerTest extends TestCase {
     }
 
 	public void testConditional2() throws Exception {
-		if (true) // XXX enable when https://bugs.eclipse.org/bugs/show_bug.cgi?id=65463 is fixed
+		if (!BUG_65463_IS_FIXED) // Enable when http://bugs.eclipse.org/bugs/show_bug.cgi?id=65463 is fixed
 			return;
     	fDocument.set(
     			"		boolean isPrime() {\n" +
@@ -839,6 +839,5 @@ public class CHeuristicScannerTest extends TestCase {
     	
     	String indent= fScanner.computeIndentation(fDocument.getLength() - 8).toString();
     	Assert.assertEquals("					", indent);
-    	
     }
 }

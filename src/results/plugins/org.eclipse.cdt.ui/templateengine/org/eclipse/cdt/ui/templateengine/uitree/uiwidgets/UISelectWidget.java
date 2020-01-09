@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Symbian Software Limited and others.
+ * Copyright (c) 2007, 2009 Symbian Software Limited and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -142,7 +142,8 @@ public class UISelectWidget extends InputUIElement {
 	@Override
 	public boolean isValid() {
 		boolean retVal = true;
-		if(Boolean.parseBoolean(uiAttributes.get(InputUIElement.MANDATORY))) {
+		if(Boolean.parseBoolean(uiAttributes.get(InputUIElement.MANDATORY))
+				&& ! InputUIElement.SELECTTYPE.equals(uiAttributes.get(InputUIElement.TYPE)) ) {
 			retVal= currentValue!= null && currentValue.trim().length()>0;
 		}
 		return retVal;

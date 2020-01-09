@@ -15,17 +15,15 @@ package org.eclipse.cdt.internal.core.pdom.dom.cpp;
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IBinding;
-import org.eclipse.cdt.core.dom.ast.IFunctionType;
-import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunction;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameter;
 import org.eclipse.cdt.internal.core.Util;
 import org.eclipse.cdt.internal.core.index.IIndexCPPBindingConstants;
 import org.eclipse.cdt.internal.core.index.IndexCPPSignatureUtil;
-import org.eclipse.cdt.internal.core.pdom.PDOM;
 import org.eclipse.cdt.internal.core.pdom.db.Database;
 import org.eclipse.cdt.internal.core.pdom.dom.IPDOMOverloader;
 import org.eclipse.cdt.internal.core.pdom.dom.PDOMBinding;
@@ -40,65 +38,78 @@ import org.eclipse.core.runtime.CoreException;
  */
 class PDOMCPPFunction extends PDOMCPPBinding implements ICPPFunction, IPDOMOverloader {
 
+	private static final short ANNOT_PARAMETER_PACK = 0x100;
+
 	/**
 	 * Offset of total number of function parameters (relative to the
 	 * beginning of the record).
 	 */
-	private static final int NUM_PARAMS = PDOMCPPBinding.RECORD_SIZE + 0;
+	private static final int NUM_PARAMS = PDOMCPPBinding.RECORD_SIZE;
 
 	/**
 	 * Offset of pointer to the first parameter of this function (relative to
 	 * the beginning of the record).
 	 */
-	private static final int FIRST_PARAM = PDOMCPPBinding.RECORD_SIZE + 4;
+	private static final int FIRST_PARAM = NUM_PARAMS + 4;
 	
 	/**
 	 * Offset of pointer to the function type record of this function (relative to
 	 * the beginning of the record).
 	 */
-	protected static final int FUNCTION_TYPE= PDOMCPPBinding.RECORD_SIZE + 8;
+	protected static final int FUNCTION_TYPE= FIRST_PARAM + Database.PTR_SIZE;
 	
 	/**
 	 * Offset of hash of parameter information to allow fast comparison
 	 */
-	private static final int SIGNATURE_HASH = PDOMCPPBinding.RECORD_SIZE + 12;
+	private static final int SIGNATURE_HASH = FUNCTION_TYPE + Database.TYPE_SIZE;
 		
 	/**
 	 * Offset of start of exception specifications
 	 */
-	protected static final int EXCEPTION_SPEC = PDOMCPPBinding.RECORD_SIZE + 16; // int
+	protected static final int EXCEPTION_SPEC = SIGNATURE_HASH + 4; // int
 	
 	/**
 	 * Offset of annotation information (relative to the beginning of the
 	 * record).
 	 */
-	private static final int ANNOTATION = PDOMCPPBinding.RECORD_SIZE + 20; // byte
+	private static final int ANNOTATION = EXCEPTION_SPEC + Database.PTR_SIZE; // short
+	
+	private static final int REQUIRED_ARG_COUNT = ANNOTATION + 2;
 
 	/**
 	 * The size in bytes of a PDOMCPPFunction record in the database.
 	 */
 	@SuppressWarnings("hiding")
-	protected static final int RECORD_SIZE = PDOMCPPBinding.RECORD_SIZE + 21;
+	protected static final int RECORD_SIZE = REQUIRED_ARG_COUNT + 4;
 
-	private byte annotation= -1;
+	private short fAnnotation= -1;
+	private int fRequiredArgCount= -1;
+	private ICPPFunctionType fType;
 	
 	public PDOMCPPFunction(PDOMLinkage linkage, PDOMNode parent, ICPPFunction function, boolean setTypes) throws CoreException, DOMException {
 		super(linkage, parent, function.getNameCharArray());
 		Database db = getDB();		
 		Integer sigHash = IndexCPPSignatureUtil.getSignatureHash(function);
 		getDB().putInt(record + SIGNATURE_HASH, sigHash != null ? sigHash.intValue() : 0);
-		db.putByte(record + ANNOTATION, PDOMCPPAnnotation.encodeAnnotation(function));
-
+		db.putShort(record + ANNOTATION, getAnnotation(function));
+		db.putInt(record + REQUIRED_ARG_COUNT, function.getRequiredArgumentCount());
 		if (setTypes) {
 			initData(function.getType(), function.getParameters(), extractExceptionSpec(function));
 		}
 	}
 
-	public void initData(ICPPFunctionType ftype, IParameter[] params, IType[] exceptionSpec) {
-		PDOMCPPFunctionType pft;
+	private short getAnnotation(ICPPFunction function) throws DOMException {
+		int annot= PDOMCPPAnnotation.encodeAnnotation(function);
+		if (function.hasParameterPack()) {
+			annot |= ANNOT_PARAMETER_PACK;
+		}
+		return (short) annot;
+	}
+
+	public void initData(ICPPFunctionType ftype, ICPPParameter[] params, IType[] exceptionSpec) {
 		try {
-			pft = setType(ftype);
-			setParameters(pft, params);
+			setType(ftype);
+			setParameters(params);
 			storeExceptionSpec(exceptionSpec);
 		} catch (CoreException e) {
 			CCorePlugin.log(e);
@@ -110,29 +121,51 @@ class PDOMCPPFunction extends PDOMCPPBinding implements ICPPFunction, IPDOMOverl
 		if (newBinding instanceof ICPPFunction) {
 			ICPPFunction func= (ICPPFunction) newBinding;
 			ICPPFunctionType newType;
-			IParameter[] newParams;
-			byte newAnnotation;
+			ICPPParameter[] newParams;
+			short newAnnotation;
+			int newBindingRequiredArgCount;
 			try {
 				newType= func.getType();
 				newParams = func.getParameters();
-				newAnnotation = PDOMCPPAnnotation.encodeAnnotation(func);
+				newAnnotation = getAnnotation(func);
+				newBindingRequiredArgCount= func.getRequiredArgumentCount();
 			} catch (DOMException e) {
 				throw new CoreException(Util.createStatus(e));
 			}
 				
-			IFunctionType oldType= getType();
-			PDOMCPPParameter oldParams= getFirstParameter();
-			PDOMCPPFunctionType pft= setType(newType);
-			setParameters(pft, newParams);
-			if (oldType != null) {
-				linkage.deleteType(oldType, record);
-			}
-			if (oldParams != null) {
-				oldParams.delete(linkage);
+			fType= null;
+			linkage.storeType(record+FUNCTION_TYPE, newType);
+
+			PDOMCPPParameter oldParams= getFirstParameter(null);
+			int requiredCount;
+			if (oldParams != null && hasDeclaration()) {
+				int parCount= 0;
+				requiredCount= 0;
+				for (ICPPParameter newPar : newParams) {
+					parCount++;
+					if (parCount <= newBindingRequiredArgCount && !oldParams.hasDefaultValue())
+						requiredCount= parCount;
+					oldParams.update(newPar);
+					long next= oldParams.getNextPtr();
+					if (next == 0)
+						break;
+					oldParams= new PDOMCPPParameter(linkage, next, null);
+				}
+				if (parCount < newBindingRequiredArgCount) {
+					requiredCount= newBindingRequiredArgCount;
+				}
+			} else {
+				requiredCount= newBindingRequiredArgCount;
+				setParameters(newParams);
+				if (oldParams != null) {
+					oldParams.delete(linkage);
+				}
 			}
 			final Database db = getDB();
-			db.putByte(record + ANNOTATION, newAnnotation);
-			annotation= newAnnotation;
+			db.putShort(record + ANNOTATION, newAnnotation);
+			fAnnotation= newAnnotation;
+			db.putInt(record + REQUIRED_ARG_COUNT, requiredCount);
+			fRequiredArgCount= requiredCount;
 			
 			long oldRec = db.getRecPtr(record+EXCEPTION_SPEC);
 			storeExceptionSpec(extractExceptionSpec(func));
@@ -163,22 +196,21 @@ class PDOMCPPFunction extends PDOMCPPBinding implements ICPPFunction, IPDOMOverl
 		return exceptionSpec;
 	}
 
-	private void setParameters(PDOMCPPFunctionType pft, IParameter[] params) throws CoreException {
+	private void setParameters(ICPPParameter[] params) throws CoreException {
+		final PDOMLinkage linkage = getLinkage();
 		final Database db= getDB();
 		db.putInt(record + NUM_PARAMS, params.length);
 		db.putRecPtr(record + FIRST_PARAM, 0);
-		IType[] paramTypes= pft.getParameterTypes();
-		for (int i= 0; i < params.length; ++i) {
-			long ptRecord= i < paramTypes.length && paramTypes[i] != null ? ((PDOMNode) paramTypes[i]).getRecord() : 0;
-			setFirstParameter(new PDOMCPPParameter(getLinkage(), this, params[i], ptRecord));
+		PDOMCPPParameter next= null;
+		for (int i= params.length-1; i >= 0; --i) {
+			next= new PDOMCPPParameter(linkage, this, params[i], next);
 		}
+		db.putRecPtr(record + FIRST_PARAM, next == null ? 0 : next.getRecord());
 	}
 
-	private PDOMCPPFunctionType setType(ICPPFunctionType ft) throws CoreException {
-		PDOMCPPFunctionType pft = (PDOMCPPFunctionType) getLinkage().addType(this, ft);
-		getDB().putRecPtr(record + FUNCTION_TYPE, pft.getRecord());
-		getPDOM().putCachedResult(record, pft, true);
-		return pft;
+	private void setType(ICPPFunctionType ft) throws CoreException {
+		fType= null;
+		getLinkage().storeType(record+FUNCTION_TYPE, ft);
 	}
 	
 	public int getSignatureHash() throws CoreException {
@@ -203,26 +235,36 @@ class PDOMCPPFunction extends PDOMCPPBinding implements ICPPFunction, IPDOMOverl
 		return IIndexCPPBindingConstants.CPPFUNCTION;
 	}
 	
-	private PDOMCPPParameter getFirstParameter() throws CoreException {
+	private PDOMCPPParameter getFirstParameter(IType type) throws CoreException {
 		long rec = getDB().getRecPtr(record + FIRST_PARAM);
-		return rec != 0 ? new PDOMCPPParameter(getLinkage(), rec) : null;
-	}
-
-	private void setFirstParameter(PDOMCPPParameter param) throws CoreException {
-		if (param != null)
-			param.setNextParameter(getFirstParameter());
-		long rec = param != null ? param.getRecord() :  0;
-		getDB().putRecPtr(record + FIRST_PARAM, rec);
+		return rec != 0 ? new PDOMCPPParameter(getLinkage(), rec, type) : null;
 	}
 	
-	public boolean isInline() throws DOMException {
+	public boolean isInline() {
 		return getBit(getAnnotation(), PDOMCAnnotation.INLINE_OFFSET);
 	}
 
-	final protected byte getAnnotation() {
-		if (annotation == -1)
-			annotation= getByte(record + ANNOTATION);
-		return annotation;
+	
+	public int getRequiredArgumentCount() throws DOMException {
+		if (fRequiredArgCount == -1) {
+			try {
+				fRequiredArgCount= getDB().getInt(record + REQUIRED_ARG_COUNT);
+			} catch (CoreException e) {
+				fRequiredArgCount= 0;
+			}
+		}
+		return fRequiredArgCount;
+	}
+
+	final protected short getAnnotation() {
+		if (fAnnotation == -1) {
+			try {
+				fAnnotation= getDB().getShort(record + ANNOTATION);
+			} catch (CoreException e) {
+				fAnnotation= 0;
+			}
+		}
+		return fAnnotation;
 	}
 
 	public boolean isExternC() throws DOMException {
@@ -237,62 +279,65 @@ class PDOMCPPFunction extends PDOMCPPBinding implements ICPPFunction, IPDOMOverl
 		throw new PDOMNotImplementedError();
 	}
 
-	public IParameter[] getParameters() throws DOMException {
+	public ICPPParameter[] getParameters() throws DOMException {
 		try {
-			int n = getDB().getInt(record + NUM_PARAMS);
-			IParameter[] params = new IParameter[n];
-			PDOMCPPParameter param = getFirstParameter();
-			while (param != null) {
-				params[--n] = param;
-				param = param.getNextParameter();
+			PDOMLinkage linkage= getLinkage();
+			Database db= getDB();
+			ICPPFunctionType ft = getType();
+			IType[] ptypes= ft == null ? IType.EMPTY_TYPE_ARRAY : ft.getParameterTypes();
+			
+			int n = db.getInt(record + NUM_PARAMS);
+			ICPPParameter[] result = new ICPPParameter[n];
+			
+			long next = db.getRecPtr(record + FIRST_PARAM);
+ 			for (int i = 0; i < n && next != 0; i++) {
+ 				IType type= i<ptypes.length ? ptypes[i] : null;
+				final PDOMCPPParameter par = new PDOMCPPParameter(linkage, next, type);
+				next= par.getNextPtr();
+				result[i]= par;
 			}
-			return params;
+			return result;
 		} catch (CoreException e) {
 			CCorePlugin.log(e);
-			return new IParameter[0];
+			return ICPPParameter.EMPTY_CPPPARAMETER_ARRAY;
 		}
 	}
 
 	public final ICPPFunctionType getType() {	
-		final PDOM pdom= getPDOM();
-		ICPPFunctionType ftype= (ICPPFunctionType) pdom.getCachedResult(record);
-		if (ftype == null) {
-			ftype= readFunctionType();
-			pdom.putCachedResult(record, ftype, false);
+		if (fType == null) {
+			try {
+				fType= (ICPPFunctionType) getLinkage().loadType(record+FUNCTION_TYPE);
+			} catch (CoreException e) {
+				CCorePlugin.log(e);
+			}
 		}
-		return ftype;
+		return fType;
 	}
 	
-	private final ICPPFunctionType readFunctionType() {
-		try {
-			long offset= getDB().getRecPtr(record + FUNCTION_TYPE);
-			return offset==0 ? null : new PDOMCPPFunctionType(getLinkage(), offset); 
-		} catch(CoreException ce) {
-			CCorePlugin.log(ce);
-			return null;
-		}
-	}
-
-	public boolean isAuto() throws DOMException {
+	public boolean isAuto() {
 		// ISO/IEC 14882:2003 7.1.1.2
 		return false; 
 	}
 
-	public boolean isExtern() throws DOMException {
+	public boolean isExtern() {
 		return getBit(getAnnotation(), PDOMCAnnotation.EXTERN_OFFSET);
 	}
 
-	public boolean isRegister() throws DOMException {
+	public boolean isRegister() {
 		// ISO/IEC 14882:2003 7.1.1.2
 		return false; 
 	}
 
-	public boolean isStatic() throws DOMException {
+	public boolean isStatic() {
 		return getBit(getAnnotation(), PDOMCAnnotation.STATIC_OFFSET);
 	}
 
 	public boolean takesVarArgs() throws DOMException {
 		return getBit(getAnnotation(), PDOMCAnnotation.VARARGS_OFFSET);
+	}
+
+	public boolean hasParameterPack() {
+		return getBit(getAnnotation(), ANNOT_PARAMETER_PACK);
 	}
 
 	@Override

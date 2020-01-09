@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2004, 2009 IBM Corporation and others.
+ *  Copyright (c) 2004, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -62,9 +62,6 @@ public class ScannerConfigProfile {
 	public final class ScannerInfoConsoleParser {
 		private IConfigurationElement configElem;
 		
-		/**
-		 * @param scannerInfoConsoleParser
-		 */
 		public ScannerInfoConsoleParser(IConfigurationElement configElem) {
 			this.configElem = configElem;
 		}
@@ -113,15 +110,13 @@ public class ScannerConfigProfile {
 	 * @author vhirsl
 	 */
 	public final class Run extends Action {
-		/**
-		 * @param run
-		 */
 		public Run(IConfigurationElement run) {
 			super(run);
 		}
 		/* (non-Javadoc)
 		 * @see org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigProfileManager.IAction#getNewExternalScannerInfoProvider()
 		 */
+		@Override
 		public Object createExternalScannerInfoProvider() {
 			Object provider = super.createExternalScannerInfoProvider();
 			if (provider == null) {
@@ -137,15 +132,13 @@ public class ScannerConfigProfile {
 	 * @author vhirsl
 	 */
 	public final class Open extends Action {
-		/**
-		 * @param open
-		 */
 		public Open(IConfigurationElement open) {
 			super(open);
 		}
 		/* (non-Javadoc)
 		 * @see org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigProfileManager.IAction#getNewExternalScannerInfoProvider()
 		 */
+		@Override
 		public Object createExternalScannerInfoProvider() {
 			Object provider = super.createExternalScannerInfoProvider();
 			if (provider == null) {
@@ -233,13 +226,10 @@ public class ScannerConfigProfile {
 	
 	private ScannerInfoCollector scannerInfoCollector;
 	private BuildOutputProvider buildOutputProvider;
-	private Map scannerInfoProviders = new LinkedHashMap();
+	private Map<String, ScannerInfoProvider> scannerInfoProviders = new LinkedHashMap<String, ScannerInfoProvider>();
 	
 	private Boolean supportsContext;
 
-	/**
-	 * @param profileId
-	 */
 	public ScannerConfigProfile(String profileId) {
 		id = profileId;
 		load();
@@ -289,8 +279,8 @@ public class ScannerConfigProfile {
 	/**
 	 * @return Returns the list of providerIds
 	 */
-	public List getSIProviderIds() {
-		return new ArrayList(scannerInfoProviders.keySet());
+	public List<String> getSIProviderIds() {
+		return new ArrayList<String>(scannerInfoProviders.keySet());
 	}
 	/**
 	 * @return Returns the buildOutputProvider.
@@ -322,7 +312,7 @@ public class ScannerConfigProfile {
 	 * @return Returns the scannerInfoProviders.
 	 */
 	public ScannerInfoProvider getScannerInfoProviderElement(String providerId) {
-		return (ScannerInfoProvider) scannerInfoProviders.get(providerId);
+		return scannerInfoProviders.get(providerId);
 	}
 	
 	public boolean supportsContext(){

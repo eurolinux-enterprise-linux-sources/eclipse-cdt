@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,7 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.RejectedExecutionException;
 
-import org.eclipse.cdt.core.IAddress;
+import org.eclipse.cdt.debug.core.model.ICastToArray;
+import org.eclipse.cdt.debug.core.model.ICastToType;
 import org.eclipse.cdt.debug.internal.ui.CDebugImages;
 import org.eclipse.cdt.dsf.concurrent.ConfinedToDsfExecutor;
 import org.eclipse.cdt.dsf.concurrent.CountingRequestMonitor;
@@ -26,19 +27,21 @@ import org.eclipse.cdt.dsf.concurrent.DsfExecutor;
 import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
 import org.eclipse.cdt.dsf.concurrent.IDsfStatusConstants;
 import org.eclipse.cdt.dsf.concurrent.ImmediateExecutor;
-import org.eclipse.cdt.dsf.concurrent.MultiRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.datamodel.IDMContext;
+import org.eclipse.cdt.dsf.debug.internal.ui.viewmodel.DsfCastToTypeSupport;
 import org.eclipse.cdt.dsf.debug.service.IExpressions;
-import org.eclipse.cdt.dsf.debug.service.IFormattedValues;
-import org.eclipse.cdt.dsf.debug.service.IStack;
 import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionChangedDMEvent;
 import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionDMAddress;
 import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionDMContext;
 import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionDMData;
+import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionDMLocation;
+import org.eclipse.cdt.dsf.debug.service.IExpressions2;
+import org.eclipse.cdt.dsf.debug.service.IFormattedValues;
 import org.eclipse.cdt.dsf.debug.service.IMemory.IMemoryChangedEvent;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.ISuspendedDMEvent;
+import org.eclipse.cdt.dsf.debug.service.IStack;
 import org.eclipse.cdt.dsf.debug.service.IStack.IFrameDMContext;
 import org.eclipse.cdt.dsf.debug.service.IStack.IVariableDMContext;
 import org.eclipse.cdt.dsf.debug.service.IStack.IVariableDMData;
@@ -51,6 +54,7 @@ import org.eclipse.cdt.dsf.debug.ui.viewmodel.numberformat.FormattedValueVMUtil;
 import org.eclipse.cdt.dsf.debug.ui.viewmodel.numberformat.IFormattedValueVMContext;
 import org.eclipse.cdt.dsf.internal.ui.DsfUIPlugin;
 import org.eclipse.cdt.dsf.service.DsfSession;
+import org.eclipse.cdt.dsf.ui.concurrent.ViewerCountingRequestMonitor;
 import org.eclipse.cdt.dsf.ui.concurrent.ViewerDataRequestMonitor;
 import org.eclipse.cdt.dsf.ui.viewmodel.VMDelta;
 import org.eclipse.cdt.dsf.ui.viewmodel.datamodel.AbstractDMVMProvider;
@@ -72,12 +76,14 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.model.IExpression;
+import org.eclipse.debug.internal.ui.viewers.model.provisional.IChildrenCountUpdate;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IChildrenUpdate;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IElementCompareRequest;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IElementEditor;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IElementLabelProvider;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IElementMementoProvider;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IElementMementoRequest;
+import org.eclipse.debug.internal.ui.viewers.model.provisional.IHasChildrenUpdate;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.ILabelUpdate;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IModelDelta;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IPresentationContext;
@@ -86,6 +92,7 @@ import org.eclipse.debug.ui.DebugUITools;
 import org.eclipse.debug.ui.IDebugModelPresentation;
 import org.eclipse.debug.ui.IDebugUIConstants;
 import org.eclipse.debug.ui.actions.IWatchExpressionFactoryAdapter2;
+import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.jface.viewers.CellEditor;
 import org.eclipse.jface.viewers.ICellModifier;
@@ -100,29 +107,29 @@ public class VariableVMNode extends AbstractExpressionVMNode
                             implements IElementEditor, IElementLabelProvider, IElementPropertiesProvider, IElementMementoProvider 
 {
     /**
-     * @since 2.0
+     * @since 2.1
      */    
-    private static final String PROP_VARIABLE_TYPE_NAME = "variable_type_name";  //$NON-NLS-1$
+    public static final String PROP_VARIABLE_TYPE_NAME = "variable_type_name";  //$NON-NLS-1$
 
     /**
-     * @since 2.0
+     * @since 2.1
      */    
-    private static final String PROP_VARIABLE_BASIC_TYPE = "variable_basic_type";  //$NON-NLS-1$
+    public static final String PROP_VARIABLE_BASIC_TYPE = "variable_basic_type";  //$NON-NLS-1$
 
     /**
-     * @since 2.0
+     * @since 2.1
      */    
-    private static final String PROP_VARIABLE_ADDRESS = "variable_address";  //$NON-NLS-1$
+    public static final String PROP_VARIABLE_ADDRESS = "variable_address";  //$NON-NLS-1$
     
     /**
-     * @since 2.0
+     * @since 2.1
      */
-    private static final String PROP_VARIABLE_SHOW_TYPE_NAMES = "variable_show_type_names"; //$NON-NLS-1$
+    public static final String PROP_VARIABLE_SHOW_TYPE_NAMES = "variable_show_type_names"; //$NON-NLS-1$
     
     /**
-     * @since 2.0
+     * @since 2.1
      */    
-    private static final String PROP_VARIABLE_ADDRESS_CHANGED = ICachingVMProvider.PROP_IS_CHANGED_PREFIX + PROP_VARIABLE_ADDRESS;
+    public static final String PROP_VARIABLE_ADDRESS_CHANGED = ICachingVMProvider.PROP_IS_CHANGED_PREFIX + PROP_VARIABLE_ADDRESS;
 
     private final SyncVariableDataAccess fSyncVariableDataAccess;
     
@@ -132,7 +139,7 @@ public class VariableVMNode extends AbstractExpressionVMNode
      *  
      * @since 2.0
      */    
-    private IElementLabelProvider fLabelProvider;
+    private final IElementLabelProvider fLabelProvider;
 
     public class VariableExpressionVMC extends DMVMContext implements IFormattedValueVMContext  {
         
@@ -142,17 +149,32 @@ public class VariableVMNode extends AbstractExpressionVMNode
             super(dmc);
         }
 
+		/* (non-Javadoc)
+		 * @see org.eclipse.cdt.debug.internal.core.IWatchpointTarget#getExpression()
+		 */
+		public String getExpression() {
+			final IExpressionDMContext exprDmc = DMContexts.getAncestorOfType(getDMContext(), IExpressionDMContext.class);
+			if (exprDmc != null) {
+				return exprDmc.getExpression();
+			}
+			return ""; //$NON-NLS-1$
+		}
+
         public void setExpression(IExpression expression) {
             fExpression = expression;
         }
-        
-        @Override
-        @SuppressWarnings("unchecked") 
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+		@Override
         public Object getAdapter(Class adapter) {
             if (fExpression != null && adapter.isAssignableFrom(fExpression.getClass())) {
                 return fExpression;
             } else if (adapter.isAssignableFrom(IWatchExpressionFactoryAdapter2.class)) {
                 return fVariableExpressionFactory;
+			} else if (fCastToTypeSupport != null && getDMContext() instanceof IExpressionDMContext
+					&& (adapter.isAssignableFrom(ICastToType.class)
+						|| adapter.isAssignableFrom(ICastToArray.class))) {
+				return fCastToTypeSupport.getCastImpl((IExpressionDMContext) getDMContext());
             } else {
                 return super.getAdapter(adapter);
             }
@@ -195,6 +217,8 @@ public class VariableVMNode extends AbstractExpressionVMNode
 
     final protected VariableExpressionFactory fVariableExpressionFactory = new VariableExpressionFactory();
 
+	protected DsfCastToTypeSupport fCastToTypeSupport;
+
     public VariableVMNode(AbstractDMVMProvider provider, DsfSession session, 
         SyncVariableDataAccess syncVariableDataAccess) 
     {
@@ -204,6 +228,15 @@ public class VariableVMNode extends AbstractExpressionVMNode
     }
 
     /**
+     * Set the cast support target.  This is only meaningful if the {@link IExpressions2}
+     * service is available.
+     * @param castToTypeSupport
+     */
+    public void setCastToTypeSupport(DsfCastToTypeSupport castToTypeSupport) {
+    	this.fCastToTypeSupport = castToTypeSupport;
+    }
+    
+    /**
      * Creates the label provider delegate.  This VM node will delegate label 
      * updates to this provider which can be created by sub-classes.   
      *  
@@ -211,48 +244,142 @@ public class VariableVMNode extends AbstractExpressionVMNode
      *  
      * @since 2.0
      */    
+    private LabelBackground columnIdValueBackground; 
+    private LabelBackground columnNoColumnsBackground;
+    private IPropertyChangeListener fPreferenceChangeListener;
+    
+    /*
+     * (non-Javadoc)
+     * @see org.eclipse.cdt.dsf.ui.viewmodel.datamodel.AbstractDMVMNode#dispose()
+     * 
+     * We need to take over the dispose so we can get rid of the preference listener we created.
+     */
+    @Override
+	public void dispose() {
+    	
+    	if ( fPreferenceChangeListener != null ) {
+    		DebugUITools.getPreferenceStore().removePropertyChangeListener(fPreferenceChangeListener);
+    	}
+    	
+        super.dispose();	
+    }
+
+    /**
+     * Create label image objects which are used in more than one column. 
+     * 
+     * @since 2.1
+     * 
+     * Pointer image is used for variable and function pointers.
+     */    
+    public final static LabelImage POINTER_LABEL_IMAGE = new LabelImage(CDebugImages.DESC_OBJS_VARIABLE_POINTER) {
+        { setPropertyNames(new String[] { PROP_VARIABLE_BASIC_TYPE }); }
+
+        @Override
+        public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
+            String type = (String)properties.get(PROP_VARIABLE_BASIC_TYPE);
+            return IExpressionDMData.BasicType.pointer.name().equals(type) ||
+                IExpressionDMData.BasicType.function.name().equals(type);
+        };
+    };
+    
+    /**
+     * @since 2.1
+     * 
+     * Aggregate image is used for array, struct, etc.
+     */   
+    public final static  LabelImage AGGREGATE_LABEL_IMAGE = new LabelImage(CDebugImages.DESC_OBJS_VARIABLE_AGGREGATE) {
+        { setPropertyNames(new String[] { PROP_VARIABLE_BASIC_TYPE }); }
+
+        @Override
+        public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
+            String type = (String)properties.get(PROP_VARIABLE_BASIC_TYPE);
+            return IExpressionDMData.BasicType.array.name().equals(type) ||
+                IExpressionDMData.BasicType.composite.name().equals(type);
+        };
+    };
+    
+    /**
+     * @since 2.1
+     * 
+     * Simple variable image is used for all other types, except when there is no type specified.
+     */ 
+    public final static  LabelImage SIMPLE_LABEL_IMAGE = new LabelImage(CDebugImages.DESC_OBJS_VARIABLE_SIMPLE) {
+        { setPropertyNames(new String[] { PROP_VARIABLE_BASIC_TYPE }); }
+        
+        @Override
+        public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
+            String type = (String)properties.get(PROP_VARIABLE_BASIC_TYPE);
+            return type != null;
+        };
+    };
+    
     protected IElementLabelProvider createLabelProvider() {
+    	
+    	//
+    	// Create the foreground/background colors which can be dynamically modified.
+    	//
+    	columnIdValueBackground = new LabelBackground(
+                DebugUITools.getPreferenceColor(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND).getRGB()) 
+            {
+                { 
+                    setPropertyNames(new String[] { 
+                        FormattedValueVMUtil.getPropertyForFormatId(IFormattedValues.STRING_FORMAT),
+                        ICachingVMProvider.PROP_IS_CHANGED_PREFIX + FormattedValueVMUtil.getPropertyForFormatId(IFormattedValues.STRING_FORMAT),
+                        IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE, 
+                        ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE,
+                        IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT, 
+                        ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT}); 
+                }
+
+                @Override
+                public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
+                    Boolean activeFormatChanged = (Boolean)properties.get(
+                        ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT);
+                    Boolean activeChanged = (Boolean)properties.get(
+                        ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE);
+                    Boolean stringChanged = (Boolean)properties.get(
+                        ICachingVMProvider.PROP_IS_CHANGED_PREFIX + FormattedValueVMUtil.getPropertyForFormatId(IFormattedValues.STRING_FORMAT));
+                    return Boolean.TRUE.equals(stringChanged) || 
+                        ( Boolean.TRUE.equals(activeChanged) && !Boolean.TRUE.equals(activeFormatChanged));
+                };                    
+            };
+            
+    	columnNoColumnsBackground = new LabelBackground(DebugUITools.getPreferenceColor(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND).getRGB())
+    	{
+    		{ 
+    			setPropertyNames(new String[] { 
+    					FormattedValueVMUtil.getPropertyForFormatId(IFormattedValues.STRING_FORMAT), 
+    					IDebugVMConstants.PROP_IS_STRING_FORMAT_VALUE_CHANGED, 
+    					IDebugVMConstants.PROP_IS_ACTIVE_FORMATTED_VALUE_CHANGED}); 
+    		}
+
+    		@Override
+    		public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
+    			Boolean stringChanged = (Boolean)properties.get(IDebugVMConstants.PROP_IS_STRING_FORMAT_VALUE_CHANGED);
+    			Boolean activeChanged = (Boolean)properties.get(IDebugVMConstants.PROP_IS_ACTIVE_FORMATTED_VALUE_CHANGED);
+    			return Boolean.TRUE.equals(stringChanged) || Boolean.TRUE.equals(activeChanged);
+    		}                
+    	};
+
+    	// Get rid of the previous listener if it exists and then create a new one and sign it up.
+    	if ( fPreferenceChangeListener != null ) {
+    		DebugUITools.getPreferenceStore().removePropertyChangeListener(fPreferenceChangeListener);
+    	}
+
+    	fPreferenceChangeListener = new IPropertyChangeListener() {
+    		public void propertyChange(PropertyChangeEvent event) {
+    			if ( event.getProperty().equals(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND) ) {
+    				columnIdValueBackground.setBackground(DebugUITools.getPreferenceColor(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND).getRGB());
+    				columnNoColumnsBackground.setBackground(DebugUITools.getPreferenceColor(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND).getRGB());
+    			}
+    		}
+    	};
+
+        DebugUITools.getPreferenceStore().addPropertyChangeListener(fPreferenceChangeListener);
+
+        // Create the initial properties provider which can be built on.
         PropertiesBasedLabelProvider provider = new PropertiesBasedLabelProvider();
 
-        // 
-        // Create label image objects which are used in more than one column. 
-        //
-        
-        // Pointer image is used for variable and function pointers.
-        LabelImage pointerLabelImage = new LabelImage(CDebugImages.DESC_OBJS_VARIABLE_POINTER) {
-            { setPropertyNames(new String[] { PROP_VARIABLE_BASIC_TYPE }); }
-
-            @Override
-            public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
-                String type = (String)properties.get(PROP_VARIABLE_BASIC_TYPE);
-                return IExpressionDMData.BasicType.pointer.name().equals(type) ||
-                    IExpressionDMData.BasicType.function.name().equals(type);
-            };
-        };
-        
-        // Aggregate image is used for array, struct, etc.
-        LabelImage aggregateLabelImage = new LabelImage(CDebugImages.DESC_OBJS_VARIABLE_AGGREGATE) {
-            { setPropertyNames(new String[] { PROP_VARIABLE_BASIC_TYPE }); }
-
-            @Override
-            public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
-                String type = (String)properties.get(PROP_VARIABLE_BASIC_TYPE);
-                return IExpressionDMData.BasicType.array.name().equals(type) ||
-                    IExpressionDMData.BasicType.composite.name().equals(type);
-            };
-        };
-        
-        // Simple variable image is used for all other types, except when there is no type specified.
-        LabelImage simpleLabelImage = new LabelImage(CDebugImages.DESC_OBJS_VARIABLE_SIMPLE) {
-            { setPropertyNames(new String[] { PROP_VARIABLE_BASIC_TYPE }); }
-            
-            @Override
-            public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
-                String type = (String)properties.get(PROP_VARIABLE_BASIC_TYPE);
-                return type != null;
-            };
-        };
-        
         // The name column consists of the expression name.  The name column image depends on the variable type. 
         provider.setColumnInfo(
             IDebugVMConstants.COLUMN_ID__NAME,
@@ -260,9 +387,9 @@ public class VariableVMNode extends AbstractExpressionVMNode
                 new LabelText(
                     MessagesForVariablesVM.VariableVMNode_Name_column__text_format, 
                     new String[] { PROP_NAME }),
-                pointerLabelImage,
-                aggregateLabelImage, 
-                simpleLabelImage,
+                POINTER_LABEL_IMAGE,
+                AGGREGATE_LABEL_IMAGE, 
+                SIMPLE_LABEL_IMAGE,
                 new StaleDataLabelForeground(),
                 new VariableLabelFont(),
             }));
@@ -275,9 +402,9 @@ public class VariableVMNode extends AbstractExpressionVMNode
                 new LabelText(
                     MessagesForVariablesVM.VariableVMNode_Expression_column__text_format, 
                     new String[] { PROP_ELEMENT_EXPRESSION }),
-                pointerLabelImage,
-                aggregateLabelImage, 
-                simpleLabelImage,
+                POINTER_LABEL_IMAGE,
+                AGGREGATE_LABEL_IMAGE, 
+                SIMPLE_LABEL_IMAGE,
                 new StaleDataLabelForeground(),
                 new VariableLabelFont(),
             }));
@@ -340,31 +467,7 @@ public class VariableVMNode extends AbstractExpressionVMNode
                     }
                 },
                 // 
-                new LabelBackground(
-                    DebugUITools.getPreferenceColor(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND).getRGB()) 
-                {
-                    { 
-                        setPropertyNames(new String[] { 
-                            FormattedValueVMUtil.getPropertyForFormatId(IFormattedValues.STRING_FORMAT),
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + FormattedValueVMUtil.getPropertyForFormatId(IFormattedValues.STRING_FORMAT),
-                            IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE, 
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE,
-                            IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT, 
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT}); 
-                    }
-
-                    @Override
-                    public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
-                        Boolean activeFormatChanged = (Boolean)properties.get(
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT);
-                        Boolean activeChanged = (Boolean)properties.get(
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE);
-                        Boolean stringChanged = (Boolean)properties.get(
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + FormattedValueVMUtil.getPropertyForFormatId(IFormattedValues.STRING_FORMAT));
-                        return Boolean.TRUE.equals(stringChanged) || 
-                            ( Boolean.TRUE.equals(activeChanged) && !Boolean.TRUE.equals(activeFormatChanged));
-                    };                    
-                },
+                columnIdValueBackground,
                 new StaleDataLabelForeground(),
                 new VariableLabelFont(),
             }));
@@ -375,9 +478,9 @@ public class VariableVMNode extends AbstractExpressionVMNode
             IDebugVMConstants.COLUMN_ID__ADDRESS,
             new LabelColumnInfo(new LabelAttribute[] { 
                 new LabelText(
-                    MessagesForVariablesVM.VariableVMNode_Address_column__text_format, 
+                    MessagesForVariablesVM.VariableVMNode_Location_column__text_format, 
                     new String[] { PROP_VARIABLE_ADDRESS }),
-                new LabelText(MessagesForVariablesVM.VariableVMNode_Address_column__Error__text_format, new String[] {}), 
+                new LabelText(MessagesForVariablesVM.VariableVMNode_Location_column__Error__text_format, new String[] {}), 
                 new LabelBackground(
                     DebugUITools.getPreferenceColor(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND).getRGB()) 
                 {
@@ -499,9 +602,9 @@ public class VariableVMNode extends AbstractExpressionVMNode
                 new ErrorLabelText(
                     MessagesForVariablesVM.VariableVMNode_NoColumns_column__Error__text_format, 
                     new String[] { PROP_NAME }),
-                pointerLabelImage,
-                aggregateLabelImage, 
-                simpleLabelImage,
+                POINTER_LABEL_IMAGE,
+                AGGREGATE_LABEL_IMAGE, 
+                SIMPLE_LABEL_IMAGE,
                 new LabelForeground(new RGB(255, 0, 0)) // TODO: replace with preference error color
                 {
                     { setPropertyNames(new String[] { PROP_NAME }); }
@@ -530,6 +633,7 @@ public class VariableVMNode extends AbstractExpressionVMNode
                         return Boolean.TRUE.equals(stringChanged) || Boolean.TRUE.equals(activeChanged);
                     };                    
                 },
+                columnNoColumnsBackground,
                 new StaleDataLabelBackground(),
                 new VariableLabelFont(),
             }));
@@ -706,9 +810,10 @@ public class VariableVMNode extends AbstractExpressionVMNode
     @ConfinedToDsfExecutor("getSession().getExecutor()")
     protected void fillAddressDataProperties(IPropertiesUpdate update, IExpressionDMAddress address)
     { 
-	    IExpressionDMAddress expression = address;
-	    IAddress expAddress = expression.getAddress();
-	    update.setProperty(PROP_VARIABLE_ADDRESS, "0x" + expAddress.toString(16)); //$NON-NLS-1$
+    	if (address instanceof IExpressionDMLocation)
+    		update.setProperty(PROP_VARIABLE_ADDRESS, ((IExpressionDMLocation)address).getLocation());
+    	else
+    		update.setProperty(PROP_VARIABLE_ADDRESS, "0x" + address.getAddress().toString(16)); //$NON-NLS-1$
     }
     
     public CellEditor getCellEditor(IPresentationContext context, String columnId, Object element, Composite parent) {
@@ -746,10 +851,11 @@ public class VariableVMNode extends AbstractExpressionVMNode
                 public void run() {
                     final IExpressions expressionService = getServicesTracker().getService(IExpressions.class);
                     if (expressionService != null) {
-                        IExpressionDMContext expressionDMC = expressionService.createExpression(
-                            createCompositeDMVMContext(update), 
-                            update.getExpression().getExpressionText());
-                        VariableExpressionVMC variableVmc = new VariableExpressionVMC(expressionDMC);
+                        IExpressionDMContext expressionDMC = createExpression(expressionService, 
+                        		createCompositeDMVMContext(update), 
+                        		update.getExpression().getExpressionText());
+                       
+                        VariableExpressionVMC variableVmc = (VariableExpressionVMC)createVMContext(expressionDMC);
                         variableVmc.setExpression(update.getExpression());
                         
                         update.setExpressionElement(variableVmc);
@@ -778,6 +884,73 @@ public class VariableVMNode extends AbstractExpressionVMNode
     protected void associateExpression(Object element, IExpression expression) {
         if (element instanceof VariableExpressionVMC) {
             ((VariableExpressionVMC)element).setExpression(expression);
+        }
+    }
+    
+    @Override
+    protected void updateHasElementsInSessionThread(final IHasChildrenUpdate update) {
+        // Get the data model context object for the current node in the hierarchy.
+        
+        final IExpressionDMContext expressionDMC = findDmcInPath(update.getViewerInput(), update.getElementPath(), IExpressionDMContext.class);
+        
+        if ( expressionDMC != null ) {
+            final IExpressions expressionService = getServicesTracker().getService(IExpressions.class);
+            
+            if (expressionService == null) {
+                handleFailedUpdate(update);
+                return;
+            }
+
+            expressionService.getSubExpressionCount(
+                expressionDMC, 
+                new ViewerDataRequestMonitor<Integer>(getExecutor(), update) {
+                    @Override
+                    public void handleCompleted() {
+                        if (!isSuccess()) {
+                            handleFailedUpdate(update);
+                            return;
+                        }
+                        update.setHasChilren(getData() > 0);
+                        update.done();
+                    }
+                });
+        }
+        else {
+            super.updateHasElementsInSessionThread(update);
+        }
+    }
+
+    @Override
+    @ConfinedToDsfExecutor("getSession().getExecutor()")
+    protected void updateElementCountInSessionThread(final IChildrenCountUpdate update) {
+        // Get the data model context object for the current node in the hierarchy.
+        
+        final IExpressionDMContext expressionDMC = findDmcInPath(update.getViewerInput(), update.getElementPath(), IExpressionDMContext.class);
+        
+        if ( expressionDMC != null ) {
+            final IExpressions expressionService = getServicesTracker().getService(IExpressions.class);
+            
+            if (expressionService == null) {
+                handleFailedUpdate(update);
+                return;
+            }
+
+            expressionService.getSubExpressionCount(
+                expressionDMC, 
+                new ViewerDataRequestMonitor<Integer>(getExecutor(), update) {
+                    @Override
+                    public void handleCompleted() {
+                        if (!isSuccess()) {
+                            handleFailedUpdate(update);
+                            return;
+                        }
+                        update.setChildCount(getData());
+                        update.done();
+                    }
+                });
+        }
+        else {
+            super.updateElementCountInSessionThread(update);
         }
     }
 
@@ -823,7 +996,21 @@ public class VariableVMNode extends AbstractExpressionVMNode
                             handleFailedUpdate(update);
                             return;
                         }
-                        fillUpdateWithVMCs(update, getData());
+                        
+                        IExpressionDMContext[] data = getData();
+                        
+                    	// If any of these expressions use casts, replace them.
+                    	if (fCastToTypeSupport != null) {
+                    		for (int i = 0; i < data.length; i++) {
+                    			data[i] = fCastToTypeSupport.replaceWithCastedExpression(data[i]);
+                    		}
+                    	}
+                    			
+						if (update.getOffset() < 0) {
+                            fillUpdateWithVMCs(update, data);
+                        } else {
+                            fillUpdateWithVMCs(update, data, update.getOffset());
+                        }
                         update.done();
                     }
             };
@@ -831,7 +1018,12 @@ public class VariableVMNode extends AbstractExpressionVMNode
             // Make the asynchronous call to IExpressions.getSubExpressions().  The results are processed in the
             // DataRequestMonitor.handleCompleted() above.
 
-            expressionService.getSubExpressions(expressionDMC, rm);
+            if (update.getOffset() < 0 || update.getLength() < 0) {
+                // If the range is not specified, get all expressions.
+                expressionService.getSubExpressions(expressionDMC, rm);                
+            } else {
+                expressionService.getSubExpressions(expressionDMC, update.getOffset(), update.getLength(), rm);
+            }
         } else {
             handleFailedUpdate(update);
         }
@@ -891,36 +1083,35 @@ public class VariableVMNode extends AbstractExpressionVMNode
                     
                     // Create the MultiRequestMonitor to handle completion of the set of getModelData() calls.
                     
-                    final MultiRequestMonitor<DataRequestMonitor<IVariableDMData>> mrm =
-                        new MultiRequestMonitor<DataRequestMonitor<IVariableDMData>>(dsfExecutor, null) {
-                            @Override
-                            public void handleCompleted() {
-                                // Now that all the calls to getModelData() are complete, we create an
-                                // IExpressionDMContext object for each local variable name, saving them all
-                                // in an array.
+                    final CountingRequestMonitor crm = new ViewerCountingRequestMonitor(dsfExecutor, update) {
+                        @Override
+                        public void handleCompleted() {
+                            // Now that all the calls to getModelData() are complete, we create an
+                            // IExpressionDMContext object for each local variable name, saving them all
+                            // in an array.
 
-                                if (!isSuccess()) {
-                                    handleFailedUpdate(update);
-                                    return;
-                                }
-         
-                                IExpressionDMContext[] expressionDMCs = new IExpressionDMContext[localsDMData.size()];
-                                
-                                int i = 0;
-                                
-                                for (IVariableDMData localDMData : localsDMData) {
-                                    expressionDMCs[i++] = expressionService.createExpression(frameDmc, localDMData.getName());
-                                }
-
-                                // Lastly, we fill the update from the array of view model context objects
-                                // that reference the ExpressionDMC objects for the local variables.  This is
-                                // the last code to run for a given call to updateElementsInSessionThread().
-                                // We can now leave anonymous-inner-class hell.
-
-                                fillUpdateWithVMCs(update, expressionDMCs);
-                                update.done();
+                            if (!isSuccess()) {
+                                handleFailedUpdate(update);
+                                return;
                             }
+     
+                            IExpressionDMContext[] expressionDMCs = new IExpressionDMContext[localsDMData.size()];
+                            
+                            int i = 0;
+                            for (IVariableDMData localDMData : localsDMData) {
+                            	expressionDMCs[i++] = createExpression(expressionService, frameDmc, localDMData.getName());
+                            }
+
+                            // Lastly, we fill the update from the array of view model context objects
+                            // that reference the ExpressionDMC objects for the local variables.  This is
+                            // the last code to run for a given call to updateElementsInSessionThread().
+                            // We can now leave anonymous-inner-class hell.
+
+                            fillUpdateWithVMCs(update, expressionDMCs);
+                            update.done();
+                        }
                     };
+                    int countRM = 0;
                     
                     // Perform a set of getModelData() calls, one for each local variable's data model
                     // context object.  In the handleCompleted() method of the DataRequestMonitor, add the
@@ -928,18 +1119,18 @@ public class VariableVMNode extends AbstractExpressionVMNode
                     
                     for (IVariableDMContext localDMC : localsDMCs) {
                         DataRequestMonitor<IVariableDMData> rm =
-                            new ViewerDataRequestMonitor<IVariableDMData>(dsfExecutor, update) {
+                            new DataRequestMonitor<IVariableDMData>(dsfExecutor, crm) {
                                 @Override
-                                public void handleCompleted() {
+                                public void handleSuccess() {
                                     localsDMData.add(getData());
-                                    mrm.requestMonitorDone(this);
+                                    crm.done();
                                 }
                         };
                         
-                        mrm.add(rm);
-                        
                         stackFrameService.getVariableData(localDMC, rm);
+                        countRM++;
                     }
+                    crm.setDoneCount(countRM);
                 }
         };
 
@@ -949,14 +1140,26 @@ public class VariableVMNode extends AbstractExpressionVMNode
         stackFrameService.getLocals(frameDmc, rm);
     }
     
-    public int getDeltaFlags(Object e) {
+
+    private IExpressionDMContext createExpression(
+			IExpressions expressionService,
+			final IDMContext dmc, final String expression) {
+    	IExpressionDMContext exprDMC = expressionService.createExpression(dmc, expression);
+    	
+    	if (fCastToTypeSupport != null) {
+    		exprDMC = fCastToTypeSupport.replaceWithCastedExpression(exprDMC);
+    	}
+    	return exprDMC;
+	}
+
+	public int getDeltaFlags(Object e) {
         if ( e instanceof ISuspendedDMEvent || 
              e instanceof IMemoryChangedEvent ||
              e instanceof IExpressionChangedDMEvent ||
              (e instanceof PropertyChangeEvent &&
-              ((PropertyChangeEvent)e).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE) ) 
+                 (((PropertyChangeEvent)e).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE || 
+                 ((PropertyChangeEvent)e).getProperty() == IDebugModelPresentation.DISPLAY_VARIABLE_TYPE_NAMES)) ) 
         {
-            // Create a delta that the whole register group has changed.
             return IModelDelta.CONTENT;
         } 
 
@@ -971,9 +1174,9 @@ public class VariableVMNode extends AbstractExpressionVMNode
              e instanceof IMemoryChangedEvent ||
              e instanceof IExpressionChangedDMEvent ||
              (e instanceof PropertyChangeEvent &&
-              ((PropertyChangeEvent)e).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE) ) 
+                 (((PropertyChangeEvent)e).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE || 
+                 ((PropertyChangeEvent)e).getProperty() == IDebugModelPresentation.DISPLAY_VARIABLE_TYPE_NAMES)) ) 
         {
-            // Create a delta that the whole register group has changed.
             parentDelta.setFlags(parentDelta.getFlags() | IModelDelta.CONTENT);
         } 
 
@@ -983,8 +1186,9 @@ public class VariableVMNode extends AbstractExpressionVMNode
     public int getDeltaFlagsForExpression(IExpression expression, Object event) {
         if ( event instanceof IExpressionChangedDMEvent ||
              event instanceof IMemoryChangedEvent ||
-             (event instanceof PropertyChangeEvent && 
-              ((PropertyChangeEvent)event).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE) )
+             (event instanceof PropertyChangeEvent &&
+                 (((PropertyChangeEvent)event).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE || 
+                 ((PropertyChangeEvent)event).getProperty() == IDebugModelPresentation.DISPLAY_VARIABLE_TYPE_NAMES)) ) 
         {
             return IModelDelta.CONTENT;
         } 
@@ -1000,8 +1204,13 @@ public class VariableVMNode extends AbstractExpressionVMNode
     public void buildDeltaForExpression(IExpression expression, int elementIdx, Object event, VMDelta parentDelta, 
         TreePath path, RequestMonitor rm) 
     {
-        // Always refresh the contents of the view upon suspended event.
-        if (event instanceof ISuspendedDMEvent) {
+        // The following events can affect any expression's values, 
+        // refresh the contents of the parent element (i.e. all the expressions). 
+        if (event instanceof ISuspendedDMEvent ||
+        	event instanceof IMemoryChangedEvent ||
+        	event instanceof IExpressionChangedDMEvent ||
+        	(event instanceof PropertyChangeEvent &&
+        			((PropertyChangeEvent)event).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE) ) {
             parentDelta.setFlags(parentDelta.getFlags() | IModelDelta.CONTENT);
         }         
 

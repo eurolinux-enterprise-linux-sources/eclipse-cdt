@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2006 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,7 +7,8 @@
  *
  * Contributors:
  * QNX Software Systems - Initial API and implementation
- * Nokia - Added support for AbsoluteSourceContainer( 159833 ) 
+ * Nokia - Added support for AbsoluteSourceContainer( 159833 )
+ * Texas Instruments - added extension point for source container type (279473) 
 *******************************************************************************/
 package org.eclipse.cdt.debug.internal.core.sourcelookup; 
 
@@ -15,15 +16,22 @@ import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.eclipse.cdt.debug.core.CDebugCorePlugin;
 import org.eclipse.cdt.debug.core.model.ICBreakpoint;
 import org.eclipse.cdt.debug.core.sourcelookup.AbsolutePathSourceContainer;
+import org.eclipse.cdt.debug.core.sourcelookup.ProgramRelativePathSourceContainer;
 import org.eclipse.cdt.debug.core.sourcelookup.MappingSourceContainer;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IConfigurationElement;
+import org.eclipse.core.runtime.IExtension;
+import org.eclipse.core.runtime.IExtensionPoint;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
+import org.eclipse.core.runtime.Platform;
+import org.eclipse.debug.core.ILaunchManager;
 import org.eclipse.debug.core.sourcelookup.AbstractSourceLookupDirector;
 import org.eclipse.debug.core.sourcelookup.ISourceContainer;
 import org.eclipse.debug.core.sourcelookup.ISourceContainerType;
@@ -31,24 +39,22 @@ import org.eclipse.debug.core.sourcelookup.ISourceLookupParticipant;
 import org.eclipse.debug.core.sourcelookup.containers.DirectorySourceContainer;
 import org.eclipse.debug.core.sourcelookup.containers.FolderSourceContainer;
 import org.eclipse.debug.core.sourcelookup.containers.ProjectSourceContainer;
-import org.eclipse.debug.core.sourcelookup.containers.WorkspaceSourceContainer;
- 
+
 /**
  * C/C++ source lookup director.
+ * 
+ * Most instantiations of this class are transient, created through
+ * {@link ILaunchManager#newSourceLocator(String)}. A singleton is also created
+ * to represent the global source locators.
+ * 
+ * An instance is either associated with a particular launch configuration or it
+ * has no association (global).
+ * 
  */
 public class CSourceLookupDirector extends AbstractSourceLookupDirector {
 
 	private static Set<String> fSupportedTypes;
-
-	static {
-		fSupportedTypes = new HashSet<String>();
-		fSupportedTypes.add( WorkspaceSourceContainer.TYPE_ID );
-		fSupportedTypes.add( ProjectSourceContainer.TYPE_ID );
-		fSupportedTypes.add( FolderSourceContainer.TYPE_ID );
-		fSupportedTypes.add( DirectorySourceContainer.TYPE_ID );
-		fSupportedTypes.add( MappingSourceContainer.TYPE_ID );
-		fSupportedTypes.add( AbsolutePathSourceContainer.TYPE_ID );
-	}
+	private static Object fSupportedTypesLock = new Object();
 
 	/* (non-Javadoc)
 	 * @see org.eclipse.debug.core.sourcelookup.ISourceLookupDirector#initializeParticipants()
@@ -60,6 +66,7 @@ public class CSourceLookupDirector extends AbstractSourceLookupDirector {
 	 * @see org.eclipse.debug.core.sourcelookup.ISourceLookupDirector#supportsSourceContainerType(org.eclipse.debug.core.sourcelookup.ISourceContainerType)
 	 */
 	public boolean supportsSourceContainerType( ISourceContainerType type ) {
+		readSupportedContainerTypes();
 		return fSupportedTypes.contains( type.getId() );
 	}
 
@@ -146,6 +153,14 @@ public class CSourceLookupDirector extends AbstractSourceLookupDirector {
 		if ( container instanceof AbsolutePathSourceContainer ) {
 			return ( ((AbsolutePathSourceContainer)container).isValidAbsoluteFilePath( sourceName ) ); 
 		}
+		if ( container instanceof ProgramRelativePathSourceContainer ) {
+			try {
+				Object[] elements = ((ProgramRelativePathSourceContainer)container).findSourceElements(sourceName);
+				return elements.length > 0;	
+			} catch (CoreException e) {
+				return false;
+			}
+		}
 		try {
 			ISourceContainer[] containers;
 			containers = container.getSourceContainers();
@@ -192,4 +207,23 @@ public class CSourceLookupDirector extends AbstractSourceLookupDirector {
 		}
 		return path;
 	}
+	
+	// >> Bugzilla 279473
+	private void readSupportedContainerTypes() {
+		synchronized (fSupportedTypesLock) {
+			if( fSupportedTypes == null) {
+				fSupportedTypes = new HashSet<String>();
+				String name = CDebugCorePlugin.PLUGIN_ID+".supportedSourceContainerTypes"; //$NON-NLS-1$; 
+				IExtensionPoint extensionPoint = Platform.getExtensionRegistry().getExtensionPoint( name);
+				if( extensionPoint != null)  
+					for( IExtension extension : extensionPoint.getExtensions()) 
+						for( IConfigurationElement configurationElements : extension.getConfigurationElements()) {
+							String id = configurationElements.getAttribute("id");//$NON-NLS-1$;
+							if( id != null)
+								fSupportedTypes.add(id);
+						}
+			}
+		}
+	}
+	// << Bugzilla 279473
 }

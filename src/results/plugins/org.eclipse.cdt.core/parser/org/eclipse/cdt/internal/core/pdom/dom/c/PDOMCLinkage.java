@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 QNX Software Systems and others.
+ * Copyright (c) 2006, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,14 +22,17 @@ import org.eclipse.cdt.core.dom.ast.IEnumeration;
 import org.eclipse.cdt.core.dom.ast.IEnumerator;
 import org.eclipse.cdt.core.dom.ast.IField;
 import org.eclipse.cdt.core.dom.ast.IFunction;
-import org.eclipse.cdt.core.dom.ast.IFunctionType;
-import org.eclipse.cdt.core.dom.ast.IProblemBinding;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
 import org.eclipse.cdt.core.dom.ast.IVariable;
-import org.eclipse.cdt.core.dom.ast.c.ICBasicType;
 import org.eclipse.cdt.core.index.IIndexBinding;
 import org.eclipse.cdt.internal.core.Util;
+import org.eclipse.cdt.internal.core.dom.parser.ITypeMarshalBuffer;
+import org.eclipse.cdt.internal.core.dom.parser.c.CArrayType;
+import org.eclipse.cdt.internal.core.dom.parser.c.CBasicType;
+import org.eclipse.cdt.internal.core.dom.parser.c.CFunctionType;
+import org.eclipse.cdt.internal.core.dom.parser.c.CPointerType;
+import org.eclipse.cdt.internal.core.dom.parser.c.CQualifierType;
 import org.eclipse.cdt.internal.core.index.IIndexCBindingConstants;
 import org.eclipse.cdt.internal.core.index.composite.CompositeIndexBinding;
 import org.eclipse.cdt.internal.core.pdom.PDOM;
@@ -138,7 +141,7 @@ class PDOMCLinkage extends PDOMLinkage implements IIndexCBindingConstants {
 		if (pdomBinding != null) {
 			pdomBinding.setLocalToFileRec(localToFile);
 			parent.addChild(pdomBinding);
-			afterAddBinding(pdomBinding);
+			insertIntoNestedBindingsIndex(pdomBinding);
 		}
 		return pdomBinding;
 	}
@@ -212,6 +215,10 @@ class PDOMCLinkage extends PDOMLinkage implements IIndexCBindingConstants {
 			} 
 			
 			IBinding owner= binding.getOwner();
+			// For plain c the enumeration type is not the parent of the enumeration item.
+			if (owner instanceof IEnumeration) {
+				owner= owner.getOwner();
+			}
 			if (owner == null) {
 				return this;
 			}
@@ -296,11 +303,8 @@ class PDOMCLinkage extends PDOMLinkage implements IIndexCBindingConstants {
 	}
 
 	@Override
-	public PDOMNode getNode(long record) throws CoreException {
-		if (record == 0)
-			return null;
-
-		switch (PDOMNode.getNodeType(getDB(), record)) {
+	public PDOMNode getNode(long record, int nodeType) throws CoreException {
+		switch (nodeType) {
 		case CVARIABLE:
 			return new PDOMCVariable(this, record);
 		case CFUNCTION:
@@ -315,35 +319,39 @@ class PDOMCLinkage extends PDOMLinkage implements IIndexCBindingConstants {
 			return new PDOMCEnumerator(this, record);
 		case CTYPEDEF:
 			return new PDOMCTypedef(this, record);
-		case CPARAMETER:
-			return new PDOMCParameter(this, record);
-		case CBASICTYPE:
-			return new PDOMCBasicType(this, record);
-		case CFUNCTIONTYPE:
-			return new PDOMCFunctionType(this, record);
 		}
 
-		return super.getNode(record);
-	}
-
-	@Override
-	public PDOMNode addType(PDOMNode parent, IType type) throws CoreException {
-		if(type instanceof IProblemBinding)
-			return null;
-		
-		if (type instanceof ICBasicType) {
-			return new PDOMCBasicType(this, parent, (ICBasicType)type);
-		} else if(type instanceof IFunctionType) {
-			return new PDOMCFunctionType(this, parent, (IFunctionType)type);
-		} else if (type instanceof IBinding) {
-			return addBinding((IBinding)type, null);
-		}
-		
-		return super.addType(parent, type); 
+		assert false;
+		return null;
 	}
 	
 	@Override
 	public IBTreeComparator getIndexComparator() {
 		return new FindBinding.DefaultBindingBTreeComparator(this);
+	}
+
+	@Override 
+	public PDOMBinding addTypeBinding(IBinding type) throws CoreException {
+		return addBinding(type, null);
+	}
+
+	
+	@Override
+	public IType unmarshalType(ITypeMarshalBuffer buffer) throws CoreException {
+		int firstByte= buffer.getByte();
+		switch((firstByte & ITypeMarshalBuffer.KIND_MASK)) {
+		case ITypeMarshalBuffer.ARRAY:
+			return CArrayType.unmarshal(firstByte, buffer);
+		case ITypeMarshalBuffer.BASIC_TYPE:
+			return CBasicType.unmarshal(firstByte, buffer);
+		case ITypeMarshalBuffer.CVQUALIFIER:
+			return CQualifierType.unmarshal(firstByte, buffer);
+		case ITypeMarshalBuffer.FUNCTION_TYPE:
+			return CFunctionType.unmarshal(firstByte, buffer);
+		case ITypeMarshalBuffer.POINTER:
+			return CPointerType.unmarshal(firstByte, buffer);
+		}
+		
+		throw new CoreException(CCorePlugin.createStatus("Cannot unmarshal a type, first byte=" + firstByte)); //$NON-NLS-1$
 	}
 }

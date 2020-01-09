@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -51,6 +51,11 @@ public class CConfigurationDataProviderDescriptor {
 			fNatureIds = new String[0];
 			fConflictingNatureIds = new String[0];
 		}
+		try {
+			fProvider = createProvider(extension);
+		} catch (CoreException e) {
+			CCorePlugin.log(e.getStatus());
+		}
 	}
 	
 	private static String[] toArray(String value){
@@ -59,14 +64,14 @@ public class CConfigurationDataProviderDescriptor {
 		
 		StringTokenizer t = new StringTokenizer(value, DELIMITER);
 		int num = t.countTokens();
-		List list = new ArrayList(num);
+		List<String> list = new ArrayList<String>(num);
 		for(int i = 0; i < num; i++){
 			String v = t.nextToken().trim();
 			if(v.length() != 0)
 				list.add(v);
 		}
 		
-		return (String[])list.toArray(new String[list.size()]);
+		return list.toArray(new String[list.size()]);
 		
 	}
 	
@@ -108,11 +113,11 @@ public class CConfigurationDataProviderDescriptor {
 	}
 	
 	public String[] getNatureIds(){
-		return (String[])fNatureIds.clone();
+		return fNatureIds.clone();
 	}
 
 	public String[] getConflictingNatureIds(){
-		return (String[])fConflictingNatureIds.clone();
+		return fConflictingNatureIds.clone();
 	}
 
 /*	public String[] getBuilderIds(){

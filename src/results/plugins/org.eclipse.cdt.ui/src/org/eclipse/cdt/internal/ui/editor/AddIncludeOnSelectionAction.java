@@ -22,8 +22,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
+import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
@@ -54,8 +56,8 @@ import org.eclipse.cdt.core.dom.ast.IASTTranslationUnit;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.ICompositeType;
 import org.eclipse.cdt.core.dom.ast.IEnumeration;
+import org.eclipse.cdt.core.dom.ast.IEnumerator;
 import org.eclipse.cdt.core.dom.ast.IFunction;
-import org.eclipse.cdt.core.dom.ast.IProblemBinding;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTQualifiedName;
@@ -64,6 +66,7 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTUsingDirective;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPBinding;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPConstructor;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPNamespace;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPSpecialization;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPVariable;
 import org.eclipse.cdt.core.index.IIndex;
 import org.eclipse.cdt.core.index.IIndexBinding;
@@ -199,9 +202,11 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 	}
 
 	/**
-	 * Extract the includes for the given selection.  This can be both used to perform
+	 * Extracts the includes for the given selection.  This can be both used to perform
 	 * the work as well as being invoked when there is a change.
-	 * @param index 
+	 * @param selection a text selection.
+	 * @param ast an AST.
+	 * @param lookupName a one-element array used to return the selected name.
 	 */
 	private void deduceInclude(ITextSelection selection, IASTTranslationUnit ast, String[] lookupName)
 			throws CoreException {
@@ -217,7 +222,7 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 			if (binding instanceof ICPPVariable) {
 				IType type = ((ICPPVariable) binding).getType();
 				type = SemanticUtil.getNestedType(type,
-						SemanticUtil.CVQ | SemanticUtil.PTR | SemanticUtil.ARRAY | SemanticUtil.REF);
+						SemanticUtil.ALLCVQ | SemanticUtil.PTR | SemanticUtil.ARRAY | SemanticUtil.REF);
 				if (type instanceof IBinding) {
 					binding = (IBinding) type;
 					nameChars = binding.getNameCharArray();
@@ -231,12 +236,22 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 		}
 
 		final Map<String, IncludeCandidate> candidatesMap= new HashMap<String, IncludeCandidate>();
-		IIndex index = ast.getIndex();
+		final IIndex index = ast.getIndex();
 		final IndexFilter filter = IndexFilter.getDeclaredBindingFilter(ast.getLinkage().getLinkageID(), false);
-		IIndexBinding[] bindings =
-				binding instanceof IIndexBinding && !(binding instanceof IProblemBinding) ?
-						new IIndexBinding[] { (IIndexBinding) binding } :
-						index.findBindings(nameChars, false, filter, new NullProgressMonitor());
+		
+		List<IIndexBinding> bindings = new ArrayList<IIndexBinding>();
+		IIndexBinding adaptedBinding= index.adaptBinding(binding);
+		if (adaptedBinding == null) {
+			bindings.addAll(Arrays.asList(index.findBindings(nameChars, false, filter, new NullProgressMonitor())));
+		} else {
+			bindings.add(adaptedBinding);
+			while (adaptedBinding instanceof ICPPSpecialization) {
+				adaptedBinding= index.adaptBinding(((ICPPSpecialization) adaptedBinding).getSpecializedBinding());
+				if (adaptedBinding != null) {
+					bindings.add(adaptedBinding);
+				}
+			}
+		}
 
 		for (IIndexBinding indexBinding : bindings) {
 			// Replace ctor with the class itself.
@@ -248,8 +263,8 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 				}
 			}
 			IIndexName[] definitions= null;
-			// class, struct, union, enum
-			if (indexBinding instanceof ICompositeType || indexBinding instanceof IEnumeration) {
+			// class, struct, union, enum-type, enum-item
+			if (indexBinding instanceof ICompositeType || indexBinding instanceof IEnumeration || indexBinding instanceof IEnumerator) {
 				definitions= index.findDefinitions(indexBinding);
 			} else if (indexBinding instanceof ITypedef || (indexBinding instanceof IFunction)) {
 				definitions = index.findDeclarations(indexBinding);
@@ -258,6 +273,8 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 				for (IIndexName definition : definitions) {
 					considerForInclusion(definition, indexBinding, index, candidatesMap);
 				}
+				if (definitions.length > 0 && adaptedBinding != null) 
+					break;
 			}
 		}
 		IIndexMacro[] macros = index.findMacros(nameChars, filter, new NullProgressMonitor());
@@ -427,7 +444,7 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 	 */
 	private IIndexFile getRepresentativeFile(IIndexFile headerFile, IIndex index) {
 		try {
-			if (ResourceLookup.findFilesForLocationURI(headerFile.getLocation().getURI()).length > 0) {
+			if (isWorkspaceFile(headerFile.getLocation().getURI())) {
 				return headerFile;
 			}
 			// TODO(sprigogin): Change to ArrayDeque when Java 5 support is no longer needed.
@@ -446,7 +463,7 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 					IIndexFile includer = include.getIncludedBy();
 					if (!processed.contains(includer)) {
 						URI uri = includer.getLocation().getURI();
-						if (isSource(uri.getPath()) || ResourceLookup.findFilesForLocationURI(uri).length > 0) {
+						if (isSource(uri.getPath()) || isWorkspaceFile(uri)) {
 							return file;
 						}
 						front.add(includer);
@@ -458,6 +475,15 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 			CUIPlugin.log(e);
 		}
 		return headerFile;
+	}
+
+	private boolean isWorkspaceFile(URI uri) {
+		for (IFile file : ResourceLookup.findFilesForLocationURI(uri)) {
+			if (file.exists()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private boolean hasExtension(String path) {
@@ -540,8 +566,7 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 			int systemIncludeVotes = 0;
 			String[] ballotBox = new String[includes.length];
 			int k = 0;
-			for (int i = 0; i < includes.length; i++) {
-				IIndexInclude include = includes[i];
+			for (IIndexInclude include : includes) {
 				if (isResolvable(include)) {
 					ballotBox[k++] = include.getFullName();
 					if (include.isSystemInclude()) {
@@ -549,26 +574,25 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 					}
 				}
 			}
-			if (k == 0) {
-				return null;
-			}
-			Arrays.sort(ballotBox, 0, k);
-			String contender = ballotBox[0];
-			int votes = 1;
-			String winner = contender;
-			int winnerVotes = votes;
-			for (int i = 1; i < k; i++) {
-				if (!ballotBox[i].equals(contender)) {
-					contender = ballotBox[i]; 
-					votes = 1;
+			if (k != 0) {
+				Arrays.sort(ballotBox, 0, k);
+				String contender = ballotBox[0];
+				int votes = 1;
+				String winner = contender;
+				int winnerVotes = votes;
+				for (int i = 1; i < k; i++) {
+					if (!ballotBox[i].equals(contender)) {
+						contender = ballotBox[i]; 
+						votes = 1;
+					}
+					votes++;
+					if (votes > winnerVotes) {
+						winner = contender;
+						winnerVotes = votes;
+					}
 				}
-				votes++;
-				if (votes > winnerVotes) {
-					winner = contender;
-					winnerVotes = votes;
-				}
+				return new RequiredInclude(winner, systemIncludeVotes * 2 >= k);
 			}
-			return new RequiredInclude(winner, systemIncludeVotes * 2 >= k);
 		}
 
 		// The file has never been included before.
@@ -630,7 +654,7 @@ public class AddIncludeOnSelectionAction extends TextEditorAction {
 	}
 
 	/**
-	 * Get the fully qualified name for a given index binding.
+	 * Returns the fully qualified name for a given index binding.
 	 * @param binding
 	 * @return binding's fully qualified name
 	 * @throws CoreException

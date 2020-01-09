@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 IBM Corporation and others.
+ * Copyright (c) 2004, 2009 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -43,9 +43,9 @@ public class GCCPerFileSIPConsoleParser implements IScannerInfoConsoleParser {
     private IScannerInfoCollector fCollector = null;
     
     private int expectingIncludes = NO_INCLUDES;
-    private List symbols;
-    private List includes;
-    private List quoteIncludes;
+    private List<String> symbols;
+    private List<String> includes;
+    private List<String> quoteIncludes;
     private int commandId = -1;
 
     /* (non-Javadoc)
@@ -65,12 +65,12 @@ public class GCCPerFileSIPConsoleParser implements IScannerInfoConsoleParser {
 
         if (line.startsWith(COMMAND_ID_BEGIN)) {
             commandId = Integer.parseInt(line.substring(COMMAND_ID_BEGIN.length()));
-            symbols = new ArrayList();
-            includes = new ArrayList();
-            quoteIncludes = new ArrayList();
+            symbols = new ArrayList<String>();
+            includes = new ArrayList<String>();
+            quoteIncludes = new ArrayList<String>();
         }
         else if (line.startsWith(COMMAND_ID_END)) {
-            Map scannerInfo = new HashMap();
+            Map<ScannerInfoTypes, List<String>> scannerInfo = new HashMap<ScannerInfoTypes, List<String>>();
             scannerInfo.put(ScannerInfoTypes.INCLUDE_PATHS, includes);
             scannerInfo.put(ScannerInfoTypes.QUOTE_INCLUDE_PATHS, quoteIncludes);
             scannerInfo.put(ScannerInfoTypes.SYMBOL_DEFINITIONS, symbols);

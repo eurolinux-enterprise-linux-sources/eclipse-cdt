@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Fetch script for feature@org.eclipse.cdt.bupc -->
+
+<project name="FetchScript" default="fetch">
+	<property name="quiet" value="true"/>
+
+	<target name="fetch">
+		<antcall target="fetch.element"/>
+		<antcall target="fetch.plugins"/>
+		<antcall target="fetch.recursively"/>
+	</target>
+	<target name="fetch.element" if="featureOnly">
+		<available property="${buildDirectory}/features/org.eclipse.cdt.bupc/feature.xml" file="${buildDirectory}/features/org.eclipse.cdt.bupc/feature.xml"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/features/org.eclipse.cdt.bupc/feature.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.bupc"/>
+			<param name="module" value="org.eclipse.cdt/upc/org.eclipse.cdt.bupc-feature"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/features"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+	</target>
+	<target name="fetch.plugins" if="featureAndPlugins">
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.managedbuilder.bupc.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.managedbuilder.bupc.ui/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.cdt.managedbuilder.bupc.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.cdt.managedbuilder.bupc.ui/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromCVS">
+			<param name="cvsRoot" value=":pserver:anonymous@dev.eclipse.org/cvsroot/tools"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.cdt.managedbuilder.bupc.ui/plugin.xml"/>
+			<param name="elementName" value="org.eclipse.cdt.managedbuilder.bupc.ui"/>
+			<param name="module" value="org.eclipse.cdt/upc/org.eclipse.cdt.managedbuilder.bupc.ui"/>
+			<param name="reallyquiet" value="${cvs.reallyquiet}"/>
+			<param name="tag" value="CDT_7_0_1"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="quiet" value="${cvs.quiet}"/>
+		</antcall>
+	</target>
+	<target name="fetch.recursively" if="featuresRecursively">
+	</target>
+	<target name="FetchFromCVS" unless="${fileToCheck}">
+		<cvs command="export -d ${elementName}" cvsRoot="${cvsRoot}" dest="${destinationFolder}" package="${module}" tag="${tag}" quiet="${quiet}" reallyquiet="${reallyquiet}" taskname="CVS - ${module}"		/>
+	</target>
+
+</project>

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -164,32 +164,34 @@ public abstract class StandaloneIndexer {
 		}
 	};
 	
+	protected FileEncodingRegistry fFileEncodingRegistry;
+	
 	/**
 	 * @deprecated Its better to provide a scanner info provider instead.
 	 */
 	@Deprecated
 	public StandaloneIndexer(IWritableIndex index, boolean indexAllFiles,  
-			                 ILanguageMapper mapper, IParserLogService log, IScannerInfo scanner) {
+			                 ILanguageMapper mapper, IParserLogService log, IScannerInfo scanner, FileEncodingRegistry fileEncodingRegistry) {
 		fIndex = index;
 		fIndexAllFiles = indexAllFiles;
 		fMapper = mapper;
 		fLog = log;	
 		fScanner = scanner;
 		fScannerInfoProvider = null;
-		
+		fFileEncodingRegistry = fileEncodingRegistry;
 		setupASTFilePathResolver();
 	}
 	
 	
 	public StandaloneIndexer(IWritableIndex index, boolean indexAllFiles,  
-            ILanguageMapper mapper, IParserLogService log, IStandaloneScannerInfoProvider scannerProvider) {
+            ILanguageMapper mapper, IParserLogService log, IStandaloneScannerInfoProvider scannerProvider, FileEncodingRegistry fileEncodingRegistry) {
 		fIndex = index;
 		fIndexAllFiles = indexAllFiles;
 		fMapper = mapper;
 		fLog = log;	
 		fScanner = null;
 		fScannerInfoProvider = scannerProvider;
-		
+		fFileEncodingRegistry = fileEncodingRegistry;
 		setupASTFilePathResolver();
 	}
 	
@@ -517,4 +519,18 @@ public abstract class StandaloneIndexer {
 	public void setExclusionFilter(FilenameFilter exclusionFilter) {
 		fExclusionFilter = exclusionFilter;
 	}
+
+
+	public FileEncodingRegistry getFileEncodingRegistry() {
+		return fFileEncodingRegistry;
+	}
+
+
+	public void setFileEncodingRegistry(FileEncodingRegistry fileEncodingRegistry) {
+		fFileEncodingRegistry = fileEncodingRegistry;
+	}
+	
+	
+	
+	
 }

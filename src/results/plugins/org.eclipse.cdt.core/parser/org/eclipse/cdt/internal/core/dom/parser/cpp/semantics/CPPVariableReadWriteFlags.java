@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2009 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,6 @@
  *******************************************************************************/ 
 package org.eclipse.cdt.internal.core.dom.parser.cpp.semantics;
 
-import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IASTUnaryExpression;
@@ -47,33 +46,24 @@ public final class CPPVariableReadWriteFlags extends VariableReadWriteFlags {
 	@Override
 	protected int rwAssignmentToType(IType type, int indirection) {
 		if (indirection == 0) {
-			if (!(type instanceof ICPPReferenceType)) {
+			if (!(type instanceof ICPPReferenceType) || ((ICPPReferenceType) type).isRValueReference()) {
 				return READ;
 			}
-			try {
-				type= ((ICPPReferenceType) type).getType();
-			}
-			catch (DOMException e) {
-				return READ; 	// fallback
-			}
+			type= ((ICPPReferenceType) type).getType();
 		}
-		try {
-			while(indirection > 0 && (type instanceof ITypeContainer)) {
-				if (type instanceof IPointerType) {
-					indirection--;
-				}
-				type= ((ITypeContainer) type).getType();
+		while(indirection > 0 && (type instanceof ITypeContainer)) {
+			if (type instanceof IPointerType) {
+				indirection--;
 			}
-			if (indirection == 0) {
-				if (type instanceof IQualifierType) {
-					return ((IQualifierType) type).isConst() ? READ : READ | WRITE;
-				}
-				else if (type instanceof IPointerType) {
-					return ((IPointerType) type).isConst() ? READ : READ | WRITE;
-				}
-			}
+			type= ((ITypeContainer) type).getType();
 		}
-		catch (DOMException e) {
+		if (indirection == 0) {
+			if (type instanceof IQualifierType) {
+				return ((IQualifierType) type).isConst() ? READ : READ | WRITE;
+			}
+			else if (type instanceof IPointerType) {
+				return ((IPointerType) type).isConst() ? READ : READ | WRITE;
+			}
 		}
 		return READ | WRITE;	// fallback
 	}

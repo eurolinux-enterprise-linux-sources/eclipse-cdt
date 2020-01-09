@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -46,7 +46,11 @@ public interface IRunControl extends IDsfService
     public interface IContainerDMContext extends IExecutionDMContext {}
 
     /** Flag indicating reason context state change. */
-    public enum StateChangeReason { UNKNOWN, USER_REQUEST, STEP, BREAKPOINT, EXCEPTION, CONTAINER, WATCHPOINT, SIGNAL, SHAREDLIB, ERROR, EVALUATION };
+    public enum StateChangeReason { 
+    	UNKNOWN, USER_REQUEST, STEP, BREAKPOINT, EXCEPTION, CONTAINER, WATCHPOINT, SIGNAL, SHAREDLIB, ERROR, EVALUATION, 
+    	
+    	/** @since 2.1 */
+    	EVENT_BREAKPOINT };
         
     /**
      * Indicates that the given thread has suspended.
@@ -105,6 +109,18 @@ public interface IRunControl extends IDsfService
          * information. 
          */
         StateChangeReason getStateChangeReason();
+    }
+
+    /**
+	 * @since 2.1
+	 */
+    public interface IExecutionDMData2 extends IExecutionDMData {
+        /**
+         * Optional method to return more detail about the suspended event, e.g.
+         * "Divide by zero exception"
+         * @return more detail about the suspended event, or null
+         */
+        String getDetails();
     }
 
     /**

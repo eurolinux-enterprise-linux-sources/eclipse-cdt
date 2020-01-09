@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -15,11 +15,16 @@ import org.eclipse.cdt.make.core.IMakeTarget;
 import org.eclipse.cdt.make.internal.ui.MakeUIImages;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.jface.viewers.ILabelProvider;
 import org.eclipse.jface.viewers.ITableLabelProvider;
 import org.eclipse.jface.viewers.LabelProvider;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.ui.model.WorkbenchLabelProvider;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class MakeLabelProvider extends LabelProvider implements ITableLabelProvider {
 	private IPath pathPrefix;
 
@@ -35,6 +40,7 @@ public class MakeLabelProvider extends LabelProvider implements ITableLabelProvi
 	/**
 	 * @see ILabelProvider#getImage(Object)
 	 */
+	@Override
 	public Image getImage(Object obj) {
 		Image image = null;
 		if (obj instanceof IMakeTarget) {
@@ -48,6 +54,7 @@ public class MakeLabelProvider extends LabelProvider implements ITableLabelProvi
 	/**
 	 * @see ILabelProvider#getText(Object)
 	 */
+	@Override
 	public String getText(Object obj) {
 		if (obj instanceof IMakeTarget) {
 			return ((IMakeTarget) obj).getName();
@@ -57,6 +64,7 @@ public class MakeLabelProvider extends LabelProvider implements ITableLabelProvi
 		return ""; //$NON-NLS-1$
 	}
 
+	@Override
 	public void dispose() {
 		super.dispose();
 		fLableProvider.dispose();

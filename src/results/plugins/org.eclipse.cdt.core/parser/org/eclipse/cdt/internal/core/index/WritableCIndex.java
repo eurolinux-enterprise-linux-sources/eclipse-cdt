@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,8 +8,8 @@
  * Contributors:
  *    Markus Schorn - initial API and implementation
  *    Andrew Ferguson (Symbian)
+ *    Sergey Prigogin (Google)
  *******************************************************************************/ 
-
 package org.eclipse.cdt.internal.core.index;
 
 import java.util.Collection;
@@ -19,6 +19,7 @@ import org.eclipse.cdt.core.dom.ast.IASTPreprocessorStatement;
 import org.eclipse.cdt.core.index.IIndexFile;
 import org.eclipse.cdt.core.index.IIndexFileLocation;
 import org.eclipse.cdt.internal.core.pdom.ASTFilePathResolver;
+import org.eclipse.cdt.internal.core.pdom.YieldableIndexLock;
 import org.eclipse.core.runtime.CoreException;
 
 public class WritableCIndex extends CIndex implements IWritableIndex {
@@ -50,29 +51,39 @@ public class WritableCIndex extends CIndex implements IWritableIndex {
 		return fWritableFragment.getFiles(location);
 	}
 
-	public IIndexFragmentFile addFile(int linkageID, IIndexFileLocation fileLocation) throws CoreException {
-		return fWritableFragment.addFile(linkageID, fileLocation);
+	public IIndexFragmentFile addFile(int linkageID, IIndexFileLocation location) throws CoreException {
+		return fWritableFragment.addFile(linkageID, location);
+	}
+
+	public IIndexFragmentFile addUncommittedFile(int linkageID, IIndexFileLocation location) throws CoreException {
+		return fWritableFragment.addUncommittedFile(linkageID, location);
+	}
+
+	public IIndexFragmentFile commitUncommittedFile() throws CoreException {
+		return fWritableFragment.commitUncommittedFile();
+	}
+
+	public void clearUncommittedFile() throws CoreException {
+		fWritableFragment.clearUncommittedFile();
 	}
 
 	private boolean isWritableFragment(IIndexFragment frag) {
 		return frag == fWritableFragment;
 	}
 
-	public void setFileContent(IIndexFragmentFile file, int linkageID,
-			IncludeInformation[] includes,
-			IASTPreprocessorStatement[] macros, IASTName[][] names, ASTFilePathResolver resolver) throws CoreException {
-
+	public void setFileContent(IIndexFragmentFile file, int linkageID, IncludeInformation[] includes,
+			IASTPreprocessorStatement[] macros, IASTName[][] names, ASTFilePathResolver resolver,
+			YieldableIndexLock lock) throws CoreException, InterruptedException {
 		IIndexFragment indexFragment = file.getIndexFragment();
 		if (!isWritableFragment(indexFragment)) {
 			assert false : "Attempt to update file of read-only fragment"; //$NON-NLS-1$
-		}
-		else {
+		} else {
 			for (IncludeInformation ii : includes) {
 				if (ii.fLocation != null) {
 					ii.fTargetFile= addFile(linkageID, ii.fLocation);
 				}
 			}
-			((IWritableIndexFragment) indexFragment).addFileContent(file, includes, macros, names, resolver);
+			((IWritableIndexFragment) indexFragment).addFileContent(file, includes, macros, names, resolver, lock);
 		}
 	}
 
@@ -89,8 +100,7 @@ public class WritableCIndex extends CIndex implements IWritableIndex {
 		IIndexFragment indexFragment = file.getIndexFragment();
 		if (!isWritableFragment(indexFragment)) {
 			assert false : "Attempt to clear file of read-only fragment"; //$NON-NLS-1$
-		}
-		else {
+		} else {
 			((IWritableIndexFragment) indexFragment).clearFile(file, clearedContexts);
 		}
 	}
@@ -123,13 +133,20 @@ public class WritableCIndex extends CIndex implements IWritableIndex {
 		assert fIsWriteLocked: "No write lock to be released"; //$NON-NLS-1$
 		assert establishReadlockCount == getReadLockCount(): "Unexpected read lock is not allowed"; //$NON-NLS-1$
 
+		// Bug 297641: Result cache of read only providers needs to be cleared.
+		if (establishReadlockCount == 0) {
+			clearResultCache();
+		}
+
 		fIsWriteLocked= false;
 		fWritableFragment.releaseWriteLock(establishReadlockCount, flush);
-		
-		// Bug 297641: Result cache of read only providers needs to be cleared.
-		clearResultCaches();
 	}
-	
+
+	@Override
+	public void clearResultCache() {
+		assert fIsWriteLocked: "Need to hold a write lock to clear result caches"; //$NON-NLS-1$
+		super.clearResultCache();
+	}
 
 	public void flush() throws CoreException {
 		assert !fIsWriteLocked;

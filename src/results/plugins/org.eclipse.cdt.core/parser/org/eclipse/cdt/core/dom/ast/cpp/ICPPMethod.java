@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,8 +22,8 @@ public interface ICPPMethod extends ICPPFunction, ICPPMember {
 	public static final ICPPMethod [] EMPTY_CPPMETHOD_ARRAY = new ICPPMethod[0];
 	
 	/**
-	 * is this a virtual method
-	 * @throws DOMException
+	 * Returns whether this method is declared to be virtual. Does not detect whether
+	 * the method is virtual because of overriding a virtual method from a base class.
 	 */
 	public boolean isVirtual() throws DOMException;
 	

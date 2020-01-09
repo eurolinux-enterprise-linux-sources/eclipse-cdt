@@ -1,150 +1,139 @@
 /*******************************************************************************
- *  Copyright (c) 2005, 2009 IBM Corporation and others.
+ *  Copyright (c) 2005, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
  *  http://www.eclipse.org/legal/epl-v10.html
  * 
  *  Contributors:
- *    IBM Rational Software - Initial API and implementation 
+ *    Devin Steffler (IBM Rational Software) - Initial API and implementation 
  *    Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.dom.parser.c;
 
+import org.eclipse.cdt.core.dom.ast.ASTTypeUtil;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
-import org.eclipse.cdt.core.dom.ast.IBasicType;
+import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
 import org.eclipse.cdt.core.dom.ast.c.ICASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.c.ICBasicType;
-import org.eclipse.cdt.internal.core.index.IIndexType;
+import org.eclipse.cdt.internal.core.dom.parser.ISerializableType;
+import org.eclipse.cdt.internal.core.dom.parser.ITypeMarshalBuffer;
+import org.eclipse.core.runtime.CoreException;
 
-/**
- * @author dsteffle
- */
-public class CBasicType implements ICBasicType {
-	static public final int IS_LONG = 1;
-	static public final int IS_LONGLONG = 1 << 1;
-	static public final int IS_SHORT    = 1 << 2;
-	static public final int IS_SIGNED   = 1 << 3;
-	static public final int IS_UNSIGNED = 1 << 4;
-	static public final int IS_COMPLEX  = 1 << 5;
-	static public final int IS_IMAGINARY= 1 << 6;
-	
-	private int type = 0;
-	private int qualifiers = 0;
+public class CBasicType implements ICBasicType, ISerializableType {
+	private final Kind fKind;
+	private int fModifiers = 0;
 	private IASTExpression value = null;
 	
-	/**
-	 * keep a reference to the declaration specifier so that duplicate information isn't generated.
-	 * 
-	 * @param sds the simple declaration specifier
-	 */
-	public CBasicType(ICASTSimpleDeclSpecifier sds) {
-		this.type = sds.getType();
-		this.qualifiers = ( sds.isLong()    ? CBasicType.IS_LONG  : 0 ) |
-		   				  ( sds.isShort()   ? CBasicType.IS_SHORT : 0 ) |
-		   				  ( sds.isSigned()  ? CBasicType.IS_SIGNED: 0 ) |
-		   				  ( sds.isUnsigned()? CBasicType.IS_UNSIGNED : 0 ) |
-						  ( sds.isLongLong()? CBasicType.IS_LONGLONG : 0 ) |
-						  ( sds.isComplex() ? CBasicType.IS_COMPLEX : 0 ) |
-						  ( sds.isImaginary()?CBasicType.IS_IMAGINARY : 0 );
-		
-		if( type == IBasicType.t_unspecified ){
-			if( (qualifiers & ( IS_COMPLEX | IS_IMAGINARY )) != 0 )
-				type = IBasicType.t_float;
-			else {
-				type = IBasicType.t_int;
+	public CBasicType(Kind kind, int modifiers, IASTExpression value) {
+		if (kind == Kind.eUnspecified) {
+			if ((modifiers & (IS_COMPLEX | IS_IMAGINARY)) != 0) {
+				fKind= Kind.eFloat;
+			} else {
+				fKind= Kind.eInt;
 			}
+		} else {
+			fKind= kind;
 		}
-	}
-	
-	public CBasicType( int type, int qualifiers ){
-		this.type = type;
-		this.qualifiers = qualifiers;
-		
-		if( type == IBasicType.t_unspecified ){
-			if( (qualifiers & ( IS_COMPLEX | IS_IMAGINARY )) != 0 )
-				type = IBasicType.t_float;
-			else {
-				type = IBasicType.t_int;
-			}
-		}
-	}
-	
-	public CBasicType( int type, int qualifiers, IASTExpression value ){
-		this.type = type;
-		this.qualifiers = qualifiers;
+		fModifiers = modifiers;
 		this.value = value;
 	}
+
+	public CBasicType(Kind kind, int modifiers) {
+		this(kind, modifiers, null);
+	}
 	
-	/* (non-Javadoc)
-	 * @see org.eclipse.cdt.core.dom.ast.IBasicType#getType()
-	 */
-	public int getType() {
-		return type;
+	public CBasicType(ICASTSimpleDeclSpecifier sds) {
+		this (getKind(sds), getQualifiers(sds), null);
+	}
+	
+	private static int getQualifiers(ICASTSimpleDeclSpecifier sds) {
+		return (sds.isLong() ? IS_LONG  : 0) |
+				(sds.isShort() ? IS_SHORT : 0) |
+				(sds.isSigned() ? IS_SIGNED: 0) |
+				(sds.isUnsigned() ? IS_UNSIGNED : 0) |
+				(sds.isLongLong() ? IS_LONG_LONG : 0) |
+				(sds.isComplex() ? IS_COMPLEX : 0) |
+				(sds.isImaginary() ? IS_IMAGINARY : 0);
+	}
+	
+	private static Kind getKind(ICASTSimpleDeclSpecifier sds) {
+		switch (sds.getType()) {
+		case IASTSimpleDeclSpecifier.t_bool:
+			return Kind.eBoolean;
+		case IASTSimpleDeclSpecifier.t_char:
+			return Kind.eChar;
+		case IASTSimpleDeclSpecifier.t_double:
+			return Kind.eDouble;
+		case IASTSimpleDeclSpecifier.t_float:
+			return Kind.eFloat;
+		case IASTSimpleDeclSpecifier.t_int:
+			return Kind.eInt;
+		case IASTSimpleDeclSpecifier.t_void:
+			return Kind.eVoid;
+		default:
+			return Kind.eUnspecified;
+		}
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.cdt.core.dom.ast.IBasicType#isSigned()
-	 */
+	public Kind getKind() {
+		return fKind;
+	}
+	
+	public int getModifiers() {
+		return fModifiers;
+	}
+
 	public boolean isSigned() {
-		return ( qualifiers & IS_SIGNED) != 0;
+		return (fModifiers & IS_SIGNED) != 0;
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.cdt.core.dom.ast.IBasicType#isUnsigned()
-	 */
 	public boolean isUnsigned() {
-		return ( qualifiers & IS_UNSIGNED) != 0;
+		return (fModifiers & IS_UNSIGNED) != 0;
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.cdt.core.dom.ast.IBasicType#isShort()
-	 */
 	public boolean isShort() {
-		return ( qualifiers & IS_SHORT) != 0;
+		return (fModifiers & IS_SHORT) != 0;
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.cdt.core.dom.ast.IBasicType#isLong()
-	 */
 	public boolean isLong() {
-		return ( qualifiers & IS_LONG) != 0;
+		return (fModifiers & IS_LONG) != 0;
 	}
 
 	public boolean isLongLong() {
-		return ( qualifiers & IS_LONGLONG) != 0;
+		return (fModifiers & IS_LONG_LONG) != 0;
 	}
 
 	public boolean isSameType(IType obj) {
-	    if( obj == this )
-	        return true;
-	    if( obj instanceof ITypedef || obj instanceof IIndexType)
-	        return obj.isSameType( this );
+		if (obj == this)
+			return true;
+		if (obj instanceof ITypedef)
+			return obj.isSameType(this);
 	    
-		if (!(obj instanceof CBasicType)) return false;
+		if (!(obj instanceof ICBasicType)) return false;
 		
-		CBasicType cObj = (CBasicType)obj;
+		ICBasicType cObj = (ICBasicType)obj;
 		
-		if (type != cObj.type) {
+		if (fKind != cObj.getKind()) {
 			return false;
 		}
 		
-		if (type == IBasicType.t_int) {
+		if (fKind == Kind.eInt) {
 			//signed int and int are equivalent
-			return (qualifiers & ~IS_SIGNED) == (cObj.qualifiers & ~IS_SIGNED);
+			return (fModifiers & ~IS_SIGNED) == (cObj.getModifiers() & ~IS_SIGNED);
 		} else {
-			return (qualifiers == cObj.qualifiers);
+			return (fModifiers == cObj.getModifiers());
 		}
 	}
 	
     @Override
-	public Object clone(){
+	public Object clone() {
         IType t = null;
    		try {
             t = (IType) super.clone();
-        } catch ( CloneNotSupportedException e ) {
+        } catch (CloneNotSupportedException e) {
             //not going to happen
         }
         return t;
@@ -155,21 +144,72 @@ public class CBasicType implements ICBasicType {
 		return value;
 	}
 	
-	public void setValue( IASTExpression expression ){
-		this.value = expression;
-	}
-
 	/* (non-Javadoc)
 	 * @see org.eclipse.cdt.core.dom.ast.c.ICBasicType#isComplex()
 	 */
 	public boolean isComplex() {
-		return ( qualifiers & IS_COMPLEX) != 0;
+		return (fModifiers & IS_COMPLEX) != 0;
 	}
 
 	/* (non-Javadoc)
 	 * @see org.eclipse.cdt.core.dom.ast.c.ICBasicType#isImaginary()
 	 */
 	public boolean isImaginary() {
-		return ( qualifiers & IS_IMAGINARY) != 0;
+		return (fModifiers & IS_IMAGINARY) != 0;
+	}
+
+	public void marshal(ITypeMarshalBuffer buffer) throws CoreException {
+		final int kind= getKind().ordinal();
+		final int shiftedKind=  kind * ITypeMarshalBuffer.FLAG1;
+		final int modifiers= getModifiers();
+		if (shiftedKind < ITypeMarshalBuffer.FLAG4 && modifiers == 0) {
+			buffer.putByte((byte) (ITypeMarshalBuffer.BASIC_TYPE | shiftedKind));
+		} else {
+			buffer.putByte((byte) (ITypeMarshalBuffer.BASIC_TYPE | ITypeMarshalBuffer.FLAG4));
+			buffer.putByte((byte) kind);
+			buffer.putByte((byte) modifiers);
+		} 
+	}
+	
+	public static IType unmarshal(int firstByte, ITypeMarshalBuffer buffer) throws CoreException {
+		final boolean dense= (firstByte & ITypeMarshalBuffer.FLAG4) == 0;
+		int modifiers= 0;
+		int kind;
+		if (dense) {
+			kind= (firstByte & (ITypeMarshalBuffer.FLAG4-1))/ITypeMarshalBuffer.FLAG1;
+		} else {
+			kind= buffer.getByte();
+			modifiers= buffer.getByte();
+		} 
+		return new CBasicType(Kind.values()[kind], modifiers);
+	}
+
+	@Deprecated
+	public int getType() {
+		switch (fKind) {
+		case eBoolean:
+			return t_Bool;
+		case eChar:
+		case eWChar:
+		case eChar16:
+		case eChar32:
+			return t_char;
+		case eDouble:
+			return t_double;
+		case eFloat:
+			return t_float;
+		case eInt:
+			return t_int;
+		case eVoid:
+			return t_void;
+		case eUnspecified:
+			return t_unspecified;
+		}
+		return t_unspecified;
+	}
+	
+	@Override
+	public String toString() {
+		return ASTTypeUtil.getType(this);
 	}
 }

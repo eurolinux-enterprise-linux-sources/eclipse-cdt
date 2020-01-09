@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2007 IBM Corporation and others.
+ * Copyright (c) 2003, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,6 +7,7 @@
  *
  * Contributors:
  * IBM Rational Software - Initial API and implementation
+ * James Blackburn (Broadcom Corp.)
  *******************************************************************************/
 package org.eclipse.cdt.managedbuilder.core;
 
@@ -33,8 +34,15 @@ import org.eclipse.core.runtime.Status;
 import org.osgi.framework.BundleContext;
 
 
+/**
+ * ManagedBuilderCorePlugin is the life-cycle owner of the managedbuilder core plug-in.
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class ManagedBuilderCorePlugin extends Plugin {
-	private static final String PLUGIN_ID = "org.eclipse.cdt.managedbuilder.core"; //$NON-NLS-1$
+	/** @since 7.0*/
+	public static final String PLUGIN_ID = "org.eclipse.cdt.managedbuilder.core"; //$NON-NLS-1$
 	// The shared instance
 	private static ManagedBuilderCorePlugin plugin;
 	// The attribute name for the makefile generator
@@ -50,9 +58,6 @@ public class ManagedBuilderCorePlugin extends Plugin {
 
 //	private DiscoveredPathManager fDiscoveryPathManager;
 
-	/**
-	 * @param descriptor
-	 */
 	public ManagedBuilderCorePlugin() {
 		super();
 		plugin = this;
@@ -69,7 +74,7 @@ public class ManagedBuilderCorePlugin extends Plugin {
 	}
 	
 	/**
-	 * Returns the shared instance.
+	 * @return the shared instance.
 	 */
 	public static ManagedBuilderCorePlugin getDefault() {
 		return plugin;
@@ -78,6 +83,7 @@ public class ManagedBuilderCorePlugin extends Plugin {
 	/* (non-Javadoc)
 	 * @see org.eclipse.core.runtime.Plugin#start(org.osgi.framework.BundleContext)
 	 */
+	@Override
 	public void start(BundleContext context) throws Exception {
 		// Turn on logging for plugin when debugging
 		super.start(context);
@@ -167,6 +173,7 @@ public class ManagedBuilderCorePlugin extends Plugin {
 	/* (non-Javadoc)
 	 * @see org.eclipse.core.runtime.Plugin#start(org.osgi.framework.BundleContext)
 	 */
+	@Override
 	public void stop(BundleContext context) throws Exception {
 		BuildStateManager.getInstance().shutdown();
 
@@ -183,8 +190,8 @@ public class ManagedBuilderCorePlugin extends Plugin {
 		//      elements
 		ResourcesPlugin.getWorkspace().removeResourceChangeListener(listener);
 		IProject projects[] = ResourcesPlugin.getWorkspace().getRoot().getProjects();
-		for(int i = 0; i < projects.length; i++){
-			listener.sendClose(projects[i]);
+		for (IProject project : projects) {
+			listener.sendClose(project);
 		}
 		listener = null;
 		super.stop(context);
@@ -204,10 +211,28 @@ public class ManagedBuilderCorePlugin extends Plugin {
 			e = ((InvocationTargetException) e).getTargetException();
 		IStatus status = null;
 		if (e instanceof CoreException)
-			status = ((CoreException) e).getStatus();
+			status = new Status(((CoreException) e).getStatus().getSeverity(), getUniqueIdentifier(), e.getMessage(), e);
 		else
 			status = new Status(IStatus.ERROR, getUniqueIdentifier(), IStatus.OK, e.getMessage(), e);
 		log(status);
+	}
+
+	/**
+	 * Log a String error to the error log
+	 * @param str string error message to log
+	 * @since 7.0
+	 */
+	public static void error(String str) {
+		log(new Status(IStatus.ERROR, getUniqueIdentifier(), IStatus.OK, str, new Exception()));
+	}
+
+	/**
+	 * Log a String info message to the log
+	 * @param str string info message to log
+	 * @since 7.0
+	 */
+	public static void info(String str) {
+		log(new Status(IStatus.INFO, getUniqueIdentifier(), IStatus.OK, str, new Exception()));
 	}
 
 	/**
@@ -234,7 +259,7 @@ public class ManagedBuilderCorePlugin extends Plugin {
 		}
 	}
 	
-	public static IBuilder[] createBuilders(IProject project, Map args){
+	public static IBuilder[] createBuilders(IProject project, Map<String, String> args){
 		return BuilderFactory.createBuilders(project, args);
 	}
 	

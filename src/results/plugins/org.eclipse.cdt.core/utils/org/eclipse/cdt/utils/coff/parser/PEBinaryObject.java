@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2009 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -102,7 +102,7 @@ public class PEBinaryObject extends BinaryObjectAdapter {
 		return info;
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	@Override
 	public Object getAdapter(Class adapter) {
 		if (adapter.equals(PE.class)) {
@@ -177,14 +177,14 @@ public class PEBinaryObject extends BinaryObjectAdapter {
 	}
 
 	protected void addSymbols(Coff.Symbol[] peSyms, byte[] table, List<Symbol> list) {
-		for (int i = 0; i < peSyms.length; i++) {
-			if (peSyms[i].isFunction() || peSyms[i].isPointer() || peSyms[i].isArray()) {
-				String name = peSyms[i].getName(table);
+		for (org.eclipse.cdt.utils.coff.Coff.Symbol peSym : peSyms) {
+			if (peSym.isFunction() || peSym.isPointer() || peSym.isArray()) {
+				String name = peSym.getName(table);
 				if (name == null || name.trim().length() == 0 || !Character.isJavaIdentifierStart(name.charAt(0))) {
 					continue;
 				}
-				int type = peSyms[i].isFunction() ? ISymbol.FUNCTION : ISymbol.VARIABLE;
-				list.add(new Symbol(this, name, type, new Addr32(peSyms[i].n_value), 1));
+				int type = peSym.isFunction() ? ISymbol.FUNCTION : ISymbol.VARIABLE;
+				list.add(new Symbol(this, name, type, new Addr32(peSym.n_value), 1));
 			}
 		}
 	}

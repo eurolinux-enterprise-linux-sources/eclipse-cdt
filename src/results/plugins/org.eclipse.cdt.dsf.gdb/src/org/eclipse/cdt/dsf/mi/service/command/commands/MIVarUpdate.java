@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -35,8 +35,7 @@ public class MIVarUpdate extends MICommand<MIVarUpdateInfo> {
      * @since 1.1
      */
 	public MIVarUpdate(ICommandControlDMContext dmc, String name) {
-		// Don't use the number parameters but use the full name '--all-values' for Apple gdb to work (bug 250037)
-		super(dmc, "-var-update", new String[] { "--all-values", name }); //$NON-NLS-1$//$NON-NLS-2$
+		super(dmc, "-var-update", new String[] { "1", name }); //$NON-NLS-1$//$NON-NLS-2$
 	}
 	
     @Override

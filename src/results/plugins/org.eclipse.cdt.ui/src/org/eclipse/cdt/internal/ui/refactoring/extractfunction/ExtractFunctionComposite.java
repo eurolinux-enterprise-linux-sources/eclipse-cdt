@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Institute for Software, HSR Hochschule fuer Technik  
+ * Copyright (c) 2008, 2009 Institute for Software, HSR Hochschule fuer Technik  
  * Rapperswil, University of applied sciences and others
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
@@ -12,6 +12,8 @@
 package org.eclipse.cdt.internal.ui.refactoring.extractfunction;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.SelectionAdapter;
+import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
@@ -40,15 +42,13 @@ public class ExtractFunctionComposite extends Composite {
 		Group returnGroup = createReturnGroup(nameVisiComp);
 		createReturnValueChooser(returnGroup, info, ip);		
 
-		// Disabled for now
-		//createReplaceCheckBox(nameVisiComp);
+		createReplaceCheckBox(nameVisiComp);
 		
 		if (info.getMethodContext().getType() == MethodContext.ContextType.METHOD) {
 			visibilityPanelSetVisible(true);
 		}else {
 			visibilityPanelSetVisible(false);
 		}
-		
 		layout();
 	}
 
@@ -102,17 +102,27 @@ public class ExtractFunctionComposite extends Composite {
 		GridData gridData = new GridData();
 		gridData.horizontalAlignment = GridData.FILL;
 		gridData.grabExcessHorizontalSpace = true;
-		nameVisiComp.setLayoutData(gridData);	
+		nameVisiComp.setLayoutData(gridData);
+		final Button virtual = new Button(nameVisiComp, SWT.CHECK);
+		virtual.setText(Messages.ExtractFunctionComposite_Virtual);
+		virtual.addSelectionListener(new SelectionAdapter() {
+
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				info.setVirtual(virtual.getSelection());
+			}
+			
+		});
 	}
 
 	
-//	private void createReplaceCheckBox(Composite parent) {
-//		replaceSimilar = new Button(parent, SWT.CHECK | SWT.LEFT);
-//		GridData buttonLayoutData = new GridData(SWT.None);
-//		buttonLayoutData.verticalIndent = 5;
-//		replaceSimilar.setLayoutData(buttonLayoutData);
-//		replaceSimilar.setText(Messages.ExtractFunctionComposite_ReplaceDuplicates); 
-//	}
+	private void createReplaceCheckBox(Composite parent) {
+		replaceSimilar = new Button(parent, SWT.CHECK | SWT.LEFT);
+		GridData buttonLayoutData = new GridData(SWT.None);
+		buttonLayoutData.verticalIndent = 5;
+		replaceSimilar.setLayoutData(buttonLayoutData);
+		replaceSimilar.setText(Messages.ExtractFunctionComposite_ReplaceDuplicates);
+	}
 
 	
 	public ChooserComposite getReturnChooser() {

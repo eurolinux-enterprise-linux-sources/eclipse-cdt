@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -28,8 +28,15 @@ import org.eclipse.core.resources.IProjectNature;
 import org.eclipse.core.runtime.CoreException;
 
 /**
+ * @deprecated as of CDT 4.0. Used by legacy CDT 3.X projects.
+ * Replaced by ScannerConfigNature in org.eclipse.cdt.managedbuilder.core.
+ * 
  * @see IProjectNature
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
  */
+@Deprecated
 public class ScannerConfigNature implements IProjectNature {
 	
 	public final static String NATURE_ID = MakeCorePlugin.getUniqueIdentifier() + ".ScannerConfigNature"; //$NON-NLS-1$
@@ -120,11 +127,7 @@ public class ScannerConfigNature implements IProjectNature {
 	}
 
 	/**
-	 * Returns build command as stored in .project file
-	 * 
-	 * @param description
-	 * @param builderID
-	 * @return ICommand
+	 * @return build command as stored in .project file
 	 */
 	public static ICommand getBuildSpec(IProjectDescription description, String builderID) {
 		ICommand[] commands = description.getBuildSpec();
@@ -138,10 +141,6 @@ public class ScannerConfigNature implements IProjectNature {
 
 	/**
 	 * Stores a build command in .project file
-	 * 
-	 * @param description
-	 * @param newCommand
-	 * @return IProjecDescription
 	 */
 	public static IProjectDescription setBuildSpec(IProjectDescription description, ICommand newCommand) {
 		ICommand[] oldCommands = description.getBuildSpec();
@@ -169,9 +168,6 @@ public class ScannerConfigNature implements IProjectNature {
 		return description;
 	}
 
-	/**
-	 * @param project
-	 */
 	public static void initializeDiscoveryOptions(IProject project) {
 		try {
 			IScannerConfigBuilderInfo2 scPrefInfo = ScannerConfigProfileManager.createScannerConfigBuildInfo2(
@@ -188,9 +184,9 @@ public class ScannerConfigNature implements IProjectNature {
 			scProjInfo.setBuildOutputFilePath(scPrefInfo.getBuildOutputFilePath());
 	
 			ScannerConfigProfile profile = ScannerConfigProfileManager.getInstance().getSCProfileConfiguration(selectedProfile);
-			List providerIdList = scPrefInfo.getProviderIdList();
-			for (Iterator i = providerIdList.iterator(); i.hasNext();) {
-				String providerId = (String) i.next();
+			List<String> providerIdList = scPrefInfo.getProviderIdList();
+			for (Iterator<String> i = providerIdList.iterator(); i.hasNext();) {
+				String providerId = i.next();
 				
 				scProjInfo.setProviderOutputParserEnabled(providerId, scPrefInfo.isProviderOutputParserEnabled(providerId));
 				if (profile.getScannerInfoProviderElement(providerId).getProviderKind().equals(

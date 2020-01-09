@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -74,6 +74,7 @@ import org.eclipse.debug.ui.DebugUITools;
 import org.eclipse.debug.ui.IDebugModelPresentation;
 import org.eclipse.debug.ui.IDebugUIConstants;
 import org.eclipse.debug.ui.actions.IWatchExpressionFactoryAdapter2;
+import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.jface.viewers.CellEditor;
 import org.eclipse.jface.viewers.ICellModifier;
@@ -106,7 +107,7 @@ public class RegisterVMNode extends AbstractExpressionVMNode
         }
 
         @Override
-        @SuppressWarnings("unchecked") 
+        @SuppressWarnings({ "rawtypes", "unchecked" }) 
         public Object getAdapter(Class adapter) {
             if (fExpression != null && adapter.isAssignableFrom(fExpression.getClass())) {
                 return fExpression;
@@ -207,8 +208,58 @@ public class RegisterVMNode extends AbstractExpressionVMNode
      *  
      * @since 2.0
      */ 
-    
+    private LabelBackground columnIdValueBackground; 
+    private IPropertyChangeListener fPreferenceChangeListener;
+
+    @Override
+    public void dispose() {
+
+    	if ( fPreferenceChangeListener != null ) {
+    		DebugUITools.getPreferenceStore().removePropertyChangeListener(fPreferenceChangeListener);
+    	}
+
+    	super.dispose();	
+    }
+  
     protected IElementLabelProvider createLabelProvider() {
+    	/*
+   	 * Create background which is responsive to the preference color changes.
+   	 */
+    	columnIdValueBackground = new LabelBackground(
+    			DebugUITools.getPreferenceColor(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND).getRGB()) 
+    	{
+    		{ 
+    			setPropertyNames(new String[] { 
+    					IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE, 
+    					ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE,
+    					IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT, 
+    					ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT}); 
+    		}
+
+    		@Override
+    		public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
+    			Boolean activeFormatChanged = (Boolean)properties.get(
+    					ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT);
+    			Boolean activeChanged = (Boolean)properties.get(
+    					ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE);
+    			return  Boolean.TRUE.equals(activeChanged) && !Boolean.TRUE.equals(activeFormatChanged);
+    		}
+    	}; 
+
+    	if ( fPreferenceChangeListener != null ) {
+    		DebugUITools.getPreferenceStore().removePropertyChangeListener(fPreferenceChangeListener);
+    	}
+
+    	fPreferenceChangeListener = new IPropertyChangeListener() {
+    		public void propertyChange(PropertyChangeEvent event) {
+    			if ( event.getProperty().equals(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND) ) {
+    				columnIdValueBackground.setBackground(DebugUITools.getPreferenceColor(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND).getRGB());
+    			}
+    		}
+    	};
+    	
+    	DebugUITools.getPreferenceStore().addPropertyChangeListener(fPreferenceChangeListener);
+       
         PropertiesBasedLabelProvider provider = new PropertiesBasedLabelProvider();
 
         // The name column consists of the register name.  
@@ -283,26 +334,7 @@ public class RegisterVMNode extends AbstractExpressionVMNode
                         return !status.isOK();
                     }
                 },
-                new LabelBackground(
-                    DebugUITools.getPreferenceColor(IDebugUIConstants.PREF_CHANGED_VALUE_BACKGROUND).getRGB()) 
-                {
-                    { 
-                        setPropertyNames(new String[] { 
-                            IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE, 
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE,
-                            IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT, 
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT}); 
-                    }
-    
-                    @Override
-                    public boolean isEnabled(IStatus status, java.util.Map<String,Object> properties) {
-                        Boolean activeFormatChanged = (Boolean)properties.get(
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT);
-                        Boolean activeChanged = (Boolean)properties.get(
-                            ICachingVMProvider.PROP_IS_CHANGED_PREFIX + IDebugVMConstants.PROP_FORMATTED_VALUE_ACTIVE_FORMAT_VALUE);
-                        return  Boolean.TRUE.equals(activeChanged) && !Boolean.TRUE.equals(activeFormatChanged);
-                    }
-                },
+                columnIdValueBackground,
                 new StaleDataLabelForeground(),
                 new VariableLabelFont(),
             }));
@@ -403,7 +435,6 @@ public class RegisterVMNode extends AbstractExpressionVMNode
         
         return provider;
     }
-
     
     @Override
     public String toString() {
@@ -467,6 +498,11 @@ public class RegisterVMNode extends AbstractExpressionVMNode
     protected void updatePropertiesInSessionThread(final IPropertiesUpdate[] updates) {
         IRegisters service = getServicesTracker().getService(IRegisters.class, null);
 
+		// Create a counting request monitor to coordinate various activities
+		// on the updated objects. Though the update objects will be given to
+		// various ViewerDataRequestMonitors, such monitors must make sure to
+		// not mark the update objects complete. That needs to be left to the
+		// following monitor.
         final CountingRequestMonitor countingRm = new CountingRequestMonitor(ImmediateExecutor.getInstance(), null) {
             @Override
             protected void handleCompleted() {
@@ -512,6 +548,8 @@ public class RegisterVMNode extends AbstractExpressionVMNode
                             update.setStatus(getStatus());
                         }
                         countingRm.done();
+                        
+						// Note: we must not call the update's done method
                     }
                 });        
             count++;
@@ -605,7 +643,8 @@ public class RegisterVMNode extends AbstractExpressionVMNode
              e instanceof IMemoryChangedEvent ||
              e instanceof IRegistersChangedDMEvent ||
              (e instanceof PropertyChangeEvent &&
-              ((PropertyChangeEvent)e).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE) ) 
+                 (((PropertyChangeEvent)e).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE || 
+                 ((PropertyChangeEvent)e).getProperty() == IDebugModelPresentation.DISPLAY_VARIABLE_TYPE_NAMES)) ) 
         {
             return IModelDelta.CONTENT;
         } 
@@ -628,7 +667,8 @@ public class RegisterVMNode extends AbstractExpressionVMNode
              e instanceof IMemoryChangedEvent ||
              e instanceof IRegistersChangedDMEvent ||
              (e instanceof PropertyChangeEvent &&
-              ((PropertyChangeEvent)e).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE) ) 
+                 (((PropertyChangeEvent)e).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE || 
+                 ((PropertyChangeEvent)e).getProperty() == IDebugModelPresentation.DISPLAY_VARIABLE_TYPE_NAMES)) ) 
         {
             // Create a delta that the whole register group has changed.
             parentDelta.setFlags(parentDelta.getFlags() | IModelDelta.CONTENT);
@@ -759,8 +799,9 @@ public class RegisterVMNode extends AbstractExpressionVMNode
     public int getDeltaFlagsForExpression(IExpression expression, Object event) {
         if ( event instanceof IRegisterChangedDMEvent ||
              event instanceof IMemoryChangedEvent ||
-             (event instanceof PropertyChangeEvent && 
-               ((PropertyChangeEvent)event).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE) )
+             (event instanceof PropertyChangeEvent &&
+                 (((PropertyChangeEvent)event).getProperty() == IDebugVMConstants.PROP_FORMATTED_VALUE_FORMAT_PREFERENCE || 
+                 ((PropertyChangeEvent)event).getProperty() == IDebugModelPresentation.DISPLAY_VARIABLE_TYPE_NAMES)) ) 
         {
             return IModelDelta.STATE;
         }

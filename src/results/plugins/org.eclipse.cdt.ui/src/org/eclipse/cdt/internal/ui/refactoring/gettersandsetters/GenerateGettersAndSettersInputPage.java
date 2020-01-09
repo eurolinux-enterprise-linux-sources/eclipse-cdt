@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Institute for Software, HSR Hochschule fuer Technik  
+ * Copyright (c) 2008, 2009 Institute for Software, HSR Hochschule fuer Technik  
  * Rapperswil, University of applied sciences and others
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
@@ -56,6 +56,20 @@ public class GenerateGettersAndSettersInputPage extends UserInputWizardPage {
 		gd = new GridData();
 		gd.verticalAlignment = SWT.TOP;
 		btComp.setLayoutData(gd);
+		
+		final Button placeImplemetation = new Button(comp, SWT.CHECK);
+		placeImplemetation.setText(Messages.GenerateGettersAndSettersInputPage_PlaceImplHeader);
+		gd = new GridData();
+		placeImplemetation.setLayoutData(gd);
+		placeImplemetation.setSelection(context.isImplementationInHeader());
+		placeImplemetation.addSelectionListener(new SelectionAdapter() {
+
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				context.setImplementationInHeader(placeImplemetation.getSelection());
+			}
+			
+		});
 
 		setControl(comp);
 	}

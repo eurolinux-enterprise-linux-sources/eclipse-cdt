@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2006 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -42,6 +42,7 @@ public class LexicalSortingAction extends Action {
 		valueChanged(checked, false);
 	}
 
+	@Override
 	public void run() {
 		valueChanged(isChecked(), true);
 	}
@@ -59,10 +60,7 @@ public class LexicalSortingAction extends Action {
 
 	private class LexicalMakefileSorter extends ViewerSorter {
 
-		public boolean isSorterProperty(Object element, Object property) {
-			return true;
-		}
-
+		@Override
 		public int category(Object obj) {
 			if (obj instanceof IDirective) {
 				IDirective directive = (IDirective) obj;

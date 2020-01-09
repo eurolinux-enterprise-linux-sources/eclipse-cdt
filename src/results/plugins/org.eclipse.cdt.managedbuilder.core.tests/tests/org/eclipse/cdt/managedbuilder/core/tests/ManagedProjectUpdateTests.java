@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 Intel Corporation and others.
+ * Copyright (c) 2004, 2009 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,8 +20,6 @@ import junit.framework.TestSuite;
 
 import org.eclipse.cdt.managedbuilder.core.IManagedBuildInfo;
 import org.eclipse.cdt.managedbuilder.core.ManagedBuildManager;
-import org.eclipse.cdt.managedbuilder.core.ManagedBuilderCorePlugin;
-import org.eclipse.cdt.managedbuilder.internal.core.ManagedMakeMessages;
 import org.eclipse.cdt.managedbuilder.projectconverter.UpdateManagedProjectManager;
 import org.eclipse.cdt.managedbuilder.testplugin.CTestPlugin;
 import org.eclipse.cdt.managedbuilder.testplugin.ManagedBuildTestHelper;
@@ -41,6 +39,8 @@ import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.ui.dialogs.IOverwriteQuery;
 
 public class ManagedProjectUpdateTests extends TestCase {
+	private IPath resourcesLocation = new Path(CTestPlugin.getFileInPlugin(new Path("resources/oldTypeProjects/")).getAbsolutePath());
+
 	public ManagedProjectUpdateTests(String name) {
 		super(name);
 	}
@@ -49,7 +49,7 @@ public class ManagedProjectUpdateTests extends TestCase {
 		TestSuite suite = new TestSuite(ManagedProjectUpdateTests.class.getName());
 		
 		suite.addTest(new ManagedProjectUpdateTests("testProjectUpdate12_Update"));
-//		suite.addTest(new ManagedProjectUpdateTests("testProjectUpdate20_Update"));
+		suite.addTest(new ManagedProjectUpdateTests("testProjectUpdate20_Update"));
 		suite.addTest(new ManagedProjectUpdateTests("testProjectUpdate21_Update"));
 //		suite.addTest(new ManagedProjectUpdateTests("testProjectUpdate12_NoUpdate"));
 //		suite.addTest(new ManagedProjectUpdateTests("testProjectUpdate20_NoUpdate"));
@@ -79,7 +79,7 @@ public class ManagedProjectUpdateTests extends TestCase {
 			}
 		});
 		
-		ArrayList projectList = new ArrayList(projectZips.length);
+		ArrayList<IProject> projectList = new ArrayList<IProject>(projectZips.length);
 		for(int i = 0; i < projectZips.length; i++){
 			try{
 				String projectName = projectZips[i].getName();
@@ -100,7 +100,7 @@ public class ManagedProjectUpdateTests extends TestCase {
 			fail("No projects found in test project directory " + file.getName() + ".  The .zip file may be missing or corrupt.");
 			return null;
 		}
-		return (IProject[])projectList.toArray(new IProject[projectList.size()]);
+		return projectList.toArray(new IProject[projectList.size()]);
 	}
 	
 	private void doTestProjectUpdate(String version, boolean updateProject, boolean overwriteBackupFiles, 
@@ -149,6 +149,7 @@ public class ManagedProjectUpdateTests extends TestCase {
 				IWorkspace wsp = ResourcesPlugin.getWorkspace();
 				ISchedulingRule rule = wsp.getRuleFactory().buildRule();
 				Job buildJob = new Job("project build job"){ 	//$NON-NLS-1$
+					@Override
 					protected IStatus run(IProgressMonitor monitor) {
 						try {
 							curProject.build(IncrementalProjectBuilder.INCREMENTAL_BUILD,null);
@@ -184,8 +185,9 @@ public class ManagedProjectUpdateTests extends TestCase {
 				if (files != null && files.length > 0) {
 					if (i == 0) {
 						String configName = info.getDefaultConfiguration().getName();
-						IPath buildDir = Path.fromOSString(configName);
-						ManagedBuildTestHelper.compareBenchmarks(curProject, buildDir, files);
+						IPath benchmarkLocationBase = resourcesLocation.append(version);
+						IPath buildLocation = curProject.getLocation().append(configName);
+						ManagedBuildTestHelper.compareBenchmarks(curProject, buildLocation, files, benchmarkLocationBase);
 					}
 				}
 			}

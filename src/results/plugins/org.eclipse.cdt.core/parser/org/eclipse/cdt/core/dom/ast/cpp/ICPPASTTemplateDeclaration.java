@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -44,14 +44,14 @@ public interface ICPPASTTemplateDeclaration extends IASTDeclaration {
 			"ICPPASTTemplateDeclaration.OWNED_DECLARATION - Subdeclaration maintained grammatically"); //$NON-NLS-1$
 
 	/**
-	 * Get templated declaration.
+	 * Get template declaration.
 	 * 
 	 * @return <code>IASTDeclaration</code>
 	 */
 	public IASTDeclaration getDeclaration();
 
 	/**
-	 * Set the templated declaration.
+	 * Set the template declaration.
 	 * 
 	 * @param declaration
 	 *            <code>IASTDeclaration</code>
@@ -67,18 +67,24 @@ public interface ICPPASTTemplateDeclaration extends IASTDeclaration {
 	/**
 	 * Get template parameters.
 	 * 
-	 * @return <code>ICPPASTTemplateParameter []</code>
+	 * @return <code>ICPPASTTemplateParameter[]</code>
 	 */
 	public ICPPASTTemplateParameter[] getTemplateParameters();
 
 	/**
 	 * Add a template parameter.
 	 * 
-	 * @param parm
-	 *            <code>ICPPASTTemplateParameter</code>
+	 * @param parm <code>ICPPASTTemplateParameter</code>
+	 * @since 5.2
 	 */
+	public void addTemplateParameter(ICPPASTTemplateParameter parm);
+
+	/**
+	 * @deprecated Use addTemplateParameter.
+	 */
+	@Deprecated
 	public void addTemplateParamter(ICPPASTTemplateParameter parm);
-	
+
 	/**
 	 * get the template scope representing this declaration in the logical tree
 	 * @return <code>ICPPTemplateScope</code>

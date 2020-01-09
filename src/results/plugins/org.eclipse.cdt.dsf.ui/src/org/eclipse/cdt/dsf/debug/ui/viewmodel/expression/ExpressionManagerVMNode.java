@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -25,6 +25,7 @@ import org.eclipse.cdt.dsf.ui.viewmodel.VMDelta;
 import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.IExpressionManager;
 import org.eclipse.debug.core.model.IExpression;
+import org.eclipse.debug.internal.ui.IInternalDebugUIConstants;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IChildrenCountUpdate;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IChildrenUpdate;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IElementEditor;
@@ -33,12 +34,15 @@ import org.eclipse.debug.internal.ui.viewers.model.provisional.IHasChildrenUpdat
 import org.eclipse.debug.internal.ui.viewers.model.provisional.ILabelUpdate;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IModelDelta;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IPresentationContext;
+import org.eclipse.debug.ui.DebugUITools;
 import org.eclipse.debug.ui.IDebugUIConstants;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.viewers.CellEditor;
 import org.eclipse.jface.viewers.ICellModifier;
 import org.eclipse.jface.viewers.TextCellEditor;
 import org.eclipse.jface.viewers.TreePath;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.widgets.Composite;
 
 /**
@@ -55,7 +59,6 @@ import org.eclipse.swt.widgets.Composite;
  * to configure the nodes that this node will delegate to when processing expressions.
  * </p> 
  */
-@SuppressWarnings("restriction")
 public class ExpressionManagerVMNode extends AbstractVMNode
     implements IElementLabelProvider, IElementEditor
 {
@@ -63,13 +66,13 @@ public class ExpressionManagerVMNode extends AbstractVMNode
      * VMC for a new expression object to be added.  When user clicks on this node to 
      * edit it, he will create a new expression.
      */
-    class NewExpressionVMC extends AbstractVMContext {
+    public class NewExpressionVMC extends AbstractVMContext {
         public NewExpressionVMC() {
             super(ExpressionManagerVMNode.this);
         }
-
+        
         @Override
-        @SuppressWarnings("unchecked") 
+        @SuppressWarnings("rawtypes") 
         public Object getAdapter(Class adapter) {
             return super.getAdapter(adapter);
         }
@@ -89,7 +92,17 @@ public class ExpressionManagerVMNode extends AbstractVMNode
     private IExpressionManager fManager = DebugPlugin.getDefault().getExpressionManager();
     
     /** Cached reference to a cell modifier for editing expression strings of invalid expressions */
-    private WatchExpressionCellModifier fWatchExpressionCellModifier = new WatchExpressionCellModifier();
+    private ICellModifier fWatchExpressionCellModifier = null;
+    
+    /**
+     * @since 2.1
+     * 
+     * @return The cell modifier to be used when editing. If you need to provide
+     *         a custom cell editor you would override this method.
+     */
+    protected ICellModifier createCellModifier() {
+    	return new WatchExpressionCellModifier();
+    }
     
     public ExpressionManagerVMNode(ExpressionVMProvider provider) {
         super(provider);
@@ -213,7 +226,11 @@ public class ExpressionManagerVMNode extends AbstractVMNode
         for (int i = 0; i < columnIds.length; i++) {
             if (IDebugVMConstants.COLUMN_ID__EXPRESSION.equals(columnIds[i])) {
                 update.setLabel(MessagesForExpressionVM.ExpressionManagerLayoutNode__newExpression_label, i);
-                update.setFontData(JFaceResources.getFontDescriptor(IDebugUIConstants.PREF_VARIABLE_TEXT_FONT).getFontData()[0], i);            
+                // TODO: replace with an API image consant after bug 313828 is addressed.
+                update.setImageDescriptor(DebugUITools.getImageDescriptor(IInternalDebugUIConstants.IMG_LCL_MONITOR_EXPRESSION), i);
+                FontData fontData = JFaceResources.getFontDescriptor(IDebugUIConstants.PREF_VARIABLE_TEXT_FONT).getFontData()[0];
+                fontData.setStyle(SWT.ITALIC);  // Bugzilla 287598: Distinguish 'Add new expression' entry from actual expressions                
+                update.setFontData(fontData, i);
             } else {
                 update.setLabel("", i); //$NON-NLS-1$
             }
@@ -293,7 +310,10 @@ public class ExpressionManagerVMNode extends AbstractVMNode
         return new TreePath(elementList.toArray());
     }
 
-    
+    /*
+     * (non-Javadoc)
+     * @see org.eclipse.debug.internal.ui.viewers.model.provisional.IElementEditor#getCellEditor(org.eclipse.debug.internal.ui.viewers.model.provisional.IPresentationContext, java.lang.String, java.lang.Object, org.eclipse.swt.widgets.Composite)
+     */
     public CellEditor getCellEditor(IPresentationContext context, String columnId, Object element, Composite parent) {
         if (IDebugVMConstants.COLUMN_ID__EXPRESSION.equals(columnId)) {
             return new TextCellEditor(parent);
@@ -301,7 +321,14 @@ public class ExpressionManagerVMNode extends AbstractVMNode
         return null;
     }
     
+    /*
+     * (non-Javadoc)
+     * @see org.eclipse.debug.internal.ui.viewers.model.provisional.IElementEditor#getCellModifier(org.eclipse.debug.internal.ui.viewers.model.provisional.IPresentationContext, java.lang.Object)
+     */
     public ICellModifier getCellModifier(IPresentationContext context, Object element) {
+        if ( fWatchExpressionCellModifier == null ) {
+        	fWatchExpressionCellModifier = createCellModifier();
+        }
         return fWatchExpressionCellModifier;
     }
 }

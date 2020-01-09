@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Nokia and others.
+ * Copyright (c) 2007, 2010 Nokia and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,6 +14,8 @@ import org.eclipse.cdt.debug.core.CDebugCorePlugin;
 import org.eclipse.cdt.debug.ui.CDebugUIPlugin;
 import org.eclipse.jface.preference.PreferencePage;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.SelectionAdapter;
+import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Composite;
@@ -42,6 +44,12 @@ public class ActionsPreferencePage extends PreferencePage implements IWorkbenchP
 		final GlobalActionsList actionsList = new GlobalActionsList(container, SWT.NONE, false);
 		actionsList.setLayoutData(new GridData(GridData.FILL, GridData.FILL, true, true));
 
+		actionsList.getDeleteButton().addSelectionListener(new SelectionAdapter() {
+			public void widgetSelected(SelectionEvent e) {
+				actionsList.HandleDeleteButton();
+			}
+		});
+		
 		String helpContextID = CDebugUIPlugin.PLUGIN_ID + "." + contextHelpID; //$NON-NLS-1$	
 		PlatformUI.getWorkbench().getHelpSystem().setHelp(super.getControl(), helpContextID);
 

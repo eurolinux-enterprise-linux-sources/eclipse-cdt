@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2007 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -39,7 +39,7 @@ abstract public class AbstractDMContext extends PlatformObject
     private final IDMContext[] fParents;
 
     /** 
-     * Main constructor provides all data needed to implement the IModelContext
+     * Main constructor provides all data needed to implement the <code>IDMContext</code>
      * interface.
      */
     public AbstractDMContext(String sessionId, IDMContext[] parents) {
@@ -86,11 +86,25 @@ abstract public class AbstractDMContext extends PlatformObject
         }
         return getSessionId().hashCode() + parentsHash;
     }
-    
+
+	/**
+	 * @return a stringified representation of our parent context. If we have
+	 *         more than one parent, the parents are separated by commas, and
+	 *         the entire collection is wrapped with parenthesis:
+	 *         "(p1,p2,...,pn)"
+	 */
     protected String baseToString() {
-        StringBuffer retVal = new StringBuffer(); 
+        StringBuilder retVal = new StringBuilder(); 
         for (IDMContext parent : fParents) {
             retVal.append(parent);
+            retVal.append(',');
+        }
+        if (retVal.length() > 0) {
+        	retVal.deleteCharAt(retVal.length() - 1);	// remove trailing comma
+        }
+        if (fParents.length > 1) {
+        	retVal.insert(0, '(');
+        	retVal.insert(retVal.length(), ')');
         }
         return retVal.toString(); 
     }
@@ -114,7 +128,7 @@ abstract public class AbstractDMContext extends PlatformObject
      * @see org.eclipse.runtime.IAdapterManager 
      */
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     public Object getAdapter(Class adapterType) {
         Object retVal = null;
         DsfSession session = DsfSession.getSession(fSessionId);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2005 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -41,6 +41,9 @@ public class CValueDetailProvider {
 						listener.detailComputed( value, ((ICValue)value).evaluateAsExpression( frame ) );
 					}
 				} );
+			}
+			else { // no valid stack frame, clear detail pane
+			    listener.detailComputed( value, "" ); //$NON-NLS-1$
 			}
 		}
 	}

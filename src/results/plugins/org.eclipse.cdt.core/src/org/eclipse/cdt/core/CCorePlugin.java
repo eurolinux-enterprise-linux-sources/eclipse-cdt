@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2009 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,29 +16,25 @@ package org.eclipse.cdt.core;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 
-import com.ibm.icu.text.MessageFormat;
-
 import org.eclipse.cdt.core.cdtvariables.ICdtVariableManager;
 import org.eclipse.cdt.core.cdtvariables.IUserVarSupplier;
-import org.eclipse.cdt.core.dom.CDOM;
 import org.eclipse.cdt.core.dom.IPDOMManager;
 import org.eclipse.cdt.core.envvar.IEnvironmentVariableManager;
 import org.eclipse.cdt.core.index.IIndexManager;
 import org.eclipse.cdt.core.model.CModelException;
 import org.eclipse.cdt.core.model.CoreModel;
+import org.eclipse.cdt.core.model.ILanguage;
 import org.eclipse.cdt.core.model.ITranslationUnit;
 import org.eclipse.cdt.core.model.IWorkingCopy;
 import org.eclipse.cdt.core.parser.IScannerInfoProvider;
 import org.eclipse.cdt.core.resources.IConsole;
 import org.eclipse.cdt.core.resources.IPathEntryVariableManager;
+import org.eclipse.cdt.core.settings.model.ICConfigExtensionReference;
 import org.eclipse.cdt.core.settings.model.ICConfigurationDescription;
 import org.eclipse.cdt.core.settings.model.ICProjectDescription;
 import org.eclipse.cdt.core.settings.model.ICProjectDescriptionManager;
@@ -51,15 +47,14 @@ import org.eclipse.cdt.internal.core.PositionTrackerManager;
 import org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager;
 import org.eclipse.cdt.internal.core.cdtvariables.UserVarSupplier;
 import org.eclipse.cdt.internal.core.envvar.EnvironmentVariableManager;
-import org.eclipse.cdt.internal.core.model.BufferManager;
 import org.eclipse.cdt.internal.core.model.CModelManager;
-import org.eclipse.cdt.internal.core.model.IBufferFactory;
 import org.eclipse.cdt.internal.core.model.Util;
-import org.eclipse.cdt.internal.core.model.WorkingCopy;
 import org.eclipse.cdt.internal.core.pdom.PDOMManager;
 import org.eclipse.cdt.internal.core.resources.ResourceLookup;
 import org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager;
 import org.eclipse.cdt.internal.core.settings.model.ExceptionFactory;
+import org.eclipse.cdt.internal.errorparsers.ErrorParserExtensionManager;
+import org.eclipse.core.resources.ICommand;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
@@ -70,6 +65,7 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IConfigurationElement;
 import org.eclipse.core.runtime.IExtension;
 import org.eclipse.core.runtime.IExtensionPoint;
+import org.eclipse.core.runtime.IExtensionRegistry;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.NullProgressMonitor;
@@ -77,11 +73,14 @@ import org.eclipse.core.runtime.OperationCanceledException;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Plugin;
 import org.eclipse.core.runtime.Preferences;
+import org.eclipse.core.runtime.QualifiedName;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.SubProgressMonitor;
 import org.eclipse.core.runtime.content.IContentType;
 import org.eclipse.core.runtime.jobs.Job;
 import org.osgi.framework.BundleContext;
+
+import com.ibm.icu.text.MessageFormat;
 
 /**
  * CCorePlugin is the life-cycle owner of the core plug-in, and starting point for access to many core APIs.
@@ -95,10 +94,11 @@ public class CCorePlugin extends Plugin {
 	public static final int STATUS_CDTPROJECT_MISMATCH = 2;
 	public static final int CDT_PROJECT_NATURE_ID_MISMATCH = 3;
 	/**
-	 * Will be public and final in the next CDT version.
-	 * @noreference
+	 * Status code for core exception that is thrown if a pdom grew larger than the supported limit.
+	 * @since 5.2
 	 */
-	public static int STATUS_PDOM_TOO_LARGE = 4;
+	public static final int STATUS_PDOM_TOO_LARGE = 4;
+
 	public static final String PLUGIN_ID = "org.eclipse.cdt.core"; //$NON-NLS-1$
 
 	public static final String BUILDER_MODEL_ID = PLUGIN_ID + ".CBuildModel"; //$NON-NLS-1$
@@ -117,7 +117,13 @@ public class CCorePlugin extends Plugin {
 	public static final String PREF_INDEXER = "indexer"; //$NON-NLS-1$
 	public static final String DEFAULT_INDEXER = IPDOMManager.ID_FAST_INDEXER;
 	
+	/**
+	 * Name of the extension point for contributing an error parser
+	 */
 	public final static String ERROR_PARSER_SIMPLE_ID = "ErrorParser"; //$NON-NLS-1$
+	/**
+	 * Full unique name of the extension point for contributing an error parser
+	 */
 	public final static String ERROR_PARSER_UNIQ_ID = PLUGIN_ID + "." + ERROR_PARSER_SIMPLE_ID; //$NON-NLS-1$
 
 	// default store for pathentry
@@ -129,6 +135,9 @@ public class CCorePlugin extends Plugin {
 
 	public static final String DEFAULT_PROVIDER_ID = CCorePlugin.PLUGIN_ID + ".defaultConfigDataProvider"; //$NON-NLS-1$
 
+	private final static String SCANNER_INFO_PROVIDER2_NAME = "ScannerInfoProvider2"; //$NON-NLS-1$
+	private final static String SCANNER_INFO_PROVIDER2 = PLUGIN_ID + "." + SCANNER_INFO_PROVIDER2_NAME; //$NON-NLS-1$ 
+	
 	/**
 	 * Name of the extension point for contributing a source code formatter
 	 */
@@ -218,7 +227,7 @@ public class CCorePlugin extends Plugin {
 	 * @since 5.1
 	 */
 	public static IWorkingCopy[] getSharedWorkingCopies() {
-		return getSharedWorkingCopies(null);
+		return CModelManager.getDefault().getSharedWorkingCopies(null);
 	}
 
 	public static String getResourceString(String key) {
@@ -352,9 +361,7 @@ public class CCorePlugin extends Plugin {
      *   (key type: <code>String</code>; value type: <code>String</code>)
      * @see #setOptions
      */
-    
-    public static HashMap<String, String> getDefaultOptions()
-    {
+    public static HashMap<String, String> getDefaultOptions() {
         HashMap<String, String> defaultOptions = new HashMap<String, String>(10);
 
         // see #initializeDefaultPluginPreferences() for changing default settings
@@ -377,7 +384,6 @@ public class CCorePlugin extends Plugin {
         return defaultOptions;
     }
 
-   
     /**
      * Helper method for returning one option value only. Equivalent to <code>(String)CCorePlugin.getOptions().get(optionName)</code>
      * Note that it may answer <code>null</code> if this option does not exist.
@@ -413,7 +419,6 @@ public class CCorePlugin extends Plugin {
      * @see CCorePlugin#getDefaultOptions
      */
     public static HashMap<String, String> getOptions() {
-        
         HashMap<String, String> options = new HashMap<String, String>(10);
 
         // see #initializeDefaultPluginPreferences() for changing default settings
@@ -523,6 +528,10 @@ public class CCorePlugin extends Plugin {
 		return getConsole(consoleID);
 	}
 
+	/**
+	 * @deprecated Use {@link #getDefaultBinaryParserExtensions(IProject)} instead.
+	 */
+	@Deprecated
 	public ICExtensionReference[] getBinaryParserExtensions(IProject project) throws CoreException {
 		ICExtensionReference ext[] = new ICExtensionReference[0];
 		if (project != null) {
@@ -535,6 +544,24 @@ public class CCorePlugin extends Plugin {
 					ext = cextensions;
 			} catch (CoreException e) {
 				log(e);
+			}
+		}
+		return ext;
+	}
+
+	/**
+	 * Returns the binary parser extensions for the default settings configuration.
+	 * @since 5.2
+	 */
+	public ICConfigExtensionReference[] getDefaultBinaryParserExtensions(IProject project) throws CoreException {
+		ICConfigExtensionReference ext[] = new ICConfigExtensionReference[0];
+		if (project != null) {
+			ICProjectDescription desc = CCorePlugin.getDefault().getProjectDescription(project, false);
+			if (desc != null) {
+				ICConfigurationDescription cfgDesc = desc.getDefaultSettingConfiguration();
+				if (cfgDesc != null) {
+					ext = cfgDesc.get(CCorePlugin.BINARY_PARSER_UNIQ_ID);
+				}
 			}
 		}
 		return ext;
@@ -886,45 +913,73 @@ public class CCorePlugin extends Plugin {
 	}
 	
 	/**
-	 * Array of error parsers ids.
+	 * @deprecated since CDT 6.1. Use {@link ErrorParserManager#getErrorParserAvailableIds()} instead
+	 * @return array of error parsers ids
 	 */
+	@Deprecated
 	public String[] getAllErrorParsersIDs() {
-        IExtensionPoint extension = Platform.getExtensionRegistry().getExtensionPoint(CCorePlugin.PLUGIN_ID, ERROR_PARSER_SIMPLE_ID);
-		String[] empty = new String[0];
-		if (extension != null) {
-			IExtension[] extensions = extension.getExtensions();
-			ArrayList<String> list = new ArrayList<String>(extensions.length);
-			for (IExtension e : extensions)
-				list.add(e.getUniqueIdentifier());
-			return list.toArray(empty);
-		}
-		return empty;
+		ErrorParserExtensionManager.loadErrorParserExtensions();
+		return ErrorParserExtensionManager.getErrorParserAvailableIds();
 	}
-
+	
+	/**
+	 * @deprecated since CDT 6.1. Use {@link ErrorParserManager#getErrorParserCopy(String)} instead
+	 * @param id - id of error parser
+	 * @return array of error parsers
+	 */
+	@Deprecated
 	public IErrorParser[] getErrorParser(String id) {
-		IErrorParser[] empty = new IErrorParser[0];
-		try {
-	        IExtensionPoint extension = Platform.getExtensionRegistry().getExtensionPoint(CCorePlugin.PLUGIN_ID, ERROR_PARSER_SIMPLE_ID);
-			if (extension != null) {
-				IExtension[] extensions = extension.getExtensions();
-				List<IErrorParser> list = new ArrayList<IErrorParser>(extensions.length);
-				for (IExtension e : extensions) {
-					String parserID = e.getUniqueIdentifier();
-					if ((id == null && parserID != null) || (id != null && id.equals(parserID))) {
-						for (IConfigurationElement ce : e.getConfigurationElements())
-							list.add((IErrorParser)ce.createExecutableExtension("class")); //$NON-NLS-1$
-					}
-				}
-				return list.toArray(empty);
-			}
-		} catch (CoreException e) {
-			log(e);
+		ErrorParserExtensionManager.loadErrorParserExtensions();
+		IErrorParser errorParser = ErrorParserExtensionManager.getErrorParserInternal(id);
+		if (errorParser == null) {
+			return new IErrorParser[] {};
+		} else {
+			return new IErrorParser[] { errorParser };
 		}
-		return empty;
 	}
 
 	public IScannerInfoProvider getScannerInfoProvider(IProject project) {
-		return fNewCProjectDescriptionManager.getScannerInfoProviderProxy(project);
+		IScannerInfoProvider provider = null;
+		try {
+			// Look up in session property for previously created provider
+			QualifiedName scannerInfoProviderName = new QualifiedName(PLUGIN_ID, SCANNER_INFO_PROVIDER2_NAME);
+			provider = (IScannerInfoProvider)project.getSessionProperty(scannerInfoProviderName);
+			if (provider != null)
+				return provider;
+			
+			// Next search the extension registry to see if a provider is registered with a build command
+			IExtensionRegistry registry = Platform.getExtensionRegistry();
+			IExtensionPoint point = registry.getExtensionPoint(SCANNER_INFO_PROVIDER2);
+			if (point != null) {
+				IExtension[] exts = point.getExtensions();
+				for (IExtension ext : exts) {
+					IConfigurationElement[] elems = ext.getConfigurationElements();
+					for (IConfigurationElement elem : elems) {
+						String builder = elem.getAttribute("builder"); //$NON-NLS-1$
+						if (builder != null) {
+							IProjectDescription desc = project.getDescription();
+							ICommand[] commands = desc.getBuildSpec();
+							for (ICommand command : commands)
+								if (builder.equals(command.getBuilderName()))
+									provider = (IScannerInfoProvider)elem.createExecutableExtension("class"); //$NON-NLS-1$
+						}
+					}
+				}
+			}
+			
+			// Default to the proxy
+			if (provider == null)
+				provider = fNewCProjectDescriptionManager.getScannerInfoProviderProxy(project);
+			project.setSessionProperty(scannerInfoProviderName, provider);
+		} catch (CoreException e) {
+			// Bug 313725: When project is being closed, don't report an error.
+			if (!project.isOpen())
+				return null;
+			
+			log(e);
+ 		}
+		
+		return provider;
 	}
 	
 	/**
@@ -1008,8 +1063,12 @@ public class CCorePlugin extends Plugin {
 		return getPluginPreferences().getBoolean(PREF_USE_STRUCTURAL_PARSE_MODE);
 	}
 	
-	public CDOM getDOM() {
-	    return CDOM.getInstance();
+	/**
+	 * @deprecated use {@link ITranslationUnit} or {@link ILanguage} to construct ASTs, instead.
+	 */
+	@Deprecated
+	public org.eclipse.cdt.core.dom.CDOM getDOM() {
+	    return org.eclipse.cdt.core.dom.CDOM.getInstance();
 	}
 
 	public ICdtVariableManager getCdtVariableManager(){
@@ -1176,32 +1235,6 @@ public class CCorePlugin extends Plugin {
 		super();
 		fgCPlugin = this;
 	}
-
-	/**
-	 * Answers the shared working copies currently registered for this buffer factory. 
-	 * Working copies can be shared by several clients using the same buffer factory,see 
-	 * <code>IWorkingCopy.getSharedWorkingCopy</code>.
-	 * 
-	 * @param factory the given buffer factory
-	 * @return the list of shared working copies for a given buffer factory
-	 * @see IWorkingCopy
-	 * @noreference This method is not intended to be referenced by clients.
-	 */
-	public static IWorkingCopy[] getSharedWorkingCopies(IBufferFactory factory) {
-		// if factory is null, default factory must be used
-		if (factory == null)
-			factory = BufferManager.getDefaultBufferManager().getDefaultBufferFactory();
-		Map<IBufferFactory, Map<ITranslationUnit, WorkingCopy>> sharedWorkingCopies = CModelManager
-				.getDefault().sharedWorkingCopies;
-
-		Map<ITranslationUnit, WorkingCopy> perFactoryWorkingCopies = sharedWorkingCopies.get(factory);
-		if (perFactoryWorkingCopies == null)
-			return CModelManager.NoWorkingCopy;
-		Collection<WorkingCopy> copies = perFactoryWorkingCopies.values();
-		IWorkingCopy[] result = new IWorkingCopy[copies.size()];
-		copies.toArray(result);
-		return result;
-	}
 	
 	/**
 	 * @noreference This method is not intended to be referenced by clients.
@@ -1262,5 +1295,16 @@ public class CCorePlugin extends Plugin {
 	@Deprecated
 	public static IPDOMManager getPDOMManager() {
 		return getDefault().pdomManager;
+	}
+
+	/**
+	 * Returns preference controlling whether source roots are shown at the top of projects
+	 * or embedded within the resource tree of projects when they are not top level folders.
+	 * 
+	 * @return boolean preference value
+	 * @since 5.2
+	 */
+	public static boolean showSourceRootsAtTopOfProject() {
+		return getDefault().getPluginPreferences().getBoolean( CCorePreferenceConstants.SHOW_SOURCE_ROOTS_AT_TOP_LEVEL_OF_PROJECT);
 	}
 }

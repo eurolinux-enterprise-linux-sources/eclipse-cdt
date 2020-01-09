@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Symbian Software Systems and others.
+ * Copyright (c) 2007, 2010 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -54,6 +54,7 @@ import org.eclipse.cdt.internal.core.index.provider.IIndexFragmentProvider;
 import org.eclipse.cdt.internal.core.index.provider.IndexProviderManager;
 import org.eclipse.cdt.internal.core.pdom.PDOM;
 import org.eclipse.cdt.internal.core.pdom.PDOMManager;
+import org.eclipse.cdt.internal.core.pdom.indexer.DeltaAnalyzer;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
@@ -94,14 +95,21 @@ public class IndexProviderManagerTest extends IndexTestBase {
 	}
 
 	@Override
+	protected void setUp() throws Exception {
+		DPT.enabled = true;
+		super.setUp();
+	}
+
+	@Override
 	protected void tearDown() throws Exception {
+		DPT.enabled = false;
 		IndexProviderManager ipm= ((PDOMManager)CCorePlugin.getIndexManager()).getIndexProviderManager();
 		ipm.reset(); ipm.startup();
 	}
 	
 	public void testProvider_SimpleLifeCycle_200958() throws Exception {
-		for(int i=0; i<DPS.length; i++)
-			DPT.reset(DPS[i]);
+		for (Class element : DPS)
+			DPT.reset(element);
 		
 		List cprojects = new ArrayList(), expectedTrace = new ArrayList();
 		try {
@@ -111,14 +119,14 @@ public class IndexProviderManagerTest extends IndexTestBase {
 				cprojects.add(cproject);
 				expectedTrace.add(cproject);
 			}
-			for(int i=0; i<DPS.length; i++)
-				assertEquals(expectedTrace, DPT.getProjectsTrace(DPS[i]));
+			for (Class element : DPS)
+				assertEquals(expectedTrace, DPT.getProjectsTrace(element));
 			for(int i=0; i<expectedTrace.size(); i++) {
 				ICProject cproject = (ICProject) expectedTrace.get(i);
 				IIndex index = CCorePlugin.getIndexManager().getIndex(cproject);
 			}
-			for(int i=0; i<DPS.length; i++)
-				assertEquals(expectedTrace, DPT.getProjectsTrace(DPS[i]));
+			for (Class element : DPS)
+				assertEquals(expectedTrace, DPT.getProjectsTrace(element));
 		} finally {
 			for(int i=0; i<cprojects.size(); i++) {
 				ICProject cproject = (ICProject) expectedTrace.get(i);
@@ -223,7 +231,7 @@ public class IndexProviderManagerTest extends IndexTestBase {
 				}
 			};
 			
-			CCorePlugin.getIndexManager().joinIndexer(8000, NPM); // ensure IPM is called only once under test conditions
+			CCorePlugin.getIndexManager().joinIndexer(8000, npm()); // ensure IPM is called only once under test conditions
 			setExpectedNumberOfLoggedNonOKStatusObjects(3); // foo, bar and baz have no compatible fragments available
 			
 			ipm.reset(VERSION_405); ipm.startup();
@@ -278,7 +286,7 @@ public class IndexProviderManagerTest extends IndexTestBase {
 				}
 			};
 			
-			CCorePlugin.getIndexManager().joinIndexer(8000, NPM); // ensure IPM is called only once under test conditions
+			CCorePlugin.getIndexManager().joinIndexer(8000, npm()); // ensure IPM is called only once under test conditions
 			setExpectedNumberOfLoggedNonOKStatusObjects(1); // contentA has no compatible fragments available
 			
 			ipm.reset(VERSION_502); ipm.startup();
@@ -297,8 +305,7 @@ public class IndexProviderManagerTest extends IndexTestBase {
 	}
 	
 	private void assertFragmentPresent(String id, String version, IIndexFragment[] fragments) throws Exception {
-		for(int i=0; i<fragments.length; i++) {
-			IIndexFragment candidate= fragments[i];
+		for (IIndexFragment candidate : fragments) {
 			String cid= null, csver= null;
 			try {
 				candidate.acquireReadLock();
@@ -317,6 +324,8 @@ public class IndexProviderManagerTest extends IndexTestBase {
 		IIndex index;
 		
 		ICProject cproject = null;
+		// Modifying the .project file triggers an indexer job, suppress that:
+		DeltaAnalyzer.sSuppressPotentialTUs= true;
 		try {
 			cproject = CProjectHelper.createCCProject("IndexFactoryConfigurationUsageTest", IPDOMManager.ID_NO_INDEXER);
 			IProject project= cproject.getProject();
@@ -327,7 +336,7 @@ public class IndexProviderManagerTest extends IndexTestBase {
 			core.setProjectDescription(project, pd);
 			
 			index= CCorePlugin.getIndexManager().getIndex(cproject);
-			CCorePlugin.getIndexManager().joinIndexer(8000, NPM);
+			CCorePlugin.getIndexManager().joinIndexer(8000, npm());
 		
 			DPT.reset(DP1);
 			changeConfigRelations(project, ICProjectDescriptionPreferences.CONFIGS_LINK_SETTINGS_AND_ACTIVE);
@@ -369,6 +378,7 @@ public class IndexProviderManagerTest extends IndexTestBase {
 			// there should be no change from the previous state (also config2)
 			assertEquals("project.config2", ((ICConfigurationDescription)DPT.getCfgsTrace(DP1).get(0)).getId());
 		} finally {
+			DeltaAnalyzer.sSuppressPotentialTUs= false;
 			if (cproject != null) {
 				cproject.getProject().delete(IResource.FORCE | IResource.ALWAYS_DELETE_PROJECT_CONTENT, new NullProgressMonitor());
 			}
@@ -492,14 +502,14 @@ public class IndexProviderManagerTest extends IndexTestBase {
 		ICProjectDescription pd= core.getProjectDescription(project);
 		pd.setActiveConfiguration(pd.getConfigurationById(cfg.getId()));
 		core.setProjectDescription(project, pd);
-		CCorePlugin.getIndexManager().joinIndexer(8000, NPM);
+		CCorePlugin.getIndexManager().joinIndexer(8000, npm());
 	}
 	
 	private void changeConfigRelations(IProject project, int option) throws CoreException {
 		ICProjectDescription pd= core.getProjectDescription(project);
 		pd.setConfigurationRelations(option);
 		core.setProjectDescription(project, pd);
-		CCorePlugin.getIndexManager().joinIndexer(8000, NPM);
+		CCorePlugin.getIndexManager().joinIndexer(8000, npm());
 	}
 }
 

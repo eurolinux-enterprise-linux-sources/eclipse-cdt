@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,18 +11,14 @@
  *******************************************************************************/
 package org.eclipse.cdt.debug.internal.ui.actions; 
 
-import org.eclipse.cdt.core.IAddress;
 import org.eclipse.cdt.debug.core.CDIDebugModel;
 import org.eclipse.cdt.debug.core.CDebugUtils;
-import org.eclipse.cdt.debug.core.model.IResumeAtAddress;
 import org.eclipse.cdt.debug.core.model.IResumeAtLine;
 import org.eclipse.cdt.debug.internal.core.ICDebugInternalConstants;
 import org.eclipse.cdt.debug.internal.core.model.CDebugElement;
 import org.eclipse.cdt.debug.internal.core.sourcelookup.CSourceLookupDirector;
 import org.eclipse.cdt.debug.internal.ui.CDebugUIUtils;
 import org.eclipse.cdt.debug.internal.ui.IInternalCDebugUIConstants;
-import org.eclipse.cdt.debug.internal.ui.views.disassembly.DisassemblyEditorInput;
-import org.eclipse.cdt.debug.internal.ui.views.disassembly.DisassemblyView;
 import org.eclipse.cdt.debug.ui.CDebugUIPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IAdaptable;
@@ -45,7 +41,7 @@ import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.texteditor.ITextEditor;
  
 /**
- * Resume at line target adapter for the CDI debugger
+ * Resume at line target adapter for the CDI and DSF-GDB debuggers
  */
 public class ResumeAtLineAdapter implements IResumeAtLineTarget {
 
@@ -68,7 +64,7 @@ public class ResumeAtLineAdapter implements IResumeAtLineTarget {
 				else {
 					final String fileName = getFileName( input ); // actually, absolute path, not just file name
 					IDebugTarget debugTarget = null;
-					if ( target instanceof CDebugElement ) { // should always be, but just in case
+					if ( target instanceof CDebugElement ) {
 						debugTarget = ((CDebugElement)target).getDebugTarget();
 					}
 					final IPath path = convertPath( fileName, debugTarget );					
@@ -92,35 +88,6 @@ public class ResumeAtLineAdapter implements IResumeAtLineTarget {
 					}
 					return;
 				}
-			}
-		}
-		else if ( part instanceof DisassemblyView ) {
-			IEditorInput input = ((DisassemblyView)part).getInput();
-			if ( !(input instanceof DisassemblyEditorInput) ) {
-				errorMessage = ActionMessages.getString( "ResumeAtLineAdapter.2" ); //$NON-NLS-1$
-			}
-			else {
-				ITextSelection textSelection = (ITextSelection)selection;
-				int lineNumber = textSelection.getStartLine() + 1;
-				final IAddress address = ((DisassemblyEditorInput)input).getAddress( lineNumber );
-				if ( address != null && target instanceof IAdaptable ) {
-					final IResumeAtAddress resumeAtAddress = (IResumeAtAddress)((IAdaptable)target).getAdapter( IResumeAtAddress.class );
-					if ( resumeAtAddress != null && resumeAtAddress.canResumeAtAddress( address ) ) {
-						Runnable r = new Runnable() {
-							
-							public void run() {
-								try {
-									resumeAtAddress.resumeAtAddress( address );
-								}
-								catch( DebugException e ) {
-									failed( e );
-								}								
-							}
-						};
-						runInBackground( r );
-					}
-				}
-				return;
 			}
 		}
 		else {
@@ -161,29 +128,14 @@ public class ResumeAtLineAdapter implements IResumeAtLineTarget {
 					return false;
 				}
 				IDebugTarget debugTarget = null;
-				if ( target instanceof CDebugElement ) { // should always be, but just in case
+				if ( target instanceof CDebugElement ) {
 					debugTarget = ((CDebugElement)target).getDebugTarget();
 				}
-				if (debugTarget == null) {
-					return false;
-				}
+
 				final IPath path = convertPath( fileName, debugTarget );									
 				ITextSelection textSelection = (ITextSelection)selection;
 				int lineNumber = textSelection.getStartLine() + 1;
 				return resumeAtLine.canResumeAtLine( path.toPortableString(), lineNumber );
-			}
-			if ( part instanceof DisassemblyView ) {
-				IResumeAtAddress resumeAtAddress = (IResumeAtAddress)((IAdaptable)target).getAdapter( IResumeAtAddress.class );
-				if ( resumeAtAddress == null )
-					return false;
-				IEditorInput input = ((DisassemblyView)part).getInput();
-				if ( !(input instanceof DisassemblyEditorInput) ) {
-					return false;
-				}
-				ITextSelection textSelection = (ITextSelection)selection;
-				int lineNumber = textSelection.getStartLine() + 1;
-				IAddress address = ((DisassemblyEditorInput)input).getAddress( lineNumber );
-				return resumeAtAddress.canResumeAtAddress( address );
 			}
 		}
 		return false;

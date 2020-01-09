@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,7 +7,8 @@
  * 
  * Contributors:
  *     Wind River Systems - initial API and implementation
- *     Ericsson 		  - Modified for handling of multiple execution contexts	
+ *     Ericsson 		  - Modified for handling of multiple execution contexts
+ *     Axel Mueller       - Bug 306555 - Add support for cast to type / view as array (IExpressions2)	
  *******************************************************************************/
 package org.eclipse.cdt.dsf.mi.service;
 
@@ -24,6 +25,7 @@ import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.datamodel.IDMContext;
 import org.eclipse.cdt.dsf.debug.service.ICachingService;
 import org.eclipse.cdt.dsf.debug.service.IExpressions;
+import org.eclipse.cdt.dsf.debug.service.IExpressions2;
 import org.eclipse.cdt.dsf.debug.service.IFormattedValues;
 import org.eclipse.cdt.dsf.debug.service.IRunControl;
 import org.eclipse.cdt.dsf.debug.service.IMemory.IMemoryChangedEvent;
@@ -33,13 +35,15 @@ import org.eclipse.cdt.dsf.debug.service.IRunControl.StateChangeReason;
 import org.eclipse.cdt.dsf.debug.service.IStack.IFrameDMContext;
 import org.eclipse.cdt.dsf.debug.service.command.CommandCache;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService;
+import org.eclipse.cdt.dsf.gdb.GDBTypeParser.GDBType;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
+import org.eclipse.cdt.dsf.gdb.service.IGDBTraceControl.ITraceRecordSelectedChangedDMEvent;
+import org.eclipse.cdt.dsf.mi.service.command.CommandFactory;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetAttributes;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetChildCount;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetChildren;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetValue;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetVar;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIDataEvaluateExpression;
 import org.eclipse.cdt.dsf.mi.service.command.output.ExprMetaGetAttributesInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.ExprMetaGetChildCountInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.ExprMetaGetChildrenInfo;
@@ -63,15 +67,15 @@ import org.osgi.framework.BundleContext;
  * 
  * @since 2.0
  */
-public class MIExpressions extends AbstractDsfService implements IExpressions, ICachingService {
+public class MIExpressions extends AbstractDsfService implements IExpressions2, ICachingService {
 
     /**
      * A format that gives more details about an expression and supports pretty-printing
      * provided by the backend.
      * 
-     * @since 2.0
+     * @since 3.0
      */
-   	public static final String DETAILS_FORMAT = "Details";
+   	public static final String DETAILS_FORMAT = "Details"; //$NON-NLS-1$
    	
    	/* The order given here is the order that will be used by DSF in the Details Pane */
    	private static final String[] FORMATS_SUPPORTED = new String[] { 
@@ -305,7 +309,7 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
 
 		@Override
 		public String toString() {
-			return (fAddr == null ? "null" : "(0x" + fAddr.toString()) + ", " + fSize + ")"; //$NON-NLS-1$ //$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$
+			return (fAddr == null ? "null" : "(" + fAddr.toHexAddressString()) + ", " + fSize + ")"; //$NON-NLS-1$ //$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$
 		}
     }
 
@@ -322,19 +326,29 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
 		private final String exprType;
 		private final int numChildren;
 		private final boolean editable;
+		private final BasicType fBasicType;
 
 		/**
 		 * ExpressionDMData constructor.
 		 */
 		public ExpressionDMData(String expr, String type, int num, boolean edit) {
-			relativeExpression = expr;
-			exprType = type;
-			numChildren = num;
-			editable = edit;
+		    this (expr, type, num, edit, null);
 		}
 
+		/**
+         * ExpressionDMData constructor.
+		 * @since 3.0
+         */
+        public ExpressionDMData(String expr, String type, int num, boolean edit, BasicType basicType) {
+            relativeExpression = expr;
+            exprType = type;
+            numChildren = num;
+            editable = edit;
+            fBasicType = basicType;
+        }
+
 		public BasicType getBasicType() {
-			return null;
+		    return fBasicType;
 		}
 		
 		public String getEncoding() {
@@ -423,7 +437,13 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
 
 	private CommandCache fExpressionCache;
 	private MIVariableManager varManager;
-
+	private CommandFactory fCommandFactory;
+	
+	/** 
+	 * Indicates that we are currently visualizing trace data.
+	 * In this case, some errors should not be reported.
+	 */
+	private boolean fTraceVisualization;
 	
 	public MIExpressions(DsfSession session) {
 		super(session);
@@ -460,6 +480,7 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
         
 		// Register this service.
 		register(new String[] { IExpressions.class.getName(),
+				IExpressions2.class.getName(),
 				MIExpressions.class.getName() },
 				new Hashtable<String, String>());
 		
@@ -469,7 +490,7 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
         // to the back-end, through the MICommandControl service
 		// It must be created after the ExpressionService is registered
 		// since it will need to find it.
-        varManager = new MIVariableManager(getSession(), getServicesTracker());
+        varManager = createMIVariableManager();
 
         // Create the meta command cache which will use the variable manager
         // to actually send MI commands to the back-end
@@ -477,9 +498,21 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
         ICommandControlService commandControl = getServicesTracker().getService(ICommandControlService.class);
         fExpressionCache.setContextAvailable(commandControl.getContext(), true);
         
+        fCommandFactory = getServicesTracker().getService(IMICommandControl.class).getCommandFactory();
+
 		requestMonitor.done();
 	}
 
+	/**
+	 * Creates the MI variable manager to be used by this expression service.
+	 * Overriding classes may override to provide a custom services tracker. 
+	 * 
+	 * @since 3.0
+	 */
+	protected MIVariableManager createMIVariableManager() {
+	    return new MIVariableManager(getSession(), getServicesTracker());
+	}
+	
 	/**
 	 * This method shuts down this service. It unregisters the service, stops
 	 * receiving service events, and calls the superclass shutdown() method to
@@ -591,16 +624,44 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
 			final DataRequestMonitor<IExpressionDMData> rm) 
 	{
 	    if (dmc instanceof MIExpressionDMC) {
-    		fExpressionCache.execute(
-    				new ExprMetaGetVar(dmc), 
-    				new DataRequestMonitor<ExprMetaGetVarInfo>(getExecutor(), rm) {
-    					@Override
-    					protected void handleSuccess() {
-    						rm.setData(new ExpressionDMData(getData().getExpr(), 
-    								getData().getType(), getData().getNumChildren(), getData().getEditable()));
-    						rm.done();
-    					}
-    				});
+            fExpressionCache.execute(
+                new ExprMetaGetVar(dmc), 
+                new DataRequestMonitor<ExprMetaGetVarInfo>(getExecutor(), rm) {
+                    @Override
+                    protected void handleSuccess() {
+                        IExpressionDMData.BasicType basicType = null;
+
+                        GDBType gdbType = getData().getGDBType();
+                        
+                        if (gdbType != null) {
+                            switch (gdbType.getType()) {
+                            case GDBType.ARRAY:
+                                basicType = IExpressionDMData.BasicType.array;
+                                break;
+                            case GDBType.FUNCTION:
+                                basicType = IExpressionDMData.BasicType.function;
+                                break;
+                            case GDBType.POINTER:
+                            case GDBType.REFERENCE:
+                                basicType =  IExpressionDMData.BasicType.pointer;
+                                break;
+                            case GDBType.GENERIC:
+                            default:
+                                if (getData().getNumChildren() > 0) {
+                                    basicType =  IExpressionDMData.BasicType.composite;
+                                } else {
+                                    basicType =  IExpressionDMData.BasicType.basic;
+                                }
+                                break;
+                            }
+                        }
+                        
+                        rm.setData(new ExpressionDMData(
+                            getData().getExpr(),getData().getType(), getData().getNumChildren(), 
+                            getData().getEditable(), basicType));
+                        rm.done();
+                    }
+                });	        
 	    } else if (dmc instanceof InvalidContextExpressionDMC) {
             rm.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, INVALID_HANDLE, "Invalid context for evaluating expressions.", null)); //$NON-NLS-1$
             rm.done();
@@ -634,20 +695,20 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
             rm.done();
     	} else {
         	fExpressionCache.execute(
-    			new MIDataEvaluateExpression<MIDataEvaluateExpressionInfo>(addressDmc), 
+        		fCommandFactory.createMIDataEvaluateExpression(addressDmc), 
     			new DataRequestMonitor<MIDataEvaluateExpressionInfo>(getExecutor(), rm) {
     				@Override
     				protected void handleSuccess() {
     					String tmpAddrStr = getData().getValue();
     					
-    					// Deal with adresses of contents of a char* which is in
+    					// Deal with addresses of contents of a char* which is in
     					// the form of "0x12345678 \"This is a string\""
     					int split = tmpAddrStr.indexOf(' '); 
     			    	if (split != -1) tmpAddrStr = tmpAddrStr.substring(0, split);
     			    	final String addrStr = tmpAddrStr;
     			    	
     					fExpressionCache.execute(
-    						new MIDataEvaluateExpression<MIDataEvaluateExpressionInfo>(sizeDmc), 
+    						fCommandFactory.createMIDataEvaluateExpression(sizeDmc), 
     						new DataRequestMonitor<MIDataEvaluateExpressionInfo>(getExecutor(), rm) {
     							@Override
     							protected void handleSuccess() {
@@ -696,12 +757,21 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
         		// Starting with GDB 7.0, this format automatically supports pretty-printing, as long as
         		// GDB has been configured to support it.
 				fExpressionCache.execute(
-						new MIDataEvaluateExpression<MIDataEvaluateExpressionInfo>(exprDmc), 
+						fCommandFactory.createMIDataEvaluateExpression(exprDmc), 
 						new DataRequestMonitor<MIDataEvaluateExpressionInfo>(getExecutor(), rm) {
 							@Override
 							protected void handleSuccess() {
 								rm.setData(new FormattedValueDMData(getData().getValue()));
 	        					rm.done();
+							}
+							@Override
+							protected void handleError() {
+								if (fTraceVisualization) {
+									rm.setData(new FormattedValueDMData("")); //$NON-NLS-1$
+									rm.done();
+								} else {
+									super.handleError();
+								}
 							}
 						});
         	} else {
@@ -802,16 +872,20 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
 						protected void handleSuccess() {
 							IExpressionDMContext[] subExpressions = getData();
 
-							if (startIndex >= subExpressions.length || startIndex + length > subExpressions.length) {
+							if (startIndex >= subExpressions.length) {
 								rm.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, REQUEST_FAILED, "Invalid range for evaluating sub expressions.", null)); //$NON-NLS-1$
 								rm.done();
 								return;
 							}
 							
-							IExpressionDMContext[] subRange = new IExpressionDMContext[length];
-							for (int i=0; i<subRange.length; i++) {
-								subRange[i] = subExpressions[i+startIndex]; 
+							int realLength = length;
+							if (startIndex + length > subExpressions.length) {
+								realLength = subExpressions.length - startIndex;
 							}
+							
+							IExpressionDMContext[] subRange = new IExpressionDMContext[realLength];
+							System.arraycopy(subExpressions, startIndex, subRange, 0, realLength);
+
 							rm.setData(subRange);
 							rm.done();
 						}
@@ -824,7 +898,6 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
 			rm.done();
 		}		
 	}
-
 	
 	/**
 	 * Retrieves the count of children expressions of the specified expression
@@ -954,6 +1027,16 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
         // MIVariableManager separately traps this event
     }
 
+    /** @since 3.0 */
+    @DsfServiceEventHandler
+    public void eventDispatched(ITraceRecordSelectedChangedDMEvent e) {
+    	if (e.isVisualizationModeEnabled()) {
+    		fTraceVisualization = true;
+    	} else {
+    		fTraceVisualization = false;
+    	}
+    }
+    
     /**
      * {@inheritDoc}
      * @since 1.1
@@ -964,5 +1047,89 @@ public class MIExpressions extends AbstractDsfService implements IExpressions, I
         // to refresh them as well
         varManager.markAllOutOfDate();
     }
+	
+	/** 
+	 * A casted or array-displayed expression. 
+	 * @since 3.0 
+	 */
+	protected class CastedExpressionDMC extends MIExpressionDMC implements ICastedExpressionDMContext {
+
+		private final CastInfo fCastInfo;
+		/** if non-null, interpret result as this type rather than the raw expression's type */
+		private String fCastExpression;
+
+		public CastedExpressionDMC(MIExpressionDMC exprDMC, String castExpression, CastInfo castInfo) {
+			super(getSession().getId(), exprDMC.getExpression(), exprDMC.getRelativeExpression(), exprDMC);
+			fCastInfo = castInfo;
+			fCastExpression = castExpression;
+		}
+		
+		/* (non-Javadoc)
+		 * @see org.eclipse.cdt.dsf.debug.service.IExpressions2.ICastedExpressionDMContext#getCastInfo()
+		 */
+		public CastInfo getCastInfo() {
+			return fCastInfo;
+		}
+		
+		/* (non-Javadoc)
+		 * @see org.eclipse.cdt.dsf.mi.service.MIExpressions.java#getExpression()
+		 */
+        @Override
+		public String getExpression() {
+            return fCastExpression;
+        }
+        
+        /**
+         * @return True if the two objects are equal, false otherwise.
+         */
+        @Override
+		public boolean equals(Object other) {
+			return super.equals(other)
+					&& fCastInfo.equals(((CastedExpressionDMC) other).fCastInfo);
+        }
+        
+        @Override
+        public String toString() {
+            return baseToString() + ".expr" + "[" + //$NON-NLS-1$ //$NON-NLS-2$
+                    getExpression() +", " + getRelativeExpression() + "]"; //$NON-NLS-1$//$NON-NLS-2$
+        }
+
+	}
+	
+    /* (non-Javadoc)
+	 * @see org.eclipse.cdt.dsf.debug.service.IExpressions2#createCastedExpression(org.eclipse.cdt.dsf.datamodel.IDMContext, java.lang.String, org.eclipse.cdt.dsf.debug.service.IExpressions2.ICastedExpressionDMContext)
+	 */
+	/** @since 3.0 */
+	public ICastedExpressionDMContext createCastedExpression(IExpressionDMContext exprDMC, CastInfo castInfo) {
+		if (exprDMC instanceof MIExpressionDMC && castInfo != null) {
+			String castType = castInfo.getTypeString();
+			String castExpression = exprDMC.getExpression();
+			int castingLength = castInfo.getArrayCount(); 
+			int castingIndex = castInfo.getArrayStartIndex();
+		 
+			// cast to type 
+			if (castType != null && castType.length() > 0) {
+				StringBuffer buffer = new StringBuffer();
+				buffer.append('(').append(castType).append(')');
+				buffer.append('(').append(castExpression).append(')');
+				castExpression = buffer.toString();
+			}	
+			
+			// cast to array (can be in addition to cast to type) 
+			if (castingLength > 0) {
+				StringBuffer buffer = new StringBuffer();
+				buffer.append("*("); //$NON-NLS-1$
+				buffer.append('(').append(castExpression).append(')');
+				buffer.append('+').append(castingIndex).append(')');
+				buffer.append('@').append(castingLength);
+				castExpression = buffer.toString();
+			}
+			
+			return new CastedExpressionDMC((MIExpressionDMC) exprDMC, castExpression, castInfo);
+		} else {
+			assert false;
+			return null;
+		}
+	}
 
 }

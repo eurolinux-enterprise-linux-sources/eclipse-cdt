@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Wind River Systems and others.
+ * Copyright (c) 2007, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -30,7 +30,7 @@ public class CompositeDMContext implements IDMContext {
     private final IDMContext[] fParents;
     
     /** 
-     * Main constructor provides all data needed to implement the IModelContext
+     * Main constructor provides all data needed to implement the <code>IDMContext</code>
      * interface.
      * @param parents Array of parent contexts that this composite context is
      * made up of.  It can be an empty array, but it cannot be null.

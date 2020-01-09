@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 QNX Software Systems and others.
+ * Copyright (c) 2008, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,15 +16,13 @@ import junit.framework.Test;
 
 import org.eclipse.cdt.core.model.CModelException;
 import org.eclipse.cdt.debug.core.cdi.CDIException;
-import org.eclipse.cdt.debug.core.cdi.ICDIFunctionLocation;
-import org.eclipse.cdt.debug.core.cdi.ICDILocation;
 import org.eclipse.cdt.debug.core.cdi.ICDILocator;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIBreakpoint;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIBreakpointManagement3;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIEventBreakpoint;
 import org.eclipse.cdt.debug.core.model.ICBreakpointType;
 import org.eclipse.cdt.debug.mi.core.MIException;
-import org.eclipse.cdt.debug.mi.core.cdi.model.EventBreakpoint;
+import org.eclipse.cdt.gdb.eventbkpts.IEventBreakpointConstants;
 
 public class EventBreakpointTests extends AbstractDebugTest {
 	public static Test suite() {
@@ -54,11 +52,11 @@ public class EventBreakpointTests extends AbstractDebugTest {
 
 
 	public void testCatch() throws CModelException, IOException, MIException, CDIException {
-		eventbreakpoints(EventBreakpoint.CATCH, "");
+		eventbreakpoints(IEventBreakpointConstants.EVENT_TYPE_CATCH, "");
 	}
 
 	public void testThrow() throws CModelException, IOException, MIException, CDIException {
-		eventbreakpoints(EventBreakpoint.THROW, "");
+		eventbreakpoints(IEventBreakpointConstants.EVENT_TYPE_THROW, "");
 	}
 	
 	private void eventbreakpoints(String type, String arg) throws CModelException, IOException, MIException, CDIException {

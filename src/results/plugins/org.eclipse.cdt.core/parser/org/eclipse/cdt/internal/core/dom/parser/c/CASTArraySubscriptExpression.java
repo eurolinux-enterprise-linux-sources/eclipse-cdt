@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,9 +13,9 @@
 package org.eclipse.cdt.internal.core.dom.parser.c;
 
 import org.eclipse.cdt.core.dom.ast.ASTVisitor;
-import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTArraySubscriptExpression;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
+import org.eclipse.cdt.core.dom.ast.IASTInitializerClause;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IArrayType;
 import org.eclipse.cdt.core.dom.ast.IPointerType;
@@ -74,7 +74,19 @@ public class CASTArraySubscriptExpression extends ASTNode implements
         }
     }
 
-    @Override
+    public IASTInitializerClause getArgument() {
+		return getSubscriptExpression();
+	}
+
+	public void setArgument(IASTInitializerClause expression) {
+		if (expression instanceof IASTExpression) {
+			setSubscriptExpression((IASTExpression) expression);
+		} else {
+			setSubscriptExpression(null);
+		}
+	}
+
+	@Override
 	public boolean accept( ASTVisitor action ){
         if( action.shouldVisitExpressions ){
 		    switch( action.visit( this ) ){
@@ -114,15 +126,15 @@ public class CASTArraySubscriptExpression extends ASTNode implements
     
     public IType getExpressionType() {
 		IType t = getArrayExpression().getExpressionType();
-		try {
-			t = CVisitor.unwrapTypedefs(t);
-			if (t instanceof IPointerType)
-				return ((IPointerType)t).getType();
-			else if (t instanceof IArrayType)
-				return ((IArrayType)t).getType();
-		} catch (DOMException e) {
-			return e.getProblem();
-		}
+		t = CVisitor.unwrapTypedefs(t);
+		if (t instanceof IPointerType)
+			return ((IPointerType)t).getType();
+		else if (t instanceof IArrayType)
+			return ((IArrayType)t).getType();
 		return t;
     }
+
+	public boolean isLValue() {
+		return true;
+	}
 }

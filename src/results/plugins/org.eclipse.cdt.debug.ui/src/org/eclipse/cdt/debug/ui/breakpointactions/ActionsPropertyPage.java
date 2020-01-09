@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Nokia and others.
+ * Copyright (c) 2007, 2010 Nokia and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -85,6 +85,12 @@ public class ActionsPropertyPage extends PropertyPage {
 			}
 		});
 
+		globalActionsList.getDeleteButton().addSelectionListener(new SelectionAdapter() {
+			public void widgetSelected(SelectionEvent e) {
+				HandleDeleteButton();
+			}
+		});
+
 		return container;
 	}
 
@@ -94,6 +100,22 @@ public class ActionsPropertyPage extends PropertyPage {
 		for (int i = 0; i < selectedActions.length; i++) {
 			actionsList.addAction(selectedActions[i]);
 		}
+	}
+
+	/**
+	 * Clean up attached actions that were just deleted from the GlobalActionList
+	 * 
+	 * @since 7.0
+	 */
+	protected void HandleDeleteButton() {
+
+		// First remove any attached action that was just deleted
+		IBreakpointAction[] selectedActions = globalActionsList.getSelectedActions();
+		for (int i = 0; i < selectedActions.length; i++) {
+			actionsList.removeAction(selectedActions[i]);
+		}
+		// Now cleanup the global action list
+		globalActionsList.HandleDeleteButton();
 	}
 
 	protected void performDefaults() {

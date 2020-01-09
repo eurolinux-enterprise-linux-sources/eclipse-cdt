@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -23,11 +23,26 @@ import org.eclipse.cdt.dsf.ui.viewmodel.properties.IElementPropertiesProvider;
 public interface ICachingVMProvider extends IVMProvider, IElementPropertiesProvider {
 
     /**
+     * A prefix used to create a property to indicate whether a given property
+     * has changed since the last cache update with the {@link IVMUpdatePolicy#ARCHIVE} 
+     * flag.  The caching VM provider appends these properties to an element's set of 
+     * properties as they are retrieved through the cache.
+     * 
+     * @see org.eclipse.cdt.dsf.ui.viewmodel.properties.IElementPropertiesProvider
+     * @see IVMUpdatePolicy#ARCHIVE
+     * 
      * @since 2.0
      */
     public static final String PROP_IS_CHANGED_PREFIX = "is_changed."; //$NON-NLS-1$
     
     /**
+     * A property used to indicate whether a given cache entry is currently dirty.  
+     * The caching VM provider appends this property to an 
+     * element's set of properties as they are retrieved through the cache.
+     * 
+     * @see org.eclipse.cdt.dsf.ui.viewmodel.properties.IElementPropertiesProvider
+     * @see IVMUpdatePolicy#DIRTY
+     * 
      * @since 2.0
      */
     public static final String PROP_CACHE_ENTRY_DIRTY = "cache_entry_dirty"; //$NON-NLS-1$

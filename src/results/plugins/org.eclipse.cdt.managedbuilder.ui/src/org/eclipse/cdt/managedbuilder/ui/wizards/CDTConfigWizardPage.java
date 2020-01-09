@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -46,16 +46,22 @@ import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableItem;
 import org.eclipse.ui.dialogs.PreferencesUtil;
 
+/**
+ * "Select Configurations" page of C/C++ New Project Wizard
+ *
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class CDTConfigWizardPage extends WizardPage {
 
 	public static final String PAGE_ID = "org.eclipse.cdt.managedbuilder.ui.wizard.CConfigWizardPage"; //$NON-NLS-1$
 
-	private static final Image IMG = ManagedBuilderUIImages.get(ManagedBuilderUIImages.IMG_BUILD_CONFIG);
+	private static final Image IMG_CONFIG = ManagedBuilderUIImages.get(ManagedBuilderUIImages.IMG_BUILD_CONFIG);
 	private static final String TITLE = UIMessages.getString("CConfigWizardPage.0"); //$NON-NLS-1$
 	private static final String MESSAGE = UIMessages.getString("CConfigWizardPage.1"); //$NON-NLS-1$
 	private static final String COMMENT = UIMessages.getString("CConfigWizardPage.12"); //$NON-NLS-1$
 	private static final String EMPTY_STR = "";  //$NON-NLS-1$
-	
+
 	private Table table;
 	private CheckboxTableViewer tv;
 	private Label l_projtype;
@@ -70,23 +76,23 @@ public class CDTConfigWizardPage extends WizardPage {
 	public boolean pagesLoaded = false;
 	private IToolChain[] visitedTCs = null;
 	IWizardPage[] customPages = null;
-	
+
 	public CDTConfigWizardPage(MBSWizardHandler h) {
-        super(UIMessages.getString("CDTConfigWizardPage.0")); //$NON-NLS-1$
-        setPageComplete(false);
-        handler = h;
-        setWizard(h.getWizard());
-    }
-	
+		super(UIMessages.getString("CDTConfigWizardPage.0")); //$NON-NLS-1$
+		setPageComplete(false);
+		handler = h;
+		setWizard(h.getWizard());
+	}
+
 	public CfgHolder[] getCfgItems(boolean getDefault) {
 		CfgHolder[] its;
-		if (getDefault || table == null || !isVisited())  
+		if (getDefault || table == null || !isVisited())
 			its = getDefaultCfgs(handler);
 		else {
 			ArrayList<CfgHolder> out = new ArrayList<CfgHolder>(table.getItemCount());
 			for (TableItem ti : table.getItems()) {
 				if (ti.getChecked())
-					out.add((CfgHolder)ti.getData()); 
+					out.add((CfgHolder)ti.getData());
 			}
 			its = out.toArray(new CfgHolder[out.size()]);
 		}
@@ -95,14 +101,14 @@ public class CDTConfigWizardPage extends WizardPage {
 
 	public void createControl(Composite p) {
 		parent = new Composite(p, SWT.NONE);
-        parent.setFont(parent.getFont());
+		parent.setFont(parent.getFont());
 		parent.setLayout(new GridLayout());
 		parent.setLayoutData(new GridData(GridData.FILL_BOTH));
-		
+
 		Composite c1 = new Composite(parent, SWT.NONE);
 		c1.setLayout(new GridLayout(2, false));
 		c1.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-		
+
 		setupLabel(c1, UIMessages.getString("CConfigWizardPage.4"), GridData.BEGINNING); //$NON-NLS-1$
 		l_projtype = setupLabel(c1, EMPTY_STR, GridData.FILL_HORIZONTAL);
 		setupLabel(c1, UIMessages.getString("CConfigWizardPage.5"), GridData.BEGINNING); //$NON-NLS-1$
@@ -113,11 +119,11 @@ public class CDTConfigWizardPage extends WizardPage {
 		Composite c2 = new Composite(parent, SWT.NONE);
 		c2.setLayout(new GridLayout(2, false));
 		c2.setLayoutData(new GridData(GridData.FILL_BOTH));
-		
+
 		table = new Table(c2, SWT.BORDER | SWT.CHECK | SWT.V_SCROLL);
 		GridData gd = new GridData(GridData.FILL_BOTH);
 		table.setLayoutData(gd);
-		
+
 		tv = new CheckboxTableViewer(table);
 		tv.setContentProvider(new IStructuredContentProvider() {
 			public Object[] getElements(Object inputElement) {
@@ -127,10 +133,12 @@ public class CDTConfigWizardPage extends WizardPage {
 			public void inputChanged(Viewer viewer, Object oldInput, Object newInput) {}
 		});
 		tv.setLabelProvider(new LabelProvider() {
+			@Override
 			public String getText(Object element) {
 				return element == null ? EMPTY_STR : ((CfgHolder)element).getName();
 			}
-			public Image getImage(Object element) { return IMG; }
+			@Override
+			public Image getImage(Object element) { return IMG_CONFIG; }
 		});
 		tv.addCheckStateListener(new ICheckStateListener() {
 			public void checkStateChanged(CheckStateChangedEvent event) {
@@ -145,7 +153,8 @@ public class CDTConfigWizardPage extends WizardPage {
 		b1.setText(UIMessages.getString("CConfigWizardPage.7")); //$NON-NLS-1$
 		b1.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 		b1.addSelectionListener(new SelectionAdapter() {
-			public void widgetSelected(SelectionEvent e) { 
+			@Override
+			public void widgetSelected(SelectionEvent e) {
 				tv.setAllChecked(true);
 				setPageComplete(isCustomPageComplete());
 				update();
@@ -155,6 +164,7 @@ public class CDTConfigWizardPage extends WizardPage {
 		b2.setText(UIMessages.getString("CConfigWizardPage.8")); //$NON-NLS-1$
 		b2.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 		b2.addSelectionListener(new SelectionAdapter() {
+			@Override
 			public void widgetSelected(SelectionEvent e) {
 				tv.setAllChecked(false);
 				setPageComplete(isCustomPageComplete());
@@ -163,47 +173,43 @@ public class CDTConfigWizardPage extends WizardPage {
 
 		// dummy placeholder
 		new Label(c, 0).setLayoutData(new GridData(GridData.FILL_BOTH));
-		
+
 		Button b3 = new Button(c, SWT.PUSH);
 		b3.setText(UIMessages.getString("CConfigWizardPage.13")); //$NON-NLS-1$
 		b3.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 		b3.addSelectionListener(new SelectionAdapter() {
+			@Override
 			public void widgetSelected(SelectionEvent e) {
 				advancedDialog();
 			}});
-		
+
 		Group gr = new Group(parent, SWT.NONE);
 		gd = new GridData(GridData.FILL_HORIZONTAL);
 		gd.horizontalSpan = 2;
 		gr.setLayoutData(gd);
 		gr.setLayout(new FillLayout());
 		Label lb = new Label(gr, SWT.NONE);
-		lb.setText(COMMENT);		
-		
-        setControl(parent);
+		lb.setText(COMMENT);
+
+		setControl(parent);
 	}
 
-	/**
-	 * 
-	 * @param handler
-	 * @return
-	 */
 	static public CfgHolder[] getDefaultCfgs(MBSWizardHandler handler) {
 		String id = handler.getPropertyId();
-		IProjectType pt = handler.getProjectType(); 
+		IProjectType pt = handler.getProjectType();
 		ArrayList<CfgHolder> out = new ArrayList<CfgHolder>();
 		for (IToolChain tc : handler.getSelectedToolChains()){
 			CfgHolder[] cfgs = null;
-			if (id != null) 
+			if (id != null)
 				cfgs = CfgHolder.cfgs2items(ManagedBuildManager.getExtensionConfigurations(tc, MBSWizardHandler.ARTIFACT, id));
-			else if (pt != null) 
+			else if (pt != null)
 				cfgs = CfgHolder.cfgs2items(ManagedBuildManager.getExtensionConfigurations(tc, pt));
 			else { // Create default configuration for StdProject
 				cfgs = new CfgHolder[1];
 				cfgs[0] = new CfgHolder(tc, null);
 			}
 			if (cfgs == null) return null;
-			
+
 			for (int j=0; j<cfgs.length; j++) {
 				if (cfgs[j].isSystem() || (handler.supportedOnly() && !cfgs[j].isSupported())) continue;
 				out.add(cfgs[j]);
@@ -211,67 +217,65 @@ public class CDTConfigWizardPage extends WizardPage {
 		}
 		return out.toArray(new CfgHolder[out.size()]);
 	}
-	
+
 	/**
 	 * Checks whether we've already worked with
 	 * given set of selected toolchains
-	 *  
-	 * @return true if toolchain(s) is the same as before 
+	 *
+	 * @return true if toolchain(s) is the same as before
 	 */
 	private boolean isVisited() {
 		if (table == null || handler == null)
 			return false;
-		
+
 		return Arrays.equals(
-				handler.getSelectedToolChains(), 
+				handler.getSelectedToolChains(),
 				visitedTCs);
 	}
-	
-    /**
-     * Returns whether this page's controls currently all contain valid 
-     * values.
-     *
-     * @return <code>true</code> if all controls are valid, and
-     *   <code>false</code> if at least one is invalid
-     */
-    public boolean isCustomPageComplete() {
-    	if (!isVisited()) 
-    		return true;
-    	
+
+	/**
+	 * Returns whether this page's controls currently all contain valid
+	 * values.
+	 *
+	 * @return <code>true</code> if all controls are valid, and
+	 *   <code>false</code> if at least one is invalid
+	 */
+	public boolean isCustomPageComplete() {
+		if (!isVisited())
+			return true;
+
 		if (table.getItemCount() == 0) {
 			errorMessage = UIMessages.getString("CConfigWizardPage.10"); //$NON-NLS-1$
-			message = errorMessage; 
+			message = errorMessage;
 			return false;
 		}
 		if (tv.getCheckedElements().length == 0) {
 			errorMessage = UIMessages.getString("CConfigWizardPage.11"); //$NON-NLS-1$
-			message = errorMessage; 
+			message = errorMessage;
 			return false;
 		}
 		errorMessage = null;
 		message = MESSAGE;
-        return true;
-    }
+		return true;
+	}
 
-    /**
-     * 
-     */
-    public void setVisible(boolean visible) {
+	@Override
+	public void setVisible(boolean visible) {
 		parent.setVisible(visible);
-    	isVisible = visible;
+		isVisible = visible;
 		if (visible && handler != null && !isVisited()) {
 			tv.setInput(CfgHolder.unique(getDefaultCfgs(handler)));
 			tv.setAllChecked(true);
 			String s = EMPTY_STR;
 			visitedTCs = handler.getSelectedToolChains();
 			for (int i=0; i < visitedTCs.length; i++) {
-				s = s + ((visitedTCs[i] == null) ? 
+				s = s + ((visitedTCs[i] == null) ?
 						"" : //$NON-NLS-1$
-							visitedTCs[i].getUniqueRealName());  
+							visitedTCs[i].getUniqueRealName());
 				if (i < visitedTCs.length - 1) s = s + "\n";  //$NON-NLS-1$
 			}
 			l_chains.setText(s);
-			l_projtype.setText(handler.getName());			
+			l_projtype.setText(handler.getName());
 			setPageComplete(isCustomPageComplete());
 			l_chains.getParent().pack();
 		}
@@ -279,10 +283,9 @@ public class CDTConfigWizardPage extends WizardPage {
 			parent.getParent().layout(true, true);
 			update();
 		}
-    }
+	}
 
-    	//------------------------
-    private Label setupLabel(Composite c, String name, int mode) {
+	private Label setupLabel(Composite c, String name, int mode) {
 		Label l = new Label(c, SWT.WRAP);
 		l.setText(name);
 		GridData gd = new GridData(mode);
@@ -293,10 +296,15 @@ public class CDTConfigWizardPage extends WizardPage {
 		return l;
 	}
 
+	@Override
 	public String getName() { return TITLE; }
+	@Override
 	public Control getControl() { return parent; }
+	@Override
 	public String getErrorMessage() { return errorMessage; }
+	@Override
 	public String getMessage() { return message; }
+	@Override
 	public String getTitle()   { return TITLE; }
 
 	protected void update() {
@@ -304,7 +312,7 @@ public class CDTConfigWizardPage extends WizardPage {
 		getWizard().getContainer().updateMessage();
 		getWizard().getContainer().updateTitleBar();
 	}
-	
+
 	/**
 	 * Edit properties
 	 */
@@ -328,9 +336,10 @@ public class CDTConfigWizardPage extends WizardPage {
 			}
 		}
 	}
-	
+
+	@Override
 	public IWizardPage getNextPage() {
 		pagesLoaded = true;
 		return MBSCustomPageManager.getNextPage(PAGE_ID);
-	}	
+	}
 }

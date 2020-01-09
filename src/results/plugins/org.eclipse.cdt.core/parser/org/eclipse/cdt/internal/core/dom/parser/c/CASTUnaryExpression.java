@@ -13,7 +13,6 @@
 package org.eclipse.cdt.internal.core.dom.parser.c;
 
 import org.eclipse.cdt.core.dom.ast.ASTVisitor;
-import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IASTUnaryExpression;
@@ -100,18 +99,39 @@ public class CASTUnaryExpression extends ASTNode implements IASTUnaryExpression,
     }
     
 	public IType getExpressionType() {
-		IType type = getOperand().getExpressionType();
+		final IType exprType = getOperand().getExpressionType();
+		IType type = CVisitor.unwrapTypedefs(exprType);
 		int op = getOperator();
-		try {
-			if (op == IASTUnaryExpression.op_star && (type instanceof IPointerType || type instanceof IArrayType)) {
+		switch(op) {
+		case op_star:
+			if (type instanceof IPointerType || type instanceof IArrayType) {
 				return ((ITypeContainer) type).getType();
-			} else if (op == IASTUnaryExpression.op_amper) {
-				return new CPointerType(type, 0);
 			}
-		} catch (DOMException e) {
-			return e.getProblem();
+			break;
+		case op_amper:
+			return new CPointerType(type, 0);
+		case op_minus:
+		case op_plus:
+		case op_tilde:
+			IType t= CArithmeticConversion.promoteCType(type);
+			if (t != null) {
+				return t;
+			}
+			break;
 		}
-		return type;
+		return exprType; // return the original
 	}
-    
+
+	public boolean isLValue() {
+		switch (getOperator()) {
+		case op_bracketedPrimary:
+			return getOperand().isLValue();
+		case op_star:
+		case op_prefixDecr:
+		case op_prefixIncr:
+			return true;
+		default:
+			return false;
+		}
+	}
 }

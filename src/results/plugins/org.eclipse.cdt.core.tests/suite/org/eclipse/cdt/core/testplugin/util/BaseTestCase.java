@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -29,20 +29,22 @@ import junit.framework.TestSuite;
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.model.CoreModel;
 import org.eclipse.cdt.core.model.ElementChangedEvent;
+import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.model.IElementChangedListener;
+import org.eclipse.cdt.core.testplugin.ResourceHelper;
 import org.eclipse.cdt.core.testplugin.TestScannerProvider;
+import org.eclipse.cdt.internal.core.CCoreInternals;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.CPPASTNameBase;
+import org.eclipse.cdt.internal.core.pdom.CModelListener;
+import org.eclipse.cdt.internal.core.pdom.PDOMManager;
 import org.eclipse.core.resources.IResourceStatus;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.ILogListener;
-import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.MultiStatus;
 import org.eclipse.core.runtime.NullProgressMonitor;
 
 public class BaseTestCase extends TestCase {
-	protected static final IProgressMonitor NPM= new NullProgressMonitor();
-
 	private boolean fExpectFailure= false;
 	private int fBugnumber= 0;
 	private int fExpectedLoggedNonOK= 0;
@@ -54,15 +56,21 @@ public class BaseTestCase extends TestCase {
 	public BaseTestCase(String name) {
 		super(name);
 	}
-	
+
+	public NullProgressMonitor npm() {
+		return new NullProgressMonitor();
+	}
+
 	@Override
 	protected void setUp() throws Exception {
 		CPPASTNameBase.sAllowRecursionBindings= false;
 		CPPASTNameBase.sAllowNameComputation= false;
+		CModelListener.sSuppressUpdateOfLastRecentlyUsed= true;
 	}
 	
 	@Override
 	protected void tearDown() throws Exception {
+		ResourceHelper.cleanUp();
 		TestScannerProvider.clear();
 	}
 
@@ -85,8 +93,8 @@ public class BaseTestCase extends TestCase {
 		Class superClass= clazz;
 		while (Test.class.isAssignableFrom(superClass) && !TestCase.class.equals(superClass)) {
 			Method[] methods= superClass.getDeclaredMethods();
-			for (int i= 0; i < methods.length; i++) {
-				addFailingMethod(suite, methods[i], names, clazz, prefix);
+			for (Method method : methods) {
+				addFailingMethod(suite, method, names, clazz, prefix);
 			}
 			superClass= superClass.getSuperclass();
 		}
@@ -123,7 +131,7 @@ public class BaseTestCase extends TestCase {
 		final List<IStatus> statusLog= Collections.synchronizedList(new ArrayList());
 		ILogListener logListener= new ILogListener() {
 			public void logging(IStatus status, String plugin) {
-				if(!status.isOK() && status.getSeverity() != IStatus.INFO) {
+				if (!status.isOK() && status.getSeverity() != IStatus.INFO) {
 					switch (status.getCode()) {
 					case IResourceStatus.NOT_FOUND_LOCAL:
 					case IResourceStatus.NO_LOCATION_LOCAL:
@@ -145,32 +153,32 @@ public class BaseTestCase extends TestCase {
 		try {
 			try {
 				super.runBare();
-			} catch(Throwable e) {
+			} catch (Throwable e) {
 				testThrowable=e;
 			}
 			
-			if(statusLog.size()!=fExpectedLoggedNonOK) {
-				StringBuffer msg= new StringBuffer("Expected number ("+fExpectedLoggedNonOK+") of ");
-				msg.append("non-OK status objects differs from actual ("+statusLog.size()+").\n");
+			if (statusLog.size() != fExpectedLoggedNonOK) {
+				StringBuffer msg= new StringBuffer("Expected number (" + fExpectedLoggedNonOK + ") of ");
+				msg.append("non-OK status objects differs from actual (" + statusLog.size() + ").\n");
 				Throwable cause= null;
-				if(!statusLog.isEmpty()) {
-					for(IStatus status : statusLog) {
+				if (!statusLog.isEmpty()) {
+					for (IStatus status : statusLog) {
 						IStatus[] ss= {status};
-						ss= status instanceof MultiStatus ? ((MultiStatus)status).getChildren() : ss; 
-						for(IStatus s : ss) {
-							msg.append("\t"+s.getMessage()+" ");
+						ss= status instanceof MultiStatus ? ((MultiStatus) status).getChildren() : ss; 
+						for (IStatus s : ss) {
+							msg.append("\t" + s.getMessage() + " ");
 							
 							Throwable t= s.getException();
-							cause= (cause==null) ? t : cause;
-							if(t != null) {
-								msg.append(t.getMessage()!=null ? t.getMessage() : t.getClass().getCanonicalName());
+							cause= cause != null ? cause : t;
+							if (t != null) {
+								msg.append(t.getMessage() != null ? t.getMessage() : t.getClass().getCanonicalName());
 							}
 							
 							msg.append("\n");
 						}
 					}
 				}
-				cause= (cause==null) ? testThrowable : cause;
+				cause= cause != null ? cause : testThrowable;
 				AssertionFailedError afe= new AssertionFailedError(msg.toString());
 				afe.initCause(cause);
 				throw afe;
@@ -181,38 +189,36 @@ public class BaseTestCase extends TestCase {
 			}
 		}
 		
-		if(testThrowable!=null)
+		if (testThrowable != null)
 			throw testThrowable;
 	}
 
     @Override
-	public void run( TestResult result ) {
+	public void run(TestResult result) {
     	if (!fExpectFailure || "true".equals(System.getProperty("SHOW_EXPECTED_FAILURES"))) {
     		super.run(result);
     		return;
     	}
     	
-        result.startTest( this );
+        result.startTest(this);
         
         TestResult r = new TestResult();
-        super.run( r );
+        super.run(r);
         if (r.failureCount() == 1) {
-        	TestFailure failure= (TestFailure) r.failures().nextElement();
+        	TestFailure failure= r.failures().nextElement();
         	String msg= failure.exceptionMessage();
         	if (msg != null && msg.startsWith("Method \"" + getName() + "\"")) {
         		result.addFailure(this, new AssertionFailedError(msg));
         	}
-        }
-        else if( r.errorCount() == 0 && r.failureCount() == 0 )
-        {
+        } else if (r.errorCount() == 0 && r.failureCount() == 0) {
             String err = "Unexpected success of " + getName();
-            if( fBugnumber > 0 ) {
+            if (fBugnumber > 0) {
                 err += ", bug #" + fBugnumber; 
             }
-            result.addFailure( this, new AssertionFailedError( err ) );
+            result.addFailure(this, new AssertionFailedError(err));
         }
         
-        result.endTest( this );
+        result.endTest(this);
     }
     
     public void setExpectFailure(int bugnumber) {
@@ -253,12 +259,12 @@ public class BaseTestCase extends TestCase {
 		public void join() throws CoreException {
 			try {
 				synchronized(changed) {
-					while(!changed[0]) {
+					while (!changed[0]) {
 						changed.wait();
 					}
 				}
-			} catch(InterruptedException ie) {
-				throw new CoreException(CCorePlugin.createStatus("Interrupted", ie));
+			} catch (InterruptedException e) {
+				throw new CoreException(CCorePlugin.createStatus("Interrupted", e));
 			}
 		}
 		
@@ -276,5 +282,16 @@ public class BaseTestCase extends TestCase {
 				changed.notifyAll();
 			}
 		}
+	}
+    
+    protected void waitForIndexer(ICProject project) throws InterruptedException {
+		final PDOMManager indexManager = CCoreInternals.getPDOMManager();
+		assertTrue(indexManager.joinIndexer(10000, npm()));
+		long waitms= 1;
+		while (waitms < 2000 && !indexManager.isProjectRegistered(project)) {
+			Thread.sleep(waitms);
+			waitms *= 2;
+		}
+		assertTrue(indexManager.joinIndexer(10000, npm()));
 	}
 }

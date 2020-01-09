@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -34,6 +34,7 @@ import org.eclipse.cdt.examples.dsf.pda.service.commands.PDACommandResult;
 import org.eclipse.cdt.examples.dsf.pda.service.commands.PDAResumeCommand;
 import org.eclipse.cdt.examples.dsf.pda.service.commands.PDAStepCommand;
 import org.eclipse.cdt.examples.dsf.pda.service.commands.PDAStepReturnCommand;
+import org.eclipse.cdt.examples.dsf.pda.service.commands.PDASuspendCommand;
 import org.eclipse.cdt.examples.dsf.pda.service.commands.PDAVMResumeCommand;
 import org.eclipse.cdt.examples.dsf.pda.service.commands.PDAVMSuspendCommand;
 import org.osgi.framework.BundleContext;
@@ -554,7 +555,7 @@ public class PDARunControl extends AbstractDsfService
                 final PDAThreadDMContext threadCtx = (PDAThreadDMContext)context;
                 fThreads.get(threadCtx.getID()).fSuspendPending = true;
                 fCommandControl.queueCommand(
-                    new PDAVMSuspendCommand(fDMContext),
+                    new PDASuspendCommand(threadCtx),
                     new DataRequestMonitor<PDACommandResult>(getExecutor(), rm) { 
                         @Override
                         protected void handleFailure() {

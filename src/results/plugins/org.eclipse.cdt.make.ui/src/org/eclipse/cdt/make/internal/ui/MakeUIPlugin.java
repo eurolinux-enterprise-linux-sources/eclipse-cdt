@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2009 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -269,6 +269,7 @@ public class MakeUIPlugin extends AbstractUIPlugin {
 	}
 
 	
+	@Override
 	public void start(BundleContext context) throws Exception {
 		super.start(context);
 		new MakeStartup().schedule();
@@ -277,6 +278,7 @@ public class MakeUIPlugin extends AbstractUIPlugin {
 	/* (non-Javadoc)
 	 * @see org.eclipse.ui.plugin.AbstractUIPlugin#stop(org.osgi.framework.BundleContext)
 	 */
+	@Override
 	public void stop(BundleContext context) throws Exception {
 		if (fWorkingCopyManager != null) {
 			fWorkingCopyManager.shutdown();

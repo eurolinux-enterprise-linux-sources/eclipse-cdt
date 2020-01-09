@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -92,7 +92,7 @@ public class ProblemsLabelDecorator implements ILabelDecorator, ILightweightLabe
 
 	private static final int ERRORTICK_WARNING= CElementImageDescriptor.WARNING;
 	private static final int ERRORTICK_ERROR= CElementImageDescriptor.ERROR;	
-	private static final int TICK_CONFIGURATION = CElementImageDescriptor.SYSTEM_INCLUDE;	
+	private static final int TICK_CONFIGURATION = CElementImageDescriptor.SETTINGS;	
 	
 	private ImageDescriptorRegistry fRegistry;
 	private boolean fUseNewRegistry= false;
@@ -360,7 +360,7 @@ public class ProblemsLabelDecorator implements ILabelDecorator, ILightweightLabe
 		int adornmentFlags= computeAdornmentFlags(element);
 
 		if ((adornmentFlags & TICK_CONFIGURATION) != 0) {
-			decoration.addOverlay(CPluginImages.DESC_OVR_SYSTEM_INCLUDE);
+			decoration.addOverlay(CPluginImages.DESC_OVR_SETTING);
 			adornmentFlags &= ~TICK_CONFIGURATION;
 		}
 		
@@ -371,19 +371,24 @@ public class ProblemsLabelDecorator implements ILabelDecorator, ILightweightLabe
 		}  
 	}
 
-	private int getTicks (IResource r) {
-		if (r == null || r instanceof IProject) return 0;		
-		IPath path = r.getProjectRelativePath();
-		ICProjectDescription prjd = CoreModel.getDefault().getProjectDescription(r.getProject(), false);
+	/**
+	 * @param rc - resource to check
+	 * @return flags {@link TICK_CONFIGURATION} if the resource has custom settings and possibly needs
+	 * to be adorned or 0 otherwise.
+	 */
+	private int getTicks (IResource rc) {
+		if (rc == null || rc instanceof IProject)
+			return 0;
+
 		int result = 0;
-		if (prjd != null) { 
-			ICConfigurationDescription [] cf = prjd.getConfigurations();
-			if (cf == null) return 0;
-			for (ICConfigurationDescription element : cf) {
-				if (element.isActive()) {
-					ICResourceDescription out = element.getResourceDescription(path, true);
-					if (out != null) result |= TICK_CONFIGURATION;
-				}
+		ICProjectDescription prjDescription = CoreModel.getDefault().getProjectDescription(rc.getProject(), false);
+		if (prjDescription != null) {
+			ICConfigurationDescription cfgDescription = prjDescription.getDefaultSettingConfiguration();
+			if (cfgDescription != null) {
+				IPath path = rc.getProjectRelativePath();
+				ICResourceDescription rcDescription = cfgDescription.getResourceDescription(path, true);
+				if (rcDescription != null)
+					result |= TICK_CONFIGURATION;
 			}
 		}
 		return result;

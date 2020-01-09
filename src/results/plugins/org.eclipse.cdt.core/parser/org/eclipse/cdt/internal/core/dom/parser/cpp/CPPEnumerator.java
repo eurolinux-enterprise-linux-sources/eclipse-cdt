@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,15 +14,14 @@ package org.eclipse.cdt.internal.core.dom.parser.cpp;
 import org.eclipse.cdt.core.dom.ILinkage;
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier;
+import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier.IASTEnumerator;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IBinding;
-import org.eclipse.cdt.core.dom.ast.IEnumeration;
 import org.eclipse.cdt.core.dom.ast.IEnumerator;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.IValue;
-import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier.IASTEnumerator;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPBlockScope;
 import org.eclipse.cdt.internal.core.dom.Linkage;
 import org.eclipse.cdt.internal.core.dom.parser.ASTEnumerator;
@@ -92,8 +91,7 @@ public class CPPEnumerator extends PlatformObject implements IEnumerator, ICPPIn
 	public IType getType() {
 	    IASTEnumerator etor = (IASTEnumerator) enumName.getParent();
 		IASTEnumerationSpecifier enumSpec = (IASTEnumerationSpecifier) etor.getParent();
-		IEnumeration enumeration = (IEnumeration) enumSpec.getName().resolveBinding();
-		return enumeration;
+		return (IType) enumSpec.getName().resolveBinding();
 	}
 
     /* (non-Javadoc)
@@ -143,5 +141,10 @@ public class CPPEnumerator extends PlatformObject implements IEnumerator, ICPPIn
 			return ((ASTEnumerator) parent).getIntegralValue();
 		
 		return Value.UNKNOWN;
+	}
+
+	@Override
+	public String toString() {
+		return getName();
 	}
 }

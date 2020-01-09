@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 QNX Software Systems and others.
+ * Copyright (c) 2009, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,25 +7,26 @@
  *
  * Contributors:
  *     Andrey Eremchenko, kamre@ngs.ru - 222495 C/C++ search should show line matches and line numbers	
+ *     Markus Schorn (Wind River Systems)
+ *     Sergey Prigogin (Google)
  *******************************************************************************/
 package org.eclipse.cdt.internal.ui.search;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
 
 import org.eclipse.cdt.core.index.IIndexFileLocation;
 import org.eclipse.cdt.core.model.ICElement;
-import org.eclipse.cdt.core.parser.CodeReader;
+import org.eclipse.cdt.core.parser.FileContent;
 import org.eclipse.cdt.ui.CUIPlugin;
 
-import org.eclipse.cdt.internal.core.parser.InternalParserUtil;
+import org.eclipse.cdt.internal.core.parser.scanner.AbstractCharArray;
+import org.eclipse.cdt.internal.core.parser.scanner.InternalFileContent;
 
 /**
  * Element representing a line with one ore more matches.
@@ -86,11 +87,12 @@ public class LineSearchElement extends PDOMSearchElement {
 	private final Match[] fMatches;
 	private final static MatchesComparator MATCHES_COMPARATOR = new MatchesComparator();
 
-	private LineSearchElement(IIndexFileLocation file, Match[] matches, int number, String content, int offset) {
+	private LineSearchElement(IIndexFileLocation file, Match[] matches, int number, String content,
+			int offset) {
 		super(file);
 		fMatches = matches;
 		fNumber = number;
-		// skip whitespace at the beginning
+		// Skip whitespace at the beginning.
 		int index = 0;
 		int length = content.length();
 		int firstMatchOffset = matches[0].getOffset();
@@ -102,7 +104,7 @@ public class LineSearchElement extends PDOMSearchElement {
 			length--;
 		}
 		fOffset = offset;
-		fContent = content.substring(index);
+		fContent = content.substring(index).trim();
 	}
 
 	public int getOffset() {
@@ -143,16 +145,13 @@ public class LineSearchElement extends PDOMSearchElement {
 		// sort matches according to their offsets
 		Arrays.sort(matches, MATCHES_COMPARATOR);
 		LineSearchElement[] result = {};
-		try {
-			// read the content of file
-			CodeReader reader = InternalParserUtil.createCodeReader(fileLocation, null);
-			if (reader != null) {
-				result = collectLineElements(reader.buffer, matches, fileLocation);
-			}
-		} catch (IOException e) {
-			CUIPlugin.log(e);
-		} catch (CoreException e) {
-			CUIPlugin.log(e);
+		
+		// read the content of file
+		FileContent content = FileContent.create(fileLocation);
+		if (content != null) {
+			AbstractCharArray buf = ((InternalFileContent) content).getSource();
+			if (buf != null)
+				result = collectLineElements(buf, matches, fileLocation);
 		}
 		return result;
 	}
@@ -190,7 +189,7 @@ public class LineSearchElement extends PDOMSearchElement {
 		return result.toArray(new LineSearchElement[result.size()]);
 	}
 
-	private static LineSearchElement[] collectLineElements(char[] buffer, Match[] matches,
+	private static LineSearchElement[] collectLineElements(AbstractCharArray buf, Match[] matches,
 			IIndexFileLocation fileLocation) {
 		List<LineSearchElement> result = new ArrayList<LineSearchElement>();
 		boolean skipLF = false;
@@ -199,8 +198,8 @@ public class LineSearchElement extends PDOMSearchElement {
 		int lineFirstMatch = -1; // not matched
 		int nextMatch = 0;
 		int nextMatchOffset = matches[nextMatch].getOffset();
-		for (int pos = 0; pos < buffer.length; pos++) {
-			char c = buffer[pos];
+		for (int pos = 0; buf.isValidOffset(pos); pos++) {
+			char c = buf.get(pos);
 			// consider '\n' and '\r'
 			if (skipLF) {
 				skipLF = false;
@@ -217,7 +216,7 @@ public class LineSearchElement extends PDOMSearchElement {
 					Match[] lineMatches = new Match[lineMatchesCount];
 					System.arraycopy(matches, lineFirstMatch, lineMatches, 0, lineMatchesCount);
 					char[] lineChars= new char[lineLength];
-					System.arraycopy(buffer, lineOffset, lineChars, 0, lineLength);
+					buf.arraycopy(lineOffset, lineChars, 0, lineLength);
 					String lineContent = new String(lineChars);
 					result.add(new LineSearchElement(fileLocation, lineMatches, lineNumber, lineContent,
 							lineOffset));
@@ -234,7 +233,7 @@ public class LineSearchElement extends PDOMSearchElement {
 				continue;
 			}
 			// compare offset of next match with current position
-			if (nextMatchOffset > pos)
+			if (nextMatchOffset > pos || nextMatch >= matches.length)
 				continue;
 			// next match was reached
 			// check if this match is the first for current line
@@ -245,19 +244,17 @@ public class LineSearchElement extends PDOMSearchElement {
 			if (nextMatch < matches.length) {
 				// update offset of next match
 				nextMatchOffset = matches[nextMatch].getOffset();
-			} else {
-				// no more matches
-				nextMatchOffset = buffer.length;
 			}
 		}
 		// check if there were matches on the last line
 		if (lineFirstMatch != -1) {
-			int lineLength = buffer.length - lineOffset;
+			int lineLength = buf.getLength() - lineOffset;
 			int lineMatchesCount = nextMatch - lineFirstMatch;
 			Match[] lineMatches = new Match[lineMatchesCount];
 			System.arraycopy(matches, lineFirstMatch, lineMatches, 0, lineMatchesCount);
+
 			char[] lineChars= new char[lineLength];
-			System.arraycopy(buffer, lineOffset, lineChars, 0, lineLength);
+			buf.arraycopy(lineOffset, lineChars, 0, lineLength);
 			String lineContent = new String(lineChars);
 			result.add(new LineSearchElement(fileLocation, lineMatches, lineNumber, lineContent, lineOffset));
 		}

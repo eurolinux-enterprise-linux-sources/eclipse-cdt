@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -33,10 +33,6 @@ public class BuildOutputReaderJob extends Job {
     private InfoContext context;
     private IScannerConfigBuilderInfo2 buildInfo;
 
-	/**
-     * @param project
-     * @param buildInfo
-     */
     public BuildOutputReaderJob(IProject project, IScannerConfigBuilderInfo2 buildInfo) {
     	this(project, buildInfo.getContext(), buildInfo);
     }
@@ -52,6 +48,7 @@ public class BuildOutputReaderJob extends Job {
     /* (non-Javadoc)
 	 * @see org.eclipse.core.internal.jobs.InternalJob#run(org.eclipse.core.runtime.IProgressMonitor)
 	 */
+	@Override
 	protected IStatus run(IProgressMonitor monitor) {
         IProject project = resource.getProject();
         monitor.beginTask(MakeMessages.getString("ScannerConfigBuilder.Invoking_Builder"), 100); //$NON-NLS-1$

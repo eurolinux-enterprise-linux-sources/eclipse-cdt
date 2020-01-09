@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,6 +7,7 @@
  *
  * Contributors:
  * Intel Corporation - Initial API and implementation
+ * IBM Corporation
  *******************************************************************************/
 package org.eclipse.cdt.build.internal.core.scannerconfig;
 
@@ -59,6 +60,8 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.core.runtime.jobs.ILock;
+import org.eclipse.core.runtime.jobs.Job;
 
 
 public class CfgDiscoveredPathManager implements IResourceChangeListener {
@@ -67,6 +70,9 @@ public class CfgDiscoveredPathManager implements IResourceChangeListener {
 
 	private IDiscoveredPathManager fBaseMngr;
 	
+	/** Deadlock-safe mutex lock */
+	private ILock lock = Job.getJobManager().newLock();
+
 	private static class ContextInfo {
 		
 		public ContextInfo() {
@@ -161,21 +167,17 @@ public class CfgDiscoveredPathManager implements IResourceChangeListener {
 
         PathInfo info = getCachedPathInfo(cInfo);
 		if (info == null) {
-			synchronized (this) {
+			try {
+				lock.acquire();
 				info = getCachedPathInfo(cInfo);
 
 				if(info == null){
 					IDiscoveredPathManager.IDiscoveredPathInfo baseInfo = loadPathInfo(project, context.getConfiguration(), cInfo);
-					
 					info = resolveCacheBaseDiscoveredInfo(cInfo, baseInfo);
 				}
+			} finally {
+				lock.release();
 			}
-
-//			setCachedPathInfo(context, info);
-//			if(info instanceof DiscoveredPathInfo && !((DiscoveredPathInfo)info).isLoadded()){
-//				info = createPathInfo(project, context);
-//				setCachedPathInfo(context, info);
-//			}
 		}
 		return info;
 	}
@@ -357,7 +359,7 @@ public class CfgDiscoveredPathManager implements IResourceChangeListener {
 			} else if(queryParent){
 //				IResourceInfo rcInfo = tool.getParentResourceInfo();
 				ITool superTool = tool.getSuperClass();
-				if(!superTool.isExtensionElement()){
+				if(superTool!=null && !superTool.isExtensionElement()){
 					if(inType != null){
 						IInputType superInType = null;
 						String exts[] = inType.getSourceExtensions(tool);

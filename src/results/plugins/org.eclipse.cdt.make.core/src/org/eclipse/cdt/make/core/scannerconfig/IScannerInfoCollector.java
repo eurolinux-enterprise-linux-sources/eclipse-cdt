@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,25 +20,27 @@ import java.util.Map;
  * 
  * @author vhirsl
  */
+@SuppressWarnings("rawtypes")
 public interface IScannerInfoCollector {
 	/**
 	 * Contribute to resource's scanner configuration
 	 * 
-	 * @param resource - if used from within Eclipse it is expected that resource is a
-	 * member of <code>org.eclipse.core.resources.IResource</code> hierarchy. 
-	 * If used outside of Eclipse then resource is expected to be a 
-	 * <code>java.io.File<code> type.
+	 * @param resource
+	 *    <li> {@link org.eclipse.core.resources.IResource} if used from within Eclipse.</li>
+	 *    <li> {@link java.io.File}  if used outside of Eclipse.</li>
+	 *    <li> {@code Integer} if represents command ID.</li>
 	 * @param scannerInfo - a map of key - list pairs, where key is the type of extra info
-	 * i.e. target specific options or imacros commands,...
+	 * i.e. target specific options or imacros commands, for example
+	 *    <li>{@code Map<ScannerInfoTypes, List<String>>}</li>
+	 *    <li>{@code Map<ScannerInfoTypes, List<CCommandDSC>>}</li>
 	 */
 	public void contributeToScannerConfig(Object resource, Map scannerInfo);
 
     /**
-     * Returns specific piece of discovered scanner info for a resource
-     * discovered during the last collection cycle 
-     * @param type
-     * @param resource
-     * @return
+     * @return specific piece of discovered scanner info for a resource
+     * discovered during the last collection cycle, can be:
+	 *    <li>{@code List<String>}</li>
+	 *    <li>{@code List<CCommandDSC>}</li>
      */
     public List getCollectedScannerInfo(Object resource, ScannerInfoTypes type);
 

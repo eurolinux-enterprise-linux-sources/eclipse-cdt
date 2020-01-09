@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,6 +18,9 @@ import org.eclipse.cdt.core.settings.model.ICSettingEntry;
 import org.eclipse.cdt.core.settings.model.util.SettingsSet.SettingLevel;
 
 public abstract class UserAndDiscoveredEntryStorage extends AbstractEntryStorage {
+	private static final int USER_ENTRIES_LEVEL = 0;
+	private static final int DISCOVERY_ENTRIES_LEVEL = 1;
+
 	public UserAndDiscoveredEntryStorage(int kind) {
 		super(kind);
 	}
@@ -25,19 +28,19 @@ public abstract class UserAndDiscoveredEntryStorage extends AbstractEntryStorage
 	@Override
 	protected SettingsSet createEmptySettings(){
 		SettingsSet settings = new SettingsSet(2);
-		SettingLevel levels[] = settings.getLevels();
+		SettingsSet.SettingLevel levels[] = settings.getLevels();
 		
+		levels[USER_ENTRIES_LEVEL].setFlagsToClear(ICSettingEntry.READONLY | ICSettingEntry.BUILTIN);
+		levels[USER_ENTRIES_LEVEL].setFlagsToSet(0);
+		levels[USER_ENTRIES_LEVEL].setReadOnly(false);
+		levels[USER_ENTRIES_LEVEL].setOverrideSupported(false);
+
 		boolean override = canDisableDiscoveredEntries(); 
 		int readOnlyFlag = override ? 0 : ICSettingEntry.READONLY;
-		levels[0].setFlagsToClear(ICSettingEntry.READONLY | ICSettingEntry.BUILTIN);
-		levels[0].setFlagsToSet(0);
-		levels[0].setReadOnly(false);
-		levels[0].setOverrideSupported(false);
-
-		levels[1].setFlagsToClear(0);
-		levels[1].setFlagsToSet(readOnlyFlag | ICSettingEntry.BUILTIN | ICSettingEntry.RESOLVED);
-		levels[1].setReadOnly(true);
-		levels[1].setOverrideSupported(override);
+		levels[DISCOVERY_ENTRIES_LEVEL].setFlagsToClear(0);
+		levels[DISCOVERY_ENTRIES_LEVEL].setFlagsToSet(readOnlyFlag | ICSettingEntry.BUILTIN | ICSettingEntry.RESOLVED);
+		levels[DISCOVERY_ENTRIES_LEVEL].setReadOnly(true);
+		levels[DISCOVERY_ENTRIES_LEVEL].setOverrideSupported(override);
 
 		return settings;
 	}
@@ -45,12 +48,12 @@ public abstract class UserAndDiscoveredEntryStorage extends AbstractEntryStorage
 	@Override
 	protected void obtainEntriesFromLevel(int levelNum, SettingLevel level) {
 		switch(levelNum){
-		case 0:
+		case USER_ENTRIES_LEVEL:
 			setUserEntries(level != null ? level.getEntries() : null);
 			break;
-		case 1:
+		case DISCOVERY_ENTRIES_LEVEL:
 			if(level != null){
-				Set set = level.getOverrideSet();
+				Set<String> set = level.getOverrideSet();
 				setDisabledDiscoveredNames(set);
 			} else {
 				setDisabledDiscoveredNames(null);
@@ -61,11 +64,11 @@ public abstract class UserAndDiscoveredEntryStorage extends AbstractEntryStorage
 	@Override
 	protected void putEntriesToLevel(int levelNum, SettingLevel level) {
 		switch(levelNum){
-		case 0:
+		case USER_ENTRIES_LEVEL:
 			level.addEntries(getUserEntries());
 			break;
-		case 1:
-			HashSet set = new HashSet();
+		case DISCOVERY_ENTRIES_LEVEL:
+			HashSet<String> set = new HashSet<String>();
 			ICLanguageSettingEntry[] entries = getDiscoveredEntries(set);
 			level.addEntries(entries);
 			if(set.size() != 0)
@@ -82,7 +85,7 @@ public abstract class UserAndDiscoveredEntryStorage extends AbstractEntryStorage
 	
 	protected abstract ICLanguageSettingEntry[] getUserEntries();
 
-	protected abstract void setDisabledDiscoveredNames(Set disabledNameSet);
+	protected abstract void setDisabledDiscoveredNames(Set<String> disabledNameSet);
 
-	protected abstract ICLanguageSettingEntry[] getDiscoveredEntries(Set disabledNameSet);
+	protected abstract ICLanguageSettingEntry[] getDiscoveredEntries(Set<String> disabledNameSet);
 }

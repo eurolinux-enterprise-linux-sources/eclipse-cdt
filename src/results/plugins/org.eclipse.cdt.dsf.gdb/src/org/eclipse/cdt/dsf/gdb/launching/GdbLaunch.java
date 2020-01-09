@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -24,6 +24,7 @@ import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.Sequence;
 import org.eclipse.cdt.dsf.concurrent.ThreadSafe;
 import org.eclipse.cdt.dsf.concurrent.ThreadSafeAndProhibitedFromDsfExecutor;
+import org.eclipse.cdt.dsf.debug.model.DsfLaunch;
 import org.eclipse.cdt.dsf.debug.model.DsfMemoryBlockRetrieval;
 import org.eclipse.cdt.dsf.debug.service.IDsfDebugServicesFactory;
 import org.eclipse.cdt.dsf.debug.service.IMemory.IMemoryDMContext;
@@ -31,6 +32,7 @@ import org.eclipse.cdt.dsf.debug.service.IProcesses.IProcessDMContext;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService.ICommandControlShutdownDMEvent;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
+import org.eclipse.cdt.dsf.gdb.internal.memory.GdbMemoryBlockRetrieval;
 import org.eclipse.cdt.dsf.gdb.service.command.IGDBControl;
 import org.eclipse.cdt.dsf.mi.service.IMIProcesses;
 import org.eclipse.cdt.dsf.mi.service.MIProcesses;
@@ -44,12 +46,13 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.MultiStatus;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.debug.core.DebugEvent;
 import org.eclipse.debug.core.DebugException;
 import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.ILaunchConfiguration;
-import org.eclipse.debug.core.Launch;
 import org.eclipse.debug.core.model.IDisconnect;
 import org.eclipse.debug.core.model.IMemoryBlockRetrieval;
+import org.eclipse.debug.core.model.IProcess;
 import org.eclipse.debug.core.model.ISourceLocator;
 import org.eclipse.debug.core.model.ITerminate;
 
@@ -57,7 +60,7 @@ import org.eclipse.debug.core.model.ITerminate;
  * The only object in the model that implements the traditional interfaces.
  */
 @ThreadSafe
-public class GdbLaunch extends Launch
+public class GdbLaunch extends DsfLaunch
     implements ITerminate, IDisconnect, ITracedLaunch
 {
     private DefaultDsfExecutor fExecutor;
@@ -115,7 +118,7 @@ public class GdbLaunch extends Launch
                 	ICommandControlService commandControl = fTracker.getService(ICommandControlService.class);
                 	IMIProcesses procService = fTracker.getService(IMIProcesses.class);
                     if (commandControl != null && procService != null) {
-                        fMemRetrieval = new DsfMemoryBlockRetrieval(
+                        fMemRetrieval = new GdbMemoryBlockRetrieval(
                                 GdbLaunchDelegate.GDB_DEBUG_MODEL_ID, getLaunchConfiguration(), fSession);
                         fSession.registerModelAdapter(IMemoryBlockRetrieval.class, fMemRetrieval);
                         
@@ -152,7 +155,10 @@ public class GdbLaunch extends Launch
     				}
     			}).get();
 
-            DebugPlugin.newProcess(this, inferiorProc, label);
+            IProcess inferior = DebugPlugin.newProcess(this, inferiorProc, label);
+            // Register the model adapter so that the inferior console becomes visible
+            // when we select a debug context for this debug session.
+            getSession().registerModelAdapter(IProcess.class, inferior);
         } catch (InterruptedException e) {
             throw new CoreException(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, 0, "Interrupted while waiting for get process callable.", e)); //$NON-NLS-1$
         } catch (ExecutionException e) {
@@ -177,7 +183,20 @@ public class GdbLaunch extends Launch
     				}
     			}).get();
 
-            DebugPlugin.newProcess(this, cliProc, label);
+            GDBProcess gdbProcess = new GDBProcess(this, cliProc, label, null);
+            addProcess(gdbProcess);
+            
+            Object existingAdapter = getSession().getModelAdapter(IProcess.class);
+            if (existingAdapter == null) {
+            	// Register the model adapter to the gdbProcess only if there is no other one
+            	// registered already; if there is already one, it is from our inferior process
+            	// and it takes precedence because we want the inferior console to show
+            	// when we select a debug context of this debug session.
+            	// If the inferior process is added later, it will properly overwrite this model adapter.
+            	// Note that we don't always have an inferior console, so it is important to register
+            	// this adapter for those cases.
+                getSession().registerModelAdapter(IProcess.class, gdbProcess);
+            }
         } catch (InterruptedException e) {
             throw new CoreException(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, 0, "Interrupted while waiting for get process callable.", e)); //$NON-NLS-1$
         } catch (ExecutionException e) {
@@ -263,6 +282,11 @@ public class GdbLaunch extends Launch
                     // DsfMemoryBlockRetrieval.saveMemoryBlocks();
                     fMemRetrieval.saveMemoryBlocks();
                     
+                    // Fire a terminate event for the memory retrieval object so
+                    // that the hosting memory views can clean up. See 255120 and
+                    // 283586
+                    DebugPlugin.getDefault().fireDebugEventSet( new DebugEvent[] { new DebugEvent(fMemRetrieval, DebugEvent.TERMINATE) });
+
                     // endSession takes a full dispatch to distribute the 
                     // session-ended event, finish step only after the dispatch.
                     fExecutor.shutdown();
@@ -276,7 +300,7 @@ public class GdbLaunch extends Launch
         fExecutor.execute(shutdownSeq);
     }
     
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     @Override
     public Object getAdapter(Class adapter) {
         // Must force adapters to be loaded.

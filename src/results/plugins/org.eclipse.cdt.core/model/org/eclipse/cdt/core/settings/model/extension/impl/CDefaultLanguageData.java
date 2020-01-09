@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2009 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -58,9 +58,9 @@ public class CDefaultLanguageData extends CLanguageData {
 		fLanguageId = languageId;
 		
 		if(isContentTypes)
-			fSourceContentTypeIds = (String[])ids.clone();
+			fSourceContentTypeIds = ids.clone();
 		else
-			fSourceExts = (String[])ids.clone();
+			fSourceExts = ids.clone();
 		
 		fStore = createStore();
 	}
@@ -85,10 +85,11 @@ public class CDefaultLanguageData extends CLanguageData {
 	protected EntryStore createStore(CLanguageData data){
 		EntryStore store = createStore(); 
 		int kinds[] = KindBasedStore.getLanguageEntryKinds();
-		for(int i = 0; i < kinds.length; i++){
-			ICLanguageSettingEntry entries[] = getEntriesToCopy(kinds[i], data);
+		for (int kind : kinds) {
+			ICLanguageSettingEntry entries[] = getEntriesToCopy(kind, data);
 			entries = processStoredEntries(entries, OP_COPY);
-			store.storeEntries(kinds[i], entries);
+			store.storeEntries(kind, entries);
+			
 		}
 		return store;
 	}

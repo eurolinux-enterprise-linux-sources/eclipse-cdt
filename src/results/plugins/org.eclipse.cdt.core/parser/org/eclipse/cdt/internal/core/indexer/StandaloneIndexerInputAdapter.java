@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,6 +18,7 @@ import org.eclipse.cdt.core.index.IIndexFileLocation;
 import org.eclipse.cdt.core.model.AbstractLanguage;
 import org.eclipse.cdt.core.model.ILanguage;
 import org.eclipse.cdt.core.parser.CodeReader;
+import org.eclipse.cdt.core.parser.FileContent;
 import org.eclipse.cdt.core.parser.IScannerInfo;
 import org.eclipse.cdt.internal.core.index.IndexFileLocation;
 import org.eclipse.cdt.internal.core.pdom.IndexerInputAdapter;
@@ -56,8 +57,18 @@ public class StandaloneIndexerInputAdapter extends IndexerInputAdapter {
 	}
 	
 	@Override
+	public boolean isIndexedOnlyIfIncluded(Object tu) {
+		return false;
+	}
+
+	@Override
 	public boolean isSource(String filename) {
 		return isValidSourceUnitName(filename);
+	}
+	
+	@Override
+	public long getFileSize(String astFilePath) {
+		return new File(astFilePath).length();
 	}
 
 	@Override
@@ -123,9 +134,22 @@ public class StandaloneIndexerInputAdapter extends IndexerInputAdapter {
 	}
 
 	@Override
-	public CodeReader getCodeReader(Object tu) {
+	public FileContent getCodeReader(Object tu) {
 		try {
-			return new CodeReader((String) tu);
+			String stu = (String) tu;
+			String fileEncoding = null;
+            // query file's encoding, if we find it and use it to create CodeReader
+			FileEncodingRegistry fileEncodingRegistry = fIndexer.getFileEncodingRegistry();
+			if(fileEncodingRegistry != null){
+				fileEncoding = fileEncodingRegistry.getFileEncoding(stu);
+			}
+
+			if (fileEncoding != null) {
+				// TODO this is bad
+				return FileContent.adapt(new CodeReader(stu, fileEncoding));
+			} else {
+				return FileContent.createForExternalFileLocation((String) tu);
+			}
 		} catch (IOException e) {
 		}
 		return null;

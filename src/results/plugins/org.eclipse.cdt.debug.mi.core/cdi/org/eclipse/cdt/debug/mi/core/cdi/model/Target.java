@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -39,7 +39,6 @@ import org.eclipse.cdt.debug.core.cdi.model.ICDIGlobalVariableDescriptor;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIInstruction;
 import org.eclipse.cdt.debug.core.cdi.model.ICDILineBreakpoint;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIMemoryBlock;
-import org.eclipse.cdt.debug.core.cdi.model.ICDIMemorySpaceManagement;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIMixedInstruction;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIRegister;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIRegisterDescriptor;
@@ -54,10 +53,8 @@ import org.eclipse.cdt.debug.core.cdi.model.ICDIThread;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIWatchpoint;
 import org.eclipse.cdt.debug.core.model.ICBreakpointType;
 import org.eclipse.cdt.debug.mi.core.CoreProcess;
-import org.eclipse.cdt.debug.mi.core.IMIConstants;
 import org.eclipse.cdt.debug.mi.core.MIException;
 import org.eclipse.cdt.debug.mi.core.MIInferior;
-import org.eclipse.cdt.debug.mi.core.MIPlugin;
 import org.eclipse.cdt.debug.mi.core.MISession;
 import org.eclipse.cdt.debug.mi.core.RxThread;
 import org.eclipse.cdt.debug.mi.core.cdi.BreakpointManager;
@@ -102,7 +99,7 @@ import org.eclipse.cdt.debug.mi.core.output.MIThreadSelectInfo;
 
 /**
  */
-public class Target extends SessionObject implements ICDITarget, ICDIBreakpointManagement3, ICDIAddressToSource, ICDIMemorySpaceManagement, ICDIExecuteMoveInstructionPointer {
+public class Target extends SessionObject implements ICDITarget, ICDIBreakpointManagement3, ICDIAddressToSource, ICDIExecuteMoveInstructionPointer {
 
 	MISession miSession;
 	ICDITargetConfiguration fConfiguration;
@@ -114,9 +111,6 @@ public class Target extends SessionObject implements ICDITarget, ICDIBreakpointM
 	boolean deferBreakpoints = true;
 	final private Object lock = new Object();
 	
-	final static String CODE_MEMORY_SPACE = "code"; //$NON-NLS-1$
-	final static String DATA_MEMORY_SPACE = "data"; //$NON-NLS-1$
-
 	public Target(Session s, MISession mi) {
 		super(s);
 		miSession = mi;
@@ -273,7 +267,7 @@ public class Target extends SessionObject implements ICDITarget, ICDIBreakpointM
 		// Fire CreatedEvent for new threads.
 		// Replace the new threads with the old thread object
 		// User may have old on to the old Thread object.
-		List cList = new ArrayList(currentThreads.length);
+		List<Integer> cList = new ArrayList<Integer>(currentThreads.length);
 		for (int i = 0; i < currentThreads.length; i++) {
 			boolean found = false;
 			for (int j = 0; j < oldThreads.length; j++) {
@@ -291,14 +285,14 @@ public class Target extends SessionObject implements ICDITarget, ICDIBreakpointM
 		if (!cList.isEmpty()) {
 			MIThreadCreatedEvent[] events = new MIThreadCreatedEvent[cList.size()];
 			for (int j = 0; j < events.length; j++) {
-				int id = ((Integer)cList.get(j)).intValue();
+				int id = cList.get(j);
 				events[j] = new MIThreadCreatedEvent(miSession, id);
 			}
 			miSession.fireEvents(events);
 		}
 
 		// Fire destroyedEvent for old threads.
-		List dList = new ArrayList(oldThreads.length);
+		List<Integer> dList = new ArrayList<Integer>(oldThreads.length);
 		for (int i = 0; i < oldThreads.length; i++) {
 			boolean found = false;
 			for (int j = 0; j < currentThreads.length; j++) {
@@ -314,7 +308,7 @@ public class Target extends SessionObject implements ICDITarget, ICDIBreakpointM
 		if (!dList.isEmpty()) {
 			MIThreadExitEvent[] events = new MIThreadExitEvent[dList.size()];
 			for (int j = 0; j < events.length; j++) {
-				int id = ((Integer)dList.get(j)).intValue();
+				int id = dList.get(j);
 				events[j] = new MIThreadExitEvent(miSession, id);
 			}
 			miSession.fireEvents(events);
@@ -1320,24 +1314,6 @@ public class Target extends SessionObject implements ICDITarget, ICDIBreakpointM
 			return new MappedSourceLocation(address, info, fileName);
 		} catch (MIException e) {
 			throw new MI2CDIException(e);
-		}
-	}
-
-	public String addressToString(BigInteger address, String memorySpaceID) {
-		return null; // use CDT's built-in encoding/decoding <memspace>:<addr-hex>
-	}
-
-	public BigInteger stringToAddress(String str, StringBuffer memorySpaceID_out)
-			throws CDIException {
-		return null; // use CDT's built-in encoding/decoding <memspace>:<addr-hex>
-	}
-
-	public String[] getMemorySpaces() {
-		if (MIPlugin.getDefault().getPluginPreferences().getBoolean(IMIConstants.PREF_ENABLE_MEMORY_SPACES)) {
-			return new String[] { CODE_MEMORY_SPACE, DATA_MEMORY_SPACE };	
-		}
-		else {
-			return new String[0];
 		}
 	}
 

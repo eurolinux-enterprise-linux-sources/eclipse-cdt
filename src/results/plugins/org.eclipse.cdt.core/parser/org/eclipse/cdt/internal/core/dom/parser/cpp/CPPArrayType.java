@@ -6,31 +6,36 @@
  *  http://www.eclipse.org/legal/epl-v10.html
  * 
  *  Contributors:
- *     IBM Corporation - initial API and implementation
+ *     Andrew Niefer (IBM Corporation) - initial API and implementation
+ *     Markus Schorn (Wind River Systems)
  *******************************************************************************/
-
-/*
- * Created on Dec 13, 2004
- */
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
 
 import org.eclipse.cdt.core.dom.ast.ASTTypeUtil;
-import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IArrayType;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.ITypedef;
+import org.eclipse.cdt.core.dom.ast.IValue;
+import org.eclipse.cdt.core.parser.util.CharArrayUtils;
+import org.eclipse.cdt.internal.core.dom.parser.ISerializableType;
 import org.eclipse.cdt.internal.core.dom.parser.ITypeContainer;
+import org.eclipse.cdt.internal.core.dom.parser.ITypeMarshalBuffer;
+import org.eclipse.cdt.internal.core.dom.parser.Value;
+import org.eclipse.core.runtime.CoreException;
 
-/**
- * @author aniefer
- */
-public class CPPArrayType implements IArrayType, ITypeContainer {
+public class CPPArrayType implements IArrayType, ITypeContainer, ISerializableType {
     private IType type;
     private IASTExpression sizeExpression;
-    
+    private IValue value= Value.NOT_INITIALIZED;
+
     public CPPArrayType(IType type) {
         this.type = type;
+    }
+    
+    public CPPArrayType(IType type, IValue value) {
+    	this.type= type;
+    	this.value= value;
     }
     
     public CPPArrayType(IType type, IASTExpression sizeExp) {
@@ -53,20 +58,34 @@ public class CPPArrayType implements IArrayType, ITypeContainer {
             return ((ITypedef) obj).isSameType(this);
         
         if (obj instanceof IArrayType) {
-            try {
-            	IType objType = ((IArrayType) obj).getType();
-            	if (objType != null)
-            		return objType.isSameType(type);
-            } catch (DOMException e) {
-                return false;
-            }
+            final IArrayType rhs = (IArrayType) obj;
+			IType objType = rhs.getType();
+			if (objType != null) {
+				if (objType.isSameType(type)) {
+					IValue s1= getSize();
+					IValue s2= rhs.getSize();
+					if (s1 == s2)
+						return true;
+					if (s1 == null || s2 == null)
+						return false;
+					return CharArrayUtils.equals(s1.getSignature(), s2.getSignature());
+				}
+			}
         }
     	return false;
     }
+
+    public IValue getSize() {
+    	if (value != Value.NOT_INITIALIZED)
+    		return value;
+    	
+    	if (sizeExpression == null)
+    		return value= null;
+
+    	return value= Value.create(sizeExpression, Value.MAX_RECURSION_DEPTH);
+    }
     
-    /* (non-Javadoc)
-     * @see org.eclipse.cdt.core.dom.ast.IArrayType#getArraySizeExpression()
-     */
+    @Deprecated
     public IASTExpression getArraySizeExpression() {
         return sizeExpression;
     }
@@ -85,5 +104,41 @@ public class CPPArrayType implements IArrayType, ITypeContainer {
 	@Override
 	public String toString() {
 		return ASTTypeUtil.getType(this);
+	}
+
+	public void marshal(ITypeMarshalBuffer buffer) throws CoreException {
+		final byte firstByte = ITypeMarshalBuffer.ARRAY;
+
+		IValue val= getSize();
+		if (val == null) {
+			buffer.putByte(firstByte);
+			buffer.marshalType(getType());
+			return;
+		} 
+		
+		Long num= val.numericalValue();
+		if (num != null) {
+			long lnum= num;
+			if (lnum >= 0 && lnum <= Short.MAX_VALUE) {
+				buffer.putByte((byte) (firstByte | ITypeMarshalBuffer.FLAG1));
+				buffer.putShort((short) lnum);
+				buffer.marshalType(getType());
+				return;
+			} 
+		}
+		buffer.putByte((byte) (firstByte | ITypeMarshalBuffer.FLAG2));
+		buffer.putValue(val);
+		buffer.marshalType(getType());
+	}
+
+	public static IType unmarshal(int firstByte, ITypeMarshalBuffer buffer) throws CoreException {
+		IValue value= null;
+		if ((firstByte & ITypeMarshalBuffer.FLAG1) != 0) {
+			value = Value.create(buffer.getShort());
+		} else if ((firstByte & ITypeMarshalBuffer.FLAG2) != 0) {
+			value = buffer.getValue();
+		}
+		IType nested= buffer.unmarshalType();
+		return new CPPArrayType(nested, value);
 	}
 }

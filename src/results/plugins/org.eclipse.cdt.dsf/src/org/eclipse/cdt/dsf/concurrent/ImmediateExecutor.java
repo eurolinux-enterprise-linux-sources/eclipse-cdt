@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,9 +16,12 @@ import org.eclipse.cdt.dsf.internal.DsfPlugin;
 import org.eclipse.core.runtime.Platform;
 
 /**
- * Executor that executes a runnable immediately as it is submitted.  This 
- * executor is useful for clients that need to create <code>RequestMonitor</code> 
- * objects, but which do not have their own executor.
+ * Executor that executes a runnable immediately (synchronously) when it is
+ * submitted (when {@link #execute(Runnable)} is called). The runnable is
+ * exercised on the submitter's thread. This executor is useful for clients that
+ * need to create <code>RequestMonitor</code> objects, but which do not have
+ * their own executor.
+ * 
  * @see RequestMonitor
  * 
  * @since 1.0

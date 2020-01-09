@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -30,8 +30,8 @@ public class SelectAllAction extends Action {
 	 */
 	public SelectAllAction(TableViewer viewer) {
 		super("selectAll"); //$NON-NLS-1$
-		setText(ActionMessages.getString("SelectAllAction.label")); //$NON-NLS-1$
-		setToolTipText(ActionMessages.getString("SelectAllAction.tooltip")); //$NON-NLS-1$
+		setText(ActionMessages.SelectAllAction_label);
+		setToolTipText(ActionMessages.SelectAllAction_tooltip);
 		PlatformUI.getWorkbench().getHelpSystem().setHelp(this, ICHelpContextIds.SELECT_ALL_ACTION);
 		Assert.isNotNull(viewer);
 		fViewer= viewer;

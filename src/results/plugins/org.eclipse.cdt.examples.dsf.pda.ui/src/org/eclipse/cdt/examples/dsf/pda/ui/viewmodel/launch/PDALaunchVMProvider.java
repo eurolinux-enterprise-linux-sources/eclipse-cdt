@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -62,10 +62,5 @@ public class PDALaunchVMProvider extends AbstractLaunchVMProvider
         // Stack frames node is under the PDA threads node.
         IVMNode stackFramesNode = new StackFramesVMNode(this, getSession());
         addChildNodes(threadsNode, new IVMNode[] { stackFramesNode });
-
-        // Register the LaunchVM provider as a listener to debug and launch 
-        // events.  These events are used by the launch and processes nodes.
-        DebugPlugin.getDefault().addDebugEventListener(this);
-        DebugPlugin.getDefault().getLaunchManager().addLaunchListener(this);
     }
 }

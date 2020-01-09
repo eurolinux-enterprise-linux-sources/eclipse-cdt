@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2009 IBM Corporation and others.
+ * Copyright (c) 2003, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -39,8 +39,12 @@ import org.eclipse.ui.model.WorkbenchContentProvider;
 import org.eclipse.ui.model.WorkbenchLabelProvider;
 
 /**
+ * @deprecated as of CDT 4.0. This Block was used for New Project Wizard
+ * for 3.X style projects.
+ * 
  * @noextend This class is not intended to be subclassed by clients.
  */
+@Deprecated
 public class ReferenceBlock extends AbstractCOptionPage {
 
 	private static final String PREFIX = "ReferenceBlock"; // $NON-NLS-1$ //$NON-NLS-1$

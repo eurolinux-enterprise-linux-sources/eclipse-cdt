@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -132,19 +132,26 @@ public class CdtActionConstants {
 	 * (value <code>"org.eclipse.cdt.ui.actions.Format"</code>).
 	 */
 	public static final String FORMAT= "org.eclipse.cdt.ui.actions.Format"; //$NON-NLS-1$
-	
+
 	/**
 	 * Source menu: name of standard Add Include global action
 	 * (value <code>"org.eclipse.cdt.ui.actions.AddInclude"</code>).
 	 */
 	public static final String ADD_INCLUDE= "org.eclipse.cdt.ui.actions.AddInclude"; //$NON-NLS-1$
-	
+
+	/**
+	 * Source menu: name of standard Sort Lines global action
+	 * (value <code>"org.eclipse.cdt.ui.actions.SortLines"</code>).
+	 * @since 5.2
+	 */
+	public static final String SORT_LINES= "org.eclipse.cdt.ui.actions.SortLines"; //$NON-NLS-1$
+
 	/**
 	 * Source menu: name of standard Sort Members global action (value
 	 * <code>"org.eclipse.cdt.ui.actions.SortMembers"</code>).
 	 */
 	public static final String SORT_MEMBERS= "org.eclipse.cdt.ui.actions.SortMembers"; //$NON-NLS-1$
-	
+
 	/**
 	 * Source menu: name of standard Surround with try/catch block global action
 	 * (value <code>"org.eclipse.cdt.ui.actions.SurroundWithTryCatch"</code>).

@@ -20,7 +20,18 @@ import org.eclipse.cdt.core.dom.ast.IParameter;
 public interface ICPPParameter extends IParameter, ICPPVariable {
 	
 	/**
+	 * @since 5.2
+	 */
+	ICPPParameter[] EMPTY_CPPPARAMETER_ARRAY = {};
+
+	/**
 	 * if there is a default value or not.
 	 */
 	public boolean hasDefaultValue();
+
+	/**
+	 * Returns whether this parameter is a parameter pack.
+	 * @since 5.2
+	 */
+	public boolean isParameterPack();
 }

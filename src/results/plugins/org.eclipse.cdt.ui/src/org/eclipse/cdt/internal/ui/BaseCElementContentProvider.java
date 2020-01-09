@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,6 +12,7 @@
 package org.eclipse.cdt.internal.ui;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,7 @@ import org.eclipse.jface.viewers.ITreeContentProvider;
 import org.eclipse.jface.viewers.Viewer;
 import org.eclipse.ui.model.IWorkbenchAdapter;
 
+import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.model.CModelException;
 import org.eclipse.cdt.core.model.CoreModel;
 import org.eclipse.cdt.core.model.IArchive;
@@ -38,6 +40,7 @@ import org.eclipse.cdt.core.model.ICElement;
 import org.eclipse.cdt.core.model.ICModel;
 import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.model.IInclude;
+import org.eclipse.cdt.core.model.IMacro;
 import org.eclipse.cdt.core.model.IMember;
 import org.eclipse.cdt.core.model.INamespace;
 import org.eclipse.cdt.core.model.IParent;
@@ -45,8 +48,8 @@ import org.eclipse.cdt.core.model.ISourceReference;
 import org.eclipse.cdt.core.model.ISourceRoot;
 import org.eclipse.cdt.core.model.ITranslationUnit;
 import org.eclipse.cdt.core.model.IWorkingCopy;
+import org.eclipse.cdt.ui.CDTUITools;
 import org.eclipse.cdt.ui.CElementGrouping;
-import org.eclipse.cdt.ui.CUIPlugin;
 import org.eclipse.cdt.ui.IncludesGrouping;
 import org.eclipse.cdt.ui.NamespacesGrouping;
  
@@ -79,6 +82,7 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 	protected boolean fIncludesGrouping= false;
 	protected boolean fNamespacesGrouping= false;
 	protected boolean fMemberGrouping= false;
+	protected boolean fMacroGrouping= false;
 	
 	public BaseCElementContentProvider() {
 		this(false, false);
@@ -165,6 +169,21 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 	public void setMemberGrouping(boolean enable) {
 		fMemberGrouping = enable;
 	}
+	
+	/**
+	 * @return whether grouping of macros is enabled
+	 */
+	public boolean isMacroGroupingEnabled() {
+		return fMacroGrouping;
+	}
+	
+	/**
+	 * Enable/disable marco grouping
+	 * @param enable
+	 */
+	public void setMacroGrouping(boolean enable) {
+		fMacroGrouping = enable;
+	}
 
 	/* (non-Cdoc)
 	 * Method declared on IContentProvider.
@@ -208,7 +227,7 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 						// if it is not already a working copy
 						if (!(element instanceof IWorkingCopy)){
 							// if it has a valid working copy
-							IWorkingCopy copy = tu.findSharedWorkingCopy(CUIPlugin.getDefault().getBufferFactory());
+							IWorkingCopy copy = CDTUITools.getWorkingCopyManager().findSharedWorkingCopy(tu);
 							if (copy != null) {
 								tu = copy;
 							}
@@ -316,6 +335,10 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 		}
 		Object parent = null;
 		if (element instanceof ICElement) {
+			if (element instanceof ICContainer && !CCorePlugin.showSourceRootsAtTopOfProject()) {
+				parent = ((ICContainer) element).getResource().getParent();
+			}
+			else
 			parent = ((ICElement)element).getParent();
 			// translate working copy parent to original TU,
 			// because working copies are never returned by getChildren
@@ -367,6 +390,9 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 		if (element instanceof IInclude && fIncludesGrouping) {
 			parent = new IncludesGrouping(((IInclude)element).getTranslationUnit());
 		}
+		if (element instanceof IMacro && fMacroGrouping) {
+			parent = new MacrosGrouping(((IMacro)element).getTranslationUnit());
+		}
 		return parent;
 	}
 	
@@ -389,15 +415,18 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 			
 		List<ICElement> list= new ArrayList<ICElement>();
 		ICElement[] children = cproject.getChildren();
-		for (int i= 0; i < children.length; i++) {
-			ICElement child = children[i];
+		for (ICElement child : children) {
 			if (child instanceof ISourceRoot && child.getResource().getType() == IResource.PROJECT) {
 				// Was a source root at the project, get the children of this element
 				ICElement[] c2 = ((ISourceRoot)child).getChildren();
 				for (int k = 0; k < c2.length; ++k)
 					list.add(c2[k]);
-			} else
+			} else if (CCorePlugin.showSourceRootsAtTopOfProject()) {
 				list.add(child);
+			} else if (child instanceof ISourceRoot && 
+						child.getResource().getParent().equals(cproject.getProject())) {	
+				list.add(child);
+		}
 		}
 
 		Object[] objects = list.toArray();
@@ -474,6 +503,28 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 			}
 			children = list.toArray();
 		}
+		if (fMacroGrouping) {
+			ArrayList<Object> list = new ArrayList<Object>(children.length);
+			boolean hasMacros = false;
+			for (int i = 0; i < children.length; i++) {
+				if (!(children[i] instanceof IMacro))
+					list.add(children[i]);
+				else
+					hasMacros = true;
+			}
+			if (hasMacros) {
+				//Check if include gouping is there. If so, put macros after
+				if(!list.isEmpty()){
+					if(list.get(0) instanceof IncludesGrouping)
+						list.add (1, new MacrosGrouping(unit));
+					else
+						list.add (0, new MacrosGrouping(unit));
+				}
+				else
+					list.add (0, new MacrosGrouping(unit));
+			}
+			children = list.toArray();
+		}
 		return children;
 	}
 
@@ -513,7 +564,11 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 
 	protected Object[] getCResources(ICContainer container) throws CModelException {
 		Object[] objects = null;
-		Object[] children = container.getChildren();
+		ICElement[] children = container.getChildren();
+		List<ICElement> missingElements = Collections.emptyList();
+		if (!CCorePlugin.showSourceRootsAtTopOfProject()) {
+			missingElements = getMissingElements(container, children);
+		}
 		try {
 			objects = container.getNonCResources();
 			if (objects.length > 0) {
@@ -521,10 +576,47 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 			}
 		} catch (CModelException e) {
 		}
-		if (objects == null || objects.length == 0) {
-			return children;
+		
+		Object[] result = children;
+		if (missingElements.size() > 0) {
+            result = concatenate(result, missingElements.toArray());
 		}
-		return concatenate(children, objects);
+
+		if (objects != null && objects.length > 0) {
+			result = concatenate(result, objects);
+		}
+
+		return result;
+	}
+
+	private List<ICElement> getMissingElements(ICContainer container, ICElement[] elements) {
+		// nested source roots may be filtered out below the project root, 
+		// we need to find them to add them back in
+		List<ICElement> missingElements = new ArrayList<ICElement>();
+		try {
+			List<IResource> missingContainers = new ArrayList<IResource>();
+			IResource[] allChildren = ((IContainer) container.getResource()).members();
+			for (IResource child : allChildren) {
+				if (!(child instanceof IContainer))
+					continue;
+				boolean found = false;
+				for (ICElement element : elements) {
+					if (element.getResource().equals(child)) {
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+					missingContainers.add(child);
+			}
+			for (IResource resource : missingContainers) {
+				ICElement element = container.getCProject().findElement(resource.getFullPath());
+				if (element != null)
+					missingElements.add(element);
+			}
+		} catch (CoreException e1) {
+		}
+		return missingElements;
 	}
 
 	protected Object[] getResources(IProject project) {
@@ -565,8 +657,8 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 			roots = new ISourceRoot[0];
 		}
 		List<Object> nonCResources = new ArrayList<Object>(objects.length);
-		for (int i= 0; i < objects.length; i++) {
-			Object o= objects[i];
+		for (Object object : objects) {
+			Object o= object;
 			// A folder can also be a source root in the following case
 			// Project
 			//  + src <- source folder
@@ -576,32 +668,35 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 			// folder we have to exclude it as a normal child.
 			if (o instanceof IFolder) {
 				IFolder folder = (IFolder)o;
-				boolean found = false;
+				ISourceRoot root = null;
 				for (int j = 0; j < roots.length; j++) {
 					if (roots[j].getPath().equals(folder.getFullPath())) {
-						found = true;
+						root = roots[j];
 						break;
 					}
 				}
 				// it is a sourceRoot skip it.
-				if (found) {
+				if (root != null) {
+					if (CCorePlugin.showSourceRootsAtTopOfProject())
 					continue;
+					else
+						o = root;
 				}
 			} else if (o instanceof IFile){
 				boolean found = false;
-				for (int j = 0; j < binaries.length; j++) {
-					IResource res = binaries[j].getResource();
+				for (ICElement binarie : binaries) {
+					IResource res = binarie.getResource();
 					if (o.equals(res)) {
-						o = binaries[j];
+						o = binarie;
 						found = true;
 						break;
 					}
 				}
 				if (!found) {
-					for (int j = 0; j < archives.length; j++) {
-						IResource res = archives[j].getResource();
+					for (ICElement archive : archives) {
+						IResource res = archive.getResource();
 						if (o.equals(res)) {
-							o = archives[j];
+							o = archive;
 							break;
 						}
 					}
@@ -641,9 +736,9 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 	protected IBinary[] getBinaries(IBinaryContainer container) throws CModelException {
 		ICElement[] celements = container.getChildren();
 		ArrayList<IBinary> list = new ArrayList<IBinary>(celements.length);
-		for (int i = 0; i < celements.length; i++) {
-			if (celements[i] instanceof IBinary) {
-				IBinary bin = (IBinary)celements[i];
+		for (ICElement celement : celements) {
+			if (celement instanceof IBinary) {
+				IBinary bin = (IBinary)celement;
 				list.add(bin);
 			}
 		}
@@ -660,9 +755,9 @@ public class BaseCElementContentProvider implements ITreeContentProvider {
 	protected IArchive[] getArchives(IArchiveContainer container) throws CModelException {
 		ICElement[] celements = container.getChildren();
 		ArrayList<IArchive> list = new ArrayList<IArchive>(celements.length);
-		for (int i = 0; i < celements.length; i++) {
-			if (celements[i] instanceof IArchive) {
-				IArchive ar = (IArchive)celements[i];
+		for (ICElement celement : celements) {
+			if (celement instanceof IArchive) {
+				IArchive ar = (IArchive)celement;
 				list.add(ar);
 			}
 		}

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,10 +8,11 @@
  * Contributors:
  *    Markus Schorn - initial API and implementation
  *    Sergey Prigogin (Google)
- *******************************************************************************/ 
+ *******************************************************************************/
 package org.eclipse.cdt.internal.core.pdom.indexer;
 
 import java.util.Calendar;
+import java.util.LinkedHashSet;
 import java.util.Map;
 
 import com.ibm.icu.text.NumberFormat;
@@ -55,7 +56,7 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 	private AbstractPDOMIndexer fIndexer;
 	private boolean fWriteInfoToLog;
 	
-	protected PDOMIndexerTask(ITranslationUnit[] forceFiles, ITranslationUnit[] updateFiles, ITranslationUnit[] removeFiles, 
+	protected PDOMIndexerTask(ITranslationUnit[] forceFiles, ITranslationUnit[] updateFiles, ITranslationUnit[] removeFiles,
 			AbstractPDOMIndexer indexer, boolean isFastIndexer) {
 		super(concat(forceFiles, updateFiles), removeFiles, new ProjectIndexerInputAdapter(indexer.getProject()), isFastIndexer);
 		fIndexer= indexer;
@@ -64,10 +65,11 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 		setShowScannerProblems(checkDebugOption(TRACE_SCANNER_PROBLEMS, TRUE));
 		setShowSyntaxProblems(checkDebugOption(TRACE_SYNTAX_PROBLEMS, TRUE));
 		setShowProblems(checkDebugOption(TRACE_PROBLEMS, TRUE));
+		final long limit = getIntProperty(IndexerPreferences.KEY_SKIP_FILES_LARGER_THAN_MB, 0);
+		setFileSizeLimit(limit * 1024 * 1024);
 		if (checkProperty(IndexerPreferences.KEY_SKIP_ALL_REFERENCES)) {
 			setSkipReferences(SKIP_ALL_REFERENCES);
-		}
-		else {
+		} else {
 			int skipRefs= 0;
 			if (checkProperty(IndexerPreferences.KEY_SKIP_IMPLICIT_REFERENCES)) {
 				skipRefs |= SKIP_IMPLICIT_REFERENCES;
@@ -97,21 +99,24 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 			setIndexFilesWithoutBuildConfiguration(false);
 			setIndexHeadersWithoutContext(UnusedHeaderStrategy.skip);
 		}
-		setUpdateFlags(IIndexManager.UPDATE_CHECK_TIMESTAMPS);
+		setUpdateFlags(IIndexManager.UPDATE_CHECK_TIMESTAMPS | IIndexManager.UPDATE_CHECK_CONTENTS_HASH);
 		setForceFirstFiles(forceFiles.length);
 	}
 	
 	private static ITranslationUnit[] concat(ITranslationUnit[] added, ITranslationUnit[] changed) {
-		ITranslationUnit[] result= new ITranslationUnit[added.length+changed.length];
-		System.arraycopy(added, 0, result, 0, added.length);
-		System.arraycopy(changed, 0, result, added.length, changed.length);
-		return result;
+		LinkedHashSet<ITranslationUnit> union = new LinkedHashSet<ITranslationUnit>(added.length + changed.length);
+		for (ITranslationUnit tu : added) {
+			union.add(tu);
+		}
+		for (ITranslationUnit tu : changed) {
+			union.add(tu);
+		}
+		return union.toArray(new ITranslationUnit[union.size()]);
 	}
 	
 	public final void setParseUpFront() {
 		setParseUpFront(fIndexer.getFilesToParseUpFront());
 	}
-
 
 	public final IPDOMIndexer getIndexer() {
 		return fIndexer;
@@ -129,7 +134,7 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 	 * @since 4.0
 	 */
 	public static boolean checkDebugOption(String option, String value) {
-		String trace= Platform.getDebugOption(option); 
+		String trace= Platform.getDebugOption(option);
 		boolean internallyActivated= Boolean.getBoolean(option);
 		return internallyActivated || (trace != null && trace.equalsIgnoreCase(value));
 	}
@@ -138,7 +143,17 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 		return TRUE.equals(getIndexer().getProperty(key));
 	}
 
-	
+	private int getIntProperty(String key, int defaultValue) {
+		final String value = getIndexer().getProperty(key);
+		if (value != null) {
+			try {
+				return Integer.parseInt(value);
+			} catch (NumberFormatException e) {
+			}
+		}
+		return defaultValue;
+	}
+
 	@Override
 	protected String getASTPathForParsingUpFront() {
 		final IProject project = getProject().getProject();
@@ -146,7 +161,7 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 		if (prjLocation == null) {
 			return null;
 		}
-		return prjLocation.append(super.getASTPathForParsingUpFront()).toString(); 
+		return prjLocation.append(super.getASTPathForParsingUpFront()).toString();
 	}
 
 	@Override
@@ -172,7 +187,7 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 		IProject project= getProject().getProject();
 		IScannerInfoProvider provider= CCorePlugin.getDefault().getScannerInfoProvider(project);
 		IScannerInfo scanInfo;
-		if (provider != null) { 
+		if (provider != null) {
 			String filename= linkageID == ILinkage.C_LINKAGE_ID ? "__cdt__.c" : "__cdt__.cpp";  //$NON-NLS-1$//$NON-NLS-2$
 			IFile file= project.getFile(filename);
 			scanInfo= provider.getScannerInformation(file);
@@ -214,8 +229,8 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 		if (fWriteInfoToLog && !wasCancelled && index != null) {
 			final long totalTime = System.currentTimeMillis() - start;
 			final IndexerProgress info= getProgressInformation();
-			final int sum= fStatistics.fDeclarationCount+fStatistics.fReferenceCount+fStatistics.fProblemBindingCount;
-			final double problemPct= sum==0 ? 0.0 : (double) fStatistics.fProblemBindingCount / (double) sum;
+			final int sum= fStatistics.fDeclarationCount + fStatistics.fReferenceCount + fStatistics.fProblemBindingCount;
+			final double problemPct= sum == 0 ? 0.0 : (double) fStatistics.fProblemBindingCount / (double) sum;
 			NumberFormat nfGroup= NumberFormat.getNumberInstance();
 			nfGroup.setGroupingUsed(true);
 			NumberFormat nfPercent= NumberFormat.getPercentInstance();
@@ -227,11 +242,11 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 			nfTime.setGroupingUsed(true);
 			final String msg= NLS.bind(Messages.PDOMIndexerTask_indexerInfo,
 					new Object[] {
-						getCProject().getElementName(), 
-						nfGroup.format(info.fCompletedSources), 
+						getCProject().getElementName(),
+						nfGroup.format(info.fCompletedSources),
 						nfGroup.format(info.fCompletedHeaders),
-						nfTime.format((double) totalTime/1000),
-						nfGroup.format(fStatistics.fDeclarationCount), 
+						nfTime.format((double) totalTime / 1000),
+						nfGroup.format(fStatistics.fDeclarationCount),
 						nfGroup.format(fStatistics.fReferenceCount),
 						nfGroup.format(fStatistics.fUnresolvedIncludesCount),
 						nfGroup.format(fStatistics.fPreprocessorProblemCount + fStatistics.fSyntaxProblemsCount),
@@ -247,10 +262,10 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 			String ident= "   ";   //$NON-NLS-1$
 			final long totalTime = System.currentTimeMillis() - start;
 			final IndexerProgress info= getProgressInformation();
-			final int sum= fStatistics.fDeclarationCount+fStatistics.fReferenceCount+fStatistics.fProblemBindingCount;
-			final double problemPct= sum==0 ? 0.0 : (double) fStatistics.fProblemBindingCount / (double) sum;
+			final int sum= fStatistics.fDeclarationCount + fStatistics.fReferenceCount + fStatistics.fProblemBindingCount;
+			final double problemPct= sum == 0 ? 0.0 : (double) fStatistics.fProblemBindingCount / (double) sum;
 			String kind= getIndexer().getClass().getName();
-			kind= kind.substring(kind.lastIndexOf('.')+1);
+			kind= kind.substring(kind.lastIndexOf('.') + 1);
 			final long dbSize= index.getDatabaseSizeBytes();
 			
 			System.out.println("C/C++ Indexer: Project '" + getProject().getElementName()     //$NON-NLS-1$
@@ -291,12 +306,12 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 			
 			long misses= index.getCacheMisses();
 			long hits= index.getCacheHits();
-			long tries= misses+hits;
-			double missPct= tries==0 ? 0.0 : (double) misses / (double) tries;
+			long tries= misses + hits;
+			double missPct= tries == 0 ? 0.0 : (double) misses / (double) tries;
 			System.out.println(ident + " Cache["    //$NON-NLS-1$
-					+ ChunkCache.getSharedInstance().getMaxSize() / 1024 / 1024 + "mb]: " +    //$NON-NLS-1$
+					+ ChunkCache.getSharedInstance().getMaxSize() / 1024 / 1024 + "MB]: " +    //$NON-NLS-1$
 					+ hits + " hits, "      //$NON-NLS-1$
-					+ misses + "(" + nfPercent.format(missPct)+ ") misses.");      //$NON-NLS-1$ //$NON-NLS-2$
+					+ misses + "(" + nfPercent.format(missPct) + ") misses.");      //$NON-NLS-1$ //$NON-NLS-2$
 
 			if ("true".equals(System.getProperty("SHOW_COMPRESSED_INDEXER_INFO"))) {    //$NON-NLS-1$ //$NON-NLS-2$
 				Calendar cal = Calendar.getInstance();
@@ -308,43 +323,43 @@ public abstract class PDOMIndexerTask extends AbstractIndexerTask implements IPD
 				final String sep0 = "|"; //$NON-NLS-1$
 				final String sep = "|  "; //$NON-NLS-1$
 				final String sec = "s"; //$NON-NLS-1$
-				final String mb = "mb"; //$NON-NLS-1$
+				final String mb = "MB"; //$NON-NLS-1$
 				final String million = "M"; //$NON-NLS-1$
-				System.out.print(sep0);   
-				System.out.print(cal.get(Calendar.YEAR) + twoDigits.format(cal.get(Calendar.MONTH)+1) + twoDigits.format(cal.get(Calendar.DAY_OF_MONTH)));
-				System.out.print(sep);   
+				System.out.print(sep0);
+				System.out.print(cal.get(Calendar.YEAR) + twoDigits.format(cal.get(Calendar.MONTH) + 1) + twoDigits.format(cal.get(Calendar.DAY_OF_MONTH)));
+				System.out.print(sep);
 				System.out.print(nfGroup.format(info.fCompletedSources));
-				System.out.print(sep);   
+				System.out.print(sep);
 				System.out.print(nfGroup.format(info.fCompletedHeaders));
-				System.out.print(sep);   
-				System.out.print(nfGroup.format((totalTime+500)/1000) + sec);   
-				System.out.print(sep);   
-				System.out.print(nfGroup.format((fStatistics.fParsingTime+500)/1000) + sec);   
-				System.out.print(sep);    
-				System.out.print(nfGroup.format((fStatistics.fResolutionTime+500)/1000) + sec);   
-				System.out.print(sep);   
-				System.out.print(nfGroup.format((fStatistics.fAddToIndexTime+500)/1000) + sec);   
-				System.out.print(sep);   
-				System.out.print(nfGroup.format((dbSize+1024*512)/1024/1024) + mb);   
-				System.out.print(sep);   
-				System.out.print(nfGroup.format((tries+1000*500)/1000000) + million);   
-				System.out.print(sep);   
-				System.out.print(nfGroup.format(fStatistics.fDeclarationCount));  
-				System.out.print(sep);   
-				System.out.print(nfGroup.format(fStatistics.fReferenceCount));  
-				System.out.print(sep);   
-				System.out.print(nfGroup.format(fStatistics.fProblemBindingCount));  
-				System.out.print(sep);   
-				System.out.print(nfPercent.format(problemPct));   
-				System.out.print(sep);   
-				System.out.print(nfGroup.format(fStatistics.fErrorCount));  
-				System.out.print(sep);   
-				System.out.print(nfGroup.format(fStatistics.fUnresolvedIncludesCount));  
-				System.out.print(sep);   
-				System.out.print(nfGroup.format(fStatistics.fPreprocessorProblemCount));  
-				System.out.print(sep);   
-				System.out.print(nfGroup.format(fStatistics.fSyntaxProblemsCount));  
-				System.out.println(sep0);   
+				System.out.print(sep);
+				System.out.print(nfGroup.format((totalTime + 500) / 1000) + sec);
+				System.out.print(sep);
+				System.out.print(nfGroup.format((fStatistics.fParsingTime + 500) / 1000) + sec);
+				System.out.print(sep);
+				System.out.print(nfGroup.format((fStatistics.fResolutionTime + 500) / 1000) + sec);
+				System.out.print(sep);
+				System.out.print(nfGroup.format((fStatistics.fAddToIndexTime + 500) / 1000) + sec);
+				System.out.print(sep);
+				System.out.print(nfGroup.format((dbSize + 1024 * 512) / 1024 / 1024) + mb);
+				System.out.print(sep);
+				System.out.print(nfGroup.format((tries + 1000 * 500) / 1000000) + million);
+				System.out.print(sep);
+				System.out.print(nfGroup.format(fStatistics.fDeclarationCount));
+				System.out.print(sep);
+				System.out.print(nfGroup.format(fStatistics.fReferenceCount));
+				System.out.print(sep);
+				System.out.print(nfGroup.format(fStatistics.fProblemBindingCount));
+				System.out.print(sep);
+				System.out.print(nfPercent.format(problemPct));
+				System.out.print(sep);
+				System.out.print(nfGroup.format(fStatistics.fErrorCount));
+				System.out.print(sep);
+				System.out.print(nfGroup.format(fStatistics.fUnresolvedIncludesCount));
+				System.out.print(sep);
+				System.out.print(nfGroup.format(fStatistics.fPreprocessorProblemCount));
+				System.out.print(sep);
+				System.out.print(nfGroup.format(fStatistics.fSyntaxProblemsCount));
+				System.out.println(sep0);
 			}
 		}
 	}

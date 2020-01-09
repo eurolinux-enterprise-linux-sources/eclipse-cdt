@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -23,19 +23,20 @@ import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.datamodel.IDMContext;
-import org.eclipse.cdt.dsf.debug.service.IRunControl;
 import org.eclipse.cdt.dsf.debug.service.IBreakpoints.IBreakpointsTargetDMContext;
 import org.eclipse.cdt.dsf.debug.service.IProcesses.IProcessDMContext;
 import org.eclipse.cdt.dsf.debug.service.IProcesses.IThreadDMContext;
+import org.eclipse.cdt.dsf.debug.service.IRunControl;
+import org.eclipse.cdt.dsf.debug.service.IRunControl2;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
+import org.eclipse.cdt.dsf.gdb.service.command.IGDBControl;
+import org.eclipse.cdt.dsf.mi.service.IMICommandControl;
 import org.eclipse.cdt.dsf.mi.service.IMIExecutionDMContext;
 import org.eclipse.cdt.dsf.mi.service.IMIProcesses;
 import org.eclipse.cdt.dsf.mi.service.IMIRunControl;
 import org.eclipse.cdt.dsf.mi.service.MIRunControl;
 import org.eclipse.cdt.dsf.mi.service.MIStack;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIBreakDelete;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIBreakInsert;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIExecContinue;
+import org.eclipse.cdt.dsf.mi.service.command.CommandFactory;
 import org.eclipse.cdt.dsf.mi.service.command.events.MIBreakpointHitEvent;
 import org.eclipse.cdt.dsf.mi.service.command.events.MIEvent;
 import org.eclipse.cdt.dsf.mi.service.command.events.MIInferiorExitEvent;
@@ -46,6 +47,7 @@ import org.eclipse.cdt.dsf.mi.service.command.output.MIInfo;
 import org.eclipse.cdt.dsf.service.DsfServiceEventHandler;
 import org.eclipse.cdt.dsf.service.DsfSession;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
 
 public class GDBRunControl extends MIRunControl {
@@ -75,7 +77,9 @@ public class GDBRunControl extends MIRunControl {
 	
     private IGDBBackend fGdb;
 	private IMIProcesses fProcService;
-
+	private IGDBControl fGbControlService;
+	private CommandFactory fCommandFactory;
+	
 	// Record list of execution contexts
 	private IExecutionDMContext[] fOldExecutionCtxts;
 
@@ -100,10 +104,13 @@ public class GDBRunControl extends MIRunControl {
     	
         fGdb = getServicesTracker().getService(IGDBBackend.class);
         fProcService = getServicesTracker().getService(IMIProcesses.class);
+        fGbControlService = getServicesTracker().getService(IGDBControl.class);
+        fCommandFactory = getServicesTracker().getService(IMICommandControl.class).getCommandFactory();
 
         register(new String[]{IRunControl.class.getName(), 
-        		IMIRunControl.class.getName(),
-        		MIRunControl.class.getName(), 
+           		IRunControl2.class.getName(),
+           		IMIRunControl.class.getName(),
+           		MIRunControl.class.getName(), 
         		GDBRunControl.class.getName()}, new Hashtable<String,String>());
         requestMonitor.done();
     }
@@ -135,11 +142,31 @@ public class GDBRunControl extends MIRunControl {
                 @Override
                 protected void handleSuccess() {
                     if (getData()) {
-                        fGdb.interrupt();
+						// A local Windows attach session requires us to interrupt
+						// the inferior instead of gdb. This deficiency was fixed
+                    	// in gdb 7.0. Note that there's a GDBRunControl_7_0,
+                    	// so we're dealing with gdb < 7.0 if we get here.
+	                    // Refer to https://bugs.eclipse.org/bugs/show_bug.cgi?id=304096#c56
+	                    // if you have the stomach for it.
+                    	if (fGdb.getIsAttachSession() 
+                    			&& fGdb.getSessionType() != SessionType.REMOTE
+                    			&& Platform.getOS().equals(Platform.OS_WIN32)) {
+                    		String inferiorPid = fGbControlService.getInferiorProcess().getPid();
+                    		if (inferiorPid != null) {
+                    			fGdb.interruptInferiorAndWait(Long.parseLong(inferiorPid), IGDBBackend.INTERRUPT_TIMEOUT_DEFAULT, rm);
+                    		}
+                    		else {
+                    			assert false : "why don't we have the inferior's pid?";  //$NON-NLS-1$
+                    			fGdb.interruptAndWait(IGDBBackend.INTERRUPT_TIMEOUT_DEFAULT, rm);
+                    		}
+                    	}
+                    	else {
+                            fGdb.interruptAndWait(IGDBBackend.INTERRUPT_TIMEOUT_DEFAULT, rm);
+                    	}
                     } else {
                         rm.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, INVALID_STATE, "Context cannot be suspended.", null)); //$NON-NLS-1$
+                        rm.done();
                     }
-                    rm.done();
                 }
             });
     }
@@ -256,12 +283,10 @@ public class GDBRunControl extends MIRunControl {
     	
     	canResume(context, rm);
     }
-	
-	/** @since 2.0 */
+
+	/** @since 3.0 */
 	@Override
-	public void runToLine(final IExecutionDMContext context, String fileName, String lineNo, final boolean skipBreakpoints, final DataRequestMonitor<MIInfo> rm){
-	    // Later add support for Address and function.
-	    
+	public void runToLocation(IExecutionDMContext context, final String location, final boolean skipBreakpoints, final RequestMonitor rm){
     	assert context != null;
 
     	final IMIExecutionDMContext dmc = DMContexts.getAncestorOfType(context, IMIExecutionDMContext.class);
@@ -271,12 +296,11 @@ public class GDBRunControl extends MIRunControl {
             return;
 		}
 
-        if (doCanResume(context)) {
-    		final String fileLocation = fileName + ":" + lineNo; //$NON-NLS-1$
+        if (doCanResume(dmc)) {
         	IBreakpointsTargetDMContext bpDmc = DMContexts.getAncestorOfType(context, IBreakpointsTargetDMContext.class);
         	getConnection().queueCommand(
-        			new MIBreakInsert(bpDmc, true, false, null, 0, 
-        					          fileLocation, dmc.getThreadId()), 
+        			fCommandFactory.createMIBreakInsert(bpDmc, true, false, null, 0, 
+        					          location, dmc.getThreadId()), 
         		    new DataRequestMonitor<MIBreakInsertInfo>(getExecutor(), rm) {
         				@Override
         				public void handleSuccess() {
@@ -284,16 +308,16 @@ public class GDBRunControl extends MIRunControl {
         					// or else we may get the stopped event, before we have set this variable.
            					int bpId = getData().getMIBreakpoints()[0].getNumber();
            					String addr = getData().getMIBreakpoints()[0].getAddress();
-        		        	fRunToLineActiveOperation = new RunToLineActiveOperation(dmc, bpId, fileLocation, addr, skipBreakpoints);
+        		        	fRunToLineActiveOperation = new RunToLineActiveOperation(dmc, bpId, location, addr, skipBreakpoints);
 
-        					resume(context, new RequestMonitor(getExecutor(), rm) {
+        					resume(dmc, new RequestMonitor(getExecutor(), rm) {
                 				@Override
                 				public void handleFailure() {
                 		    		IBreakpointsTargetDMContext bpDmc = DMContexts.getAncestorOfType(fRunToLineActiveOperation.getThreadContext(),
                 		    				IBreakpointsTargetDMContext.class);
                 		    		int bpId = fRunToLineActiveOperation.getBreakointId();
 
-                		    		getConnection().queueCommand(new MIBreakDelete(bpDmc, new int[] {bpId}),
+                		    		getConnection().queueCommand(fCommandFactory.createMIBreakDelete(bpDmc, new int[] {bpId}),
                 		    				new DataRequestMonitor<MIInfo>(getExecutor(), null));
                 		    		fRunToLineActiveOperation = null;
 
@@ -322,7 +346,7 @@ public class GDBRunControl extends MIRunControl {
     				IBreakpointsTargetDMContext.class);
     		int bpId = fRunToLineActiveOperation.getBreakointId();
 
-    		getConnection().queueCommand(new MIBreakDelete(bpDmc, new int[] {bpId}),
+    		getConnection().queueCommand(fCommandFactory.createMIBreakDelete(bpDmc, new int[] {bpId}),
     				new DataRequestMonitor<MIInfo>(getExecutor(), null));
     		fRunToLineActiveOperation = null;
     	}
@@ -359,18 +383,24 @@ public class GDBRunControl extends MIRunControl {
     			// Didn't stop at the right place yet
     			if (fRunToLineActiveOperation.shouldSkipBreakpoints() && e instanceof MIBreakpointHitEvent) {
     				getConnection().queueCommand(
-    						new MIExecContinue(fRunToLineActiveOperation.getThreadContext()),
+    						fCommandFactory.createMIExecContinue(fRunToLineActiveOperation.getThreadContext()),
     						new DataRequestMonitor<MIInfo>(getExecutor(), null));
 
     				// Don't send the stop event since we are resuming again.
     				return;
     			} else {
-    				// Stopped at another breakpoint or not a breakpoint at all.  Just remove our temporary one
-    				// since we don't want it to hit later
+    				// Stopped at another breakpoint that we should not skip.
+    				// Or got an interrupt signal from a suspend command.
+    				// Or got an interrupt signal because the user set/changed a breakpoint.  This last case is tricky.
+    				// We could let the run-to-line continue its job, however, I'm thinking that if the user creates
+    				// a new breakpoint, she may want to force the program to stop, in a way to abort the run-to-line.
+    				// So, let's cancel the run-to-line in this case.
+    				//
+    				// Just remove our temporary one since we don't want it to hit later
     				IBreakpointsTargetDMContext bpDmc = DMContexts.getAncestorOfType(fRunToLineActiveOperation.getThreadContext(),
     						IBreakpointsTargetDMContext.class);
 
-    				getConnection().queueCommand(new MIBreakDelete(bpDmc, new int[] {fRunToLineActiveOperation.getBreakointId()}),
+    				getConnection().queueCommand(fCommandFactory.createMIBreakDelete(bpDmc, new int[] {fRunToLineActiveOperation.getBreakointId()}),
     						new DataRequestMonitor<MIInfo>(getExecutor(), null));
     				fRunToLineActiveOperation = null;
     			}

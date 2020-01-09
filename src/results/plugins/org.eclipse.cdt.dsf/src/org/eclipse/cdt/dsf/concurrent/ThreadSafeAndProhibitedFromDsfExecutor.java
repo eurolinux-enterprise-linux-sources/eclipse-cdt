@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006 Wind River Systems and others.
+ * Copyright (c) 2006, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,11 +18,11 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Annotation idicating that given package, class, method, can be accessed on
+ * Annotation indicating that given package, class, method, can be accessed on
  * any thread, except on the dispatch thread of given DsfExecutor. 
  * <br> This restriction is desirable if it is expected that the implementation 
  * behavior is to block the calling thread and execute a transaction using an 
- * executor.  In this situation, if the call is made on the executor's dispach
+ * executor.  In this situation, if the call is made on the executor's dispatch
  * thread, the execution would dead-lock.
  * <br> 
  * If declared on package or type, a field or method could still be declared 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -37,12 +37,14 @@ import org.eclipse.core.runtime.PlatformObject;
 /**
  * Implementation of problem bindings
  */
-public class ProblemBinding extends PlatformObject implements IProblemBinding, IType, IScope, IASTInternalScope {
+public class ProblemBinding extends PlatformObject implements IProblemBinding, IASTInternalScope {
+	public static ProblemBinding NOT_INITIALIZED= new ProblemBinding(null, 0);
+	
     protected final int id;
     protected char[] arg;
     protected IASTNode node;
     private final String message = null;
-	private final IBinding[] candidateBindings;
+	private IBinding[] candidateBindings;
     
     public ProblemBinding(IASTName name, int id) {
     	this(name, id, null, null);
@@ -73,6 +75,10 @@ public class ProblemBinding extends PlatformObject implements IProblemBinding, I
 
 	public IBinding[] getCandidateBindings() {
 		return candidateBindings != null ? candidateBindings : IBinding.EMPTY_BINDING_ARRAY;
+	}
+	
+	public void setCandidateBindings(IBinding[] foundBindings) {
+		candidateBindings= foundBindings;
 	}
 
     protected static final String[] errorMessages;

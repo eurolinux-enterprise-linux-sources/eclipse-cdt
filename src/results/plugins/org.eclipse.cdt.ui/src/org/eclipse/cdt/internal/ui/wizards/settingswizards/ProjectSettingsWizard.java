@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 IBM Corporation and others.
+ * Copyright (c) 2008, 2009 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -25,6 +25,9 @@ public abstract class ProjectSettingsWizard extends Wizard {
 	
 	public abstract ProjectSettingsWizardPage getPage(); 
 
+	private boolean finishedPressed;
+	
+	
 	@Override
 	public void addPages() {
 		super.addPages();
@@ -41,7 +44,12 @@ public abstract class ProjectSettingsWizard extends Wizard {
 
 	@Override
 	public boolean performFinish() {
+		finishedPressed = true;
 		return mainPage.finish();
+	}
+	
+	public boolean isFinishedPressed() {
+		return finishedPressed;
 	}
 	
 

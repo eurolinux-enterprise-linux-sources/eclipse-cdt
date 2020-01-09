@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -72,10 +72,11 @@ public class TextTestSuite extends TestSuite {
 		// compare tests
 		addTest(CStructureCreatorTest.suite());
 		
-		// block comment tests
+		// source manipulation tests
 		addTest(AddBlockCommentTest.suite());
 		addTest(RemoveBlockCommentTest.suite());
-	
+		addTest(SortLinesTest.suite());
+
 		// add include
 		addTest(AddIncludeTest.suite());
     }

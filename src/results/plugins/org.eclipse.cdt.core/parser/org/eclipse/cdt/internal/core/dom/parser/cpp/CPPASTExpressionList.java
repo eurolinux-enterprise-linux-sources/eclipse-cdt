@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,9 +8,11 @@
  * Contributors:
  *     John Camelon (IBM) - Initial API and implementation
  *     Mike Kucera (IBM) - implicit names
+ *     Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
 
+import org.eclipse.cdt.core.dom.ast.ASTNodeProperty;
 import org.eclipse.cdt.core.dom.ast.ASTVisitor;
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
@@ -18,16 +20,20 @@ import org.eclipse.cdt.core.dom.ast.IASTFunctionCallExpression;
 import org.eclipse.cdt.core.dom.ast.IASTImplicitName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IType;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTConstructorChainInitializer;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTConstructorInitializer;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTExpressionList;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTNewExpression;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunction;
 import org.eclipse.cdt.core.parser.util.ArrayUtil;
 import org.eclipse.cdt.internal.core.dom.parser.ASTNode;
 import org.eclipse.cdt.internal.core.dom.parser.IASTAmbiguityParent;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPSemantics;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
 
 
 public class CPPASTExpressionList extends ASTNode implements ICPPASTExpressionList, IASTAmbiguityParent {
-
+	private static final ICPPFunction[] NO_FUNCTIONS = new ICPPFunction[0];
 
 	/**
 	 * Caution: may contain nulls. 
@@ -135,8 +141,15 @@ public class CPPASTExpressionList extends ASTNode implements ICPPASTExpressionLi
     private ICPPFunction[] getOverloads() {
     	if(overloads == null) {
 	    	IASTExpression[] exprs = getExpressions();
-	    	if(exprs.length < 2 || getPropertyInParent() == IASTFunctionCallExpression.PARAMETERS)
-	    		return overloads = new ICPPFunction[0];
+	    	if(exprs.length < 2)
+	    		return overloads = NO_FUNCTIONS;
+	    	
+	    	ASTNodeProperty prop = getPropertyInParent();
+	    	if (prop == IASTFunctionCallExpression.ARGUMENT || 
+	    			prop == ICPPASTConstructorChainInitializer.INITIALIZER ||
+	    			prop == ICPPASTConstructorInitializer.ARGUMENT ||
+	    			prop == ICPPASTNewExpression.NEW_INITIALIZER)
+	    		return overloads = NO_FUNCTIONS;
 	    	
 	    	overloads = new ICPPFunction[exprs.length-1];
 	    	IType lookupType = exprs[0].getExpressionType();
@@ -172,22 +185,44 @@ public class CPPASTExpressionList extends ASTNode implements ICPPASTExpressionLi
         }
     }
     
-    public IType getExpressionType() {
-    	ICPPFunction[] overloads = getOverloads();
-    	if(overloads.length > 0) {
-    		ICPPFunction last = overloads[overloads.length-1];
-    		if(last != null) {
-    			try {
+	public IType getExpressionType() {
+		ICPPFunction[] overloads = getOverloads();
+		if (overloads.length > 0) {
+			ICPPFunction last = overloads[overloads.length - 1];
+			if (last != null) {
+				try {
 					return last.getType().getReturnType();
-				} catch (DOMException e) { }
-    		}
-    	}
-    	
-    	for (int i = expressions.length-1; i >= 0 ; i--) {
-			IASTExpression expr= expressions[i];
+				} catch (DOMException e) {
+				}
+			}
+		}
+
+		for (int i = expressions.length - 1; i >= 0; i--) {
+			IASTExpression expr = expressions[i];
 			if (expr != null)
 				return expr.getExpressionType();
 		}
-    	return null;
-    }
+		return null;
+	}
+    
+	public boolean isLValue() {
+		ICPPFunction[] overloads = getOverloads();
+		if (overloads.length > 0) {
+			ICPPFunction last = overloads[overloads.length - 1];
+			if (last != null) {
+				try {
+					return CPPVisitor.isLValueReference(last.getType().getReturnType());
+				} catch (DOMException e) {
+					return false;
+				}
+			}
+		}
+
+    	for (int i = expressions.length-1; i >= 0; i--) {
+    		IASTExpression expr= expressions[i];
+    		if (expr != null)
+    			return expr.isLValue();
+		}
+    	return false;
+	}
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -37,6 +37,10 @@ public class CDTPrefUtil {
 	public static final String KEY_DTREE   = "properties.data.hierarchy.enable"; //$NON-NLS-1$
 	public static final String KEY_NOTOOLM   = "properties.toolchain.modification.disable"; //$NON-NLS-1$
 	public static final String KEY_EXPORT   = "properties.export.page.enable"; //$NON-NLS-1$
+	/** @since 5.2 Show the "Include Files" settings entry tab */
+	public static final String KEY_SHOW_INC_FILES = "properties.includefiles.page.enable"; //$NON-NLS-1$
+	/** @since 5.2 */
+	public static final String KEY_TIPBOX   = "properties.option.tipbox.enable"; //$NON-NLS-1$
 	// string keys
 	public static final String KEY_PREFTC  = "wizard.preferred.toolchains";  //$NON-NLS-1$
 	public static final String KEY_CONFSET = "workingsets.selected.configs";  //$NON-NLS-1$

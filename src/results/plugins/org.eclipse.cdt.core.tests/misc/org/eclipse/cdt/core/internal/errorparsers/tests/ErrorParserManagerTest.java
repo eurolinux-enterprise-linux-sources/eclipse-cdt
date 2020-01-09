@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 QNX Software Systems and others.
+ * Copyright (c) 2008, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -108,11 +108,12 @@ public class ErrorParserManagerTest extends TestCase {
 
 		};
 		String[] errorParsersIds = {
-			"org.eclipse.cdt.core.MakeErrorParser",
+			"org.eclipse.cdt.core.CWDLocator",
 			"org.eclipse.cdt.core.GCCErrorParser",
 			"org.eclipse.cdt.core.GASErrorParser",
 			"org.eclipse.cdt.core.GLDErrorParser",
 			"org.eclipse.cdt.core.VCErrorParser",
+			"org.eclipse.cdt.core.GmakeErrorParser",
 		};
 		epManager = new ErrorParserManager(cProject.getProject(), markerGenerator, errorParsersIds);
 
@@ -152,7 +153,7 @@ public class ErrorParserManagerTest extends TestCase {
 	private void end() throws IOException {
 		epManager.getOutputStream();
 		epManager.close();
-		epManager.reportProblems();
+		epManager.getOutputStream().close();
 	}
 
 	public void testParsersSanity() throws CoreException, IOException {
@@ -185,7 +186,7 @@ public class ErrorParserManagerTest extends TestCase {
 			epManager.write(b, 0, k);
 		}
 		end();
-		assertEquals(19, errorList.size());
+		assertEquals(22, errorList.size());
 
 	}
 

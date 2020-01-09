@@ -1,0 +1,35 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: TCF Debug Ui Plug-in
+Bundle-SymbolicName: org.eclipse.cdt.debug.edc.ui;singleton:=true
+Bundle-Version: 1.0.0.qualifier
+Bundle-Activator: org.eclipse.cdt.debug.edc.internal.ui.EDCDebugUI
+Require-Bundle: org.eclipse.core.runtime,
+ org.eclipse.ui;bundle-version="3.4.1",
+ org.eclipse.debug.core;bundle-version="3.4.0",
+ org.eclipse.debug.ui;bundle-version="3.4.1",
+ org.eclipse.cdt.debug.core;bundle-version="5.0.0",
+ org.eclipse.cdt.debug.edc;bundle-version="1.0.0",
+ org.eclipse.cdt.debug.ui;bundle-version="5.0.0",
+ org.eclipse.cdt.dsf;bundle-version="2.0.0",
+ org.eclipse.cdt.dsf.ui;bundle-version="2.0.0",
+ org.eclipse.cdt.launch;bundle-version="6.0.0",
+ org.eclipse.cdt.debug.edc.tcf.extension;bundle-version="1.0.0",
+ org.eclipse.ui.console;bundle-version="3.4.0",
+ org.eclipse.tm.tcf.core,
+ org.eclipse.cdt.ui,
+ org.eclipse.jface.text,
+ org.eclipse.cdt.core;bundle-version="5.1.1",
+ org.eclipse.ui.workbench.texteditor;bundle-version="3.5.0"
+Bundle-ActivationPolicy: lazy
+Bundle-RequiredExecutionEnvironment: J2SE-1.5
+Export-Package: org.eclipse.cdt.debug.edc.internal.ui;x-internal:=true,
+ org.eclipse.cdt.debug.edc.internal.ui.actions;x-internal:=true,
+ org.eclipse.cdt.debug.edc.internal.ui.launch;x-friends:="org.eclipse.cdt.debug.edc.windows,org.eclipse.cdt.debug.edc.windows.ui,org.eclipse.cdt.debug.edc.linux.x86",
+ org.eclipse.cdt.debug.edc.internal.ui.views;x-internal:=true,
+ org.eclipse.cdt.debug.edc.ui,
+ org.eclipse.cdt.debug.edc.ui.console
+Import-Package: org.eclipse.core.expressions,
+ org.eclipse.tm.tcf.core;version="0.2.0",
+ org.eclipse.tm.tcf.protocol;version="0.2.0"
+Bundle-Vendor: Eclipse CDT

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Wind River Systems and others.
+ * Copyright (c) 2008, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -35,5 +35,10 @@ public interface ILaunchVMConstants {
     public static final String PROP_FRAME_MODULE = "frame_module";  //$NON-NLS-1$
     
     public static final String PROP_STATE_CHANGE_REASON = "state_change_reason";  //$NON-NLS-1$
+
+    /**
+     * @since 2.1
+     */
+    public static final String PROP_STATE_CHANGE_DETAILS = "state_change_details";  //$NON-NLS-1$
 
 }

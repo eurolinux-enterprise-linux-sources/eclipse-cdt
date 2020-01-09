@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 IBM Corporation and others.
+ * Copyright (c) 2004, 2009 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,8 +17,8 @@ import java.util.Collections;
 import junit.framework.TestSuite;
 
 import org.eclipse.cdt.core.model.ICProject;
-import org.eclipse.cdt.core.parser.CodeReader;
 import org.eclipse.cdt.core.parser.ExtendedScannerInfo;
+import org.eclipse.cdt.core.parser.FileContent;
 import org.eclipse.cdt.core.parser.IScannerInfo;
 import org.eclipse.cdt.core.parser.IToken;
 import org.eclipse.cdt.core.parser.ParserLanguage;
@@ -49,6 +49,7 @@ public class InclusionTests extends PreprocessorTestsBase {
 		super(name);
 	}
 
+	@Override
 	protected void tearDown() throws Exception {
 		if (fProject != null) {
 			CProjectHelper.delete(fProject);
@@ -59,14 +60,14 @@ public class InclusionTests extends PreprocessorTestsBase {
 	
 	public final static int SIZEOF_TRUTHTABLE = 10;
 
-	private IFile importFile(String fileName, String contents ) throws Exception{
+	private IFile importFile(String fileName, String contents) throws Exception {
     	if (fProject == null) {
     		fProject= CProjectHelper.createCProject(getClass().getName(), null, PDOMNullIndexer.ID);
     	}
     	return TestSourceReader.createFile(fProject.getProject(), fileName, contents);
 	}
 
-    private IFolder importFolder(String name) throws Exception{
+    private IFolder importFolder(String name) throws Exception {
     	if (fProject == null) {
     		fProject= CProjectHelper.createCProject(getClass().getName(), null, PDOMNullIndexer.ID);
     	}
@@ -77,7 +78,37 @@ public class InclusionTests extends PreprocessorTestsBase {
     	return folder;
 	}
 
-    public void testIncludeNext() throws Exception	{    	
+    // #include "one.h"
+    // #include "f1/two.h"
+    // #include "f1/f2/three.h"
+    public void testIncludeVariables_69529() throws Exception {    
+    	String content= getAboveComment();
+
+    	IFolder f0 = importFolder(".framework"); 
+    	importFolder("f1.framework"); 
+    	importFolder("f1"); 
+    	importFolder("f1.framework/f2"); 
+    	importFolder("f3"); 
+    	IFile base = importFile("base.cpp", content); 
+    	
+    	importFile(".framework/one.h", "1"); 
+    	importFile("f1.framework/two.h", "2"); 
+    	importFile("f1.framework/f2/three.h", "3"); 
+
+    	String[] path = {
+    			f0.getLocation().removeLastSegments(1) + "/__framework__.framework/__header__"
+    	};
+    	IScannerInfo scannerInfo = new ExtendedScannerInfo(Collections.EMPTY_MAP, path, new String[]{}, null);
+    	FileContent reader= FileContent.create(base);
+    	initializeScanner(reader, ParserLanguage.C, ParserMode.COMPLETE_PARSE, scannerInfo);
+
+    	// first file is not picked up (no framework)
+    	validateInteger("2");
+    	validateInteger("3");
+    	validateEOF();
+    }
+
+    public void testIncludeNext() throws Exception {    	
     	String baseFile = "int zero; \n#include \"foo.h\""; //$NON-NLS-1$
     	String i1Next = "int one; \n#include_next <bar/foo.h>"; //$NON-NLS-1$
     	String i2Next = "int two; \n#include_next \"bar/foo.h\""; //$NON-NLS-1$
@@ -99,7 +130,7 @@ public class InclusionTests extends PreprocessorTestsBase {
     	path[2] = oneThree.getLocation().toOSString();
     	
     	IScannerInfo scannerInfo = new ExtendedScannerInfo(Collections.EMPTY_MAP, path, new String[]{}, null);
-    	CodeReader reader= new CodeReader(base.getLocation().toString());
+    	FileContent reader= FileContent.create(base);
     	initializeScanner(reader, ParserLanguage.C, ParserMode.COMPLETE_PARSE, scannerInfo);
 
     	validateToken(IToken.t_int);
@@ -121,8 +152,36 @@ public class InclusionTests extends PreprocessorTestsBase {
     	validateEOF();
 	}
 
-    public void testIncludePathOrdering() throws Exception
-	{    	
+    public void testIncludeNext_286081() throws Exception {    	
+    	String baseFile = "0 \n#include \"foo.h\""; //$NON-NLS-1$
+    	String foo1 =     "1 \n#include \"intermed.h\""; //$NON-NLS-1$
+    	String intermed = "2 \n#include_next <foo.h>"; //$NON-NLS-1$
+    	String foo2 =     "3 \n"; //$NON-NLS-1$
+
+    	IFolder one = importFolder("one"); //$NON-NLS-1$
+    	IFolder two = importFolder("two"); //$NON-NLS-1$
+    	IFile base = importFile("base.cpp", baseFile); //$NON-NLS-1$
+    	importFile("one/foo.h", foo1); //$NON-NLS-1$
+    	importFile("one/intermed.h", intermed); //$NON-NLS-1$
+    	importFile("two/foo.h", foo2); //$NON-NLS-1$
+    	
+    	String[] path = new String[2];
+    	path[0] = one.getLocation().toOSString();
+    	path[1] = two.getLocation().toOSString();
+    	
+    	IScannerInfo scannerInfo = new ExtendedScannerInfo(Collections.EMPTY_MAP, path, new String[]{}, null);
+    	FileContent reader= FileContent.create(base);
+    	initializeScanner(reader, ParserLanguage.C, ParserMode.COMPLETE_PARSE, scannerInfo);
+
+    	validateInteger("0");
+    	validateInteger("1");
+    	validateInteger("2");
+    	validateInteger("3");
+    	
+    	validateEOF();
+	}
+
+    public void testIncludePathOrdering() throws Exception {    	
     	// create directory structure:
     	//  project/base.cpp
     	//  project/foo.h
@@ -149,7 +208,7 @@ public class InclusionTests extends PreprocessorTestsBase {
        	path[1] = threef.getLocation().toOSString();
    	
     	IScannerInfo scannerInfo = new ExtendedScannerInfo( Collections.EMPTY_MAP, path, new String[]{}, null );
-    	CodeReader reader= new CodeReader(base.getLocation().toString());
+    	FileContent reader= FileContent.create(base);
     	initializeScanner(reader, ParserLanguage.C, ParserMode.COMPLETE_PARSE, scannerInfo);
 
     	validateToken(IToken.t_int);
@@ -177,10 +236,10 @@ public class InclusionTests extends PreprocessorTestsBase {
         buffer.append( "int var = FOUND;\n"); //$NON-NLS-1$
     	IFile base = importFile( "base.cpp", buffer.toString() ); //$NON-NLS-1$
 
-    	CodeReader reader= new CodeReader(base.getLocation().toString());
+    	FileContent reader= FileContent.create(base);
     	ParserLanguage lang[]= {ParserLanguage.C, ParserLanguage.CPP};
-    	for (int i = 0; i < lang.length; i++) {
-    		initializeScanner(reader, lang[i], ParserMode.COMPLETE_PARSE, new ScannerInfo());
+    	for (ParserLanguage element : lang) {
+    		initializeScanner(reader, element, ParserMode.COMPLETE_PARSE, new ScannerInfo());
     		validateToken(IToken.t_int);
     		validateIdentifier("var");
     		validateToken(IToken.tASSIGN);
@@ -195,10 +254,28 @@ public class InclusionTests extends PreprocessorTestsBase {
         StringBuffer buffer = new StringBuffer( "#include \"file.h\"" );
     	IFile base = importFile( "base.cpp", buffer.toString() ); //$NON-NLS-1$
 
-    	CodeReader reader= new CodeReader(base.getLocation().toString());
+    	FileContent reader= FileContent.create(base);
     	initializeScanner(reader, ParserLanguage.CPP, ParserMode.COMPLETE_PARSE, new ScannerInfo());
     	validateIdentifier("ok");
     	validateEOF();
     }
     
+    // #include <inc/test.h>
+    public void testRelativeIncludes_243170() throws Exception {    
+    	String content= getAboveComment();
+
+    	IFolder f0 = importFolder("f1"); 
+    	importFolder("f1/f2"); 
+    	importFolder("f1/f2/inc"); 
+    	importFile("f1/f2/inc/test.h", "1"); 
+    	IFile base = importFile("f1/base.cpp", getAboveComment()); 
+
+    	String[] path = {"f2"};  // relative include
+    	IScannerInfo scannerInfo = new ExtendedScannerInfo(Collections.EMPTY_MAP, path, new String[]{}, null);
+    	FileContent reader= FileContent.create(base);
+    	initializeScanner(reader, ParserLanguage.C, ParserMode.COMPLETE_PARSE, scannerInfo);
+
+    	validateInteger("1");
+    	validateEOF();
+    }
 }

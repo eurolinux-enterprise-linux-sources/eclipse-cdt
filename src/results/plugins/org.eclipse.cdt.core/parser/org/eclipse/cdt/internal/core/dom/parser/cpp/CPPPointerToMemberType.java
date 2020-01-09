@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,6 +20,8 @@ import org.eclipse.cdt.core.dom.ast.ITypedef;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTPointerToMember;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTQualifiedName;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPPointerToMemberType;
+import org.eclipse.cdt.internal.core.dom.parser.ITypeMarshalBuffer;
+import org.eclipse.core.runtime.CoreException;
 
 /**
  * Models pointer to members.
@@ -66,18 +68,23 @@ public class CPPPointerToMemberType extends CPPPointerType implements ICPPPointe
 	 * @see org.eclipse.cdt.core.dom.ast.cpp.ICPPPointerToMemberType#getMemberOfClass()
 	 */
 	public IType getMemberOfClass() {
-		if (classType == null) { 
+		if (classType == null) {
+			IASTName name;
+			IBinding binding= null;
 			ICPPASTPointerToMember pm = operator;
-			IASTName name = pm.getName();
-			if (name instanceof ICPPASTQualifiedName) {
-				IASTName[] ns = ((ICPPASTQualifiedName) name).getNames();
-				if (ns.length > 1)
-					name = ns[ns.length - 2];
-				else 
-					name = ns[ns.length - 1]; 
+			if (pm == null) {
+				name= new CPPASTName();
+			} else {
+				name = pm.getName();
+				if (name instanceof ICPPASTQualifiedName) {
+					IASTName[] ns = ((ICPPASTQualifiedName) name).getNames();
+					if (ns.length > 1)
+						name = ns[ns.length - 2];
+					else 
+						name = ns[ns.length - 1]; 
+				}
+				binding = name.resolvePreBinding();
 			}
-			
-			IBinding binding = name.resolvePreBinding();
 			if (binding instanceof IType) {
 				classType = (IType) binding;
 			} else {
@@ -85,5 +92,22 @@ public class CPPPointerToMemberType extends CPPPointerType implements ICPPPointe
 			}
 		}
 		return classType;
+	}
+	
+	@Override
+	public void marshal(ITypeMarshalBuffer buffer) throws CoreException {
+		int firstByte= ITypeMarshalBuffer.POINTER_TO_MEMBER;
+		if (isConst()) firstByte |= ITypeMarshalBuffer.FLAG1;
+		if (isVolatile()) firstByte |= ITypeMarshalBuffer.FLAG2;
+		buffer.putByte((byte) firstByte);
+		buffer.marshalType(getType());
+		buffer.marshalType(getMemberOfClass());
+	}
+	
+	public static IType unmarshal(int firstByte, ITypeMarshalBuffer buffer) throws CoreException {
+		IType nested= buffer.unmarshalType();
+		IType memberOf= buffer.unmarshalType();
+		return new CPPPointerToMemberType(nested, memberOf, (firstByte & ITypeMarshalBuffer.FLAG1) != 0,
+				(firstByte & ITypeMarshalBuffer.FLAG2) != 0);
 	}
 }

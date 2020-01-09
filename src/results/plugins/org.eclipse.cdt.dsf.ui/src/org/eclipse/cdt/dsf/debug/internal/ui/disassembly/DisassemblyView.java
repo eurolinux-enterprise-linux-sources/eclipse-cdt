@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,6 +21,7 @@ import org.eclipse.ui.IViewPart;
 import org.eclipse.ui.IViewSite;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.PartInitException;
+import org.eclipse.ui.actions.ActionFactory;
 
 /**
  * DisassemblyView
@@ -76,9 +77,11 @@ public class DisassemblyView extends DisassemblyPart implements IViewPart {
 	protected void contributeToActionBars(IActionBars bars) {
 		super.contributeToActionBars(bars);
 		fillLocalPullDown(bars.getMenuManager());
+		fillLocalToolBar(bars.getToolBarManager());
 	}
 
 	protected void fillLocalPullDown(IMenuManager manager) {
+		manager.add(fGlobalActions.get(ActionFactory.FIND.getId()));
 		manager.add(fActionGotoPC);
 		manager.add(fActionGotoAddress);
 		manager.add(fActionToggleSource);
@@ -92,7 +95,7 @@ public class DisassemblyView extends DisassemblyPart implements IViewPart {
 
 	@Override
 	public void dispose() {
-		getSite().getPage().removeSelectionListener(fDebugViewListener);
+		getSite().getPage().removeSelectionListener(IDebugUIConstants.ID_DEBUG_VIEW, fDebugViewListener);
 		super.dispose();
 	}
 }

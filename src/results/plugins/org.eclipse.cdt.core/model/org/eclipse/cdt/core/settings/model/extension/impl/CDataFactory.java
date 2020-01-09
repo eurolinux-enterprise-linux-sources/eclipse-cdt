@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2009 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -169,7 +169,7 @@ public class CDataFactory {
 			}
 			break;
 		case ICSettingBase.SETTING_FOLDER:
-			((CDefaultFolderData)parent).fLanguageDatas.add(child);
+			((CDefaultFolderData)parent).fLanguageDatas.add((CLanguageData)child);
 			break;
 		case ICSettingBase.SETTING_FILE:
 			((CDefaultFileData)parent).fLanguageData = (CLanguageData)child;

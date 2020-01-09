@@ -23,6 +23,7 @@ import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.OperationCanceledException;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.osgi.util.NLS;
 
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.ICompositeType;
@@ -89,6 +90,22 @@ public class PDOMSearchPatternQuery extends PDOMSearchQuery {
     	for (int i = 0; i < n; ++i) {
     		char c = patternStr.charAt(i);
     		switch (c) {
+    		case '\\':
+    			if (i+1 < n) {
+    				switch(patternStr.charAt(i+1)) {
+    				case '?':
+    					buff.append("\\?"); //$NON-NLS-1$
+    					break;
+    				case '*':
+    					buff.append("\\*"); //$NON-NLS-1$
+    					break;
+    				default:
+    					buff.append('\\');
+    				}
+    			} else {
+    				buff.append('\\');
+    			}
+    			break;
     		case '*':
     			buff.append(".*"); //$NON-NLS-1$
     			break;
@@ -104,13 +121,15 @@ public class PDOMSearchPatternQuery extends PDOMSearchQuery {
     				buff = new StringBuffer();
     			}
     			break;
+			case '|': case '+': case '^': case '(': case ')': case '[': case ']': 
+				buff.append('\\').append(c);
+				break;
    			default:
     			buff.append(c);
     		}
     	}
     	
-    	if (buff.length() > 0)
-    	{
+    	if (buff.length() > 0) {
 			if (isCaseSensitive)
 				patternList.add(Pattern.compile(buff.toString()));
 			else
@@ -137,8 +156,7 @@ public class PDOMSearchPatternQuery extends PDOMSearchQuery {
 				boolean matches= false;
 				if ((flags & FIND_ALL_TYPES) == FIND_ALL_TYPES) {
 					matches= true;
-				}
-				else if (pdomBinding instanceof ICompositeType) {
+				} else if (pdomBinding instanceof ICompositeType) {
 					ICompositeType ct= (ICompositeType) pdomBinding;
 					switch (ct.getKey()) {
 					case ICompositeType.k_struct:
@@ -149,29 +167,21 @@ public class PDOMSearchPatternQuery extends PDOMSearchQuery {
 						matches= (flags & FIND_UNION) != 0;
 						break;
 					}
-				}
-				else if (pdomBinding instanceof IEnumeration) {
+				} else if (pdomBinding instanceof IEnumeration) {
 					matches= (flags & FIND_ENUM) != 0;
-				}
-				else if (pdomBinding instanceof IEnumerator) {
+				} else if (pdomBinding instanceof IEnumerator) {
 					matches= (flags & FIND_ENUMERATOR) != 0;
-				}
-				else if (pdomBinding instanceof IField) {
+				} else if (pdomBinding instanceof IField) {
 					matches= (flags & FIND_FIELD) != 0;
-				}
-				else if (pdomBinding instanceof ICPPMethod) {
+				} else if (pdomBinding instanceof ICPPMethod) {
 					matches= (flags & FIND_METHOD) != 0;
-				}
-				else if (pdomBinding instanceof IVariable) {
+				} else if (pdomBinding instanceof IVariable) {
 					matches= (flags & FIND_VARIABLE) != 0;
-				}
-				else if (pdomBinding instanceof IFunction) {
+				} else if (pdomBinding instanceof IFunction) {
 					matches= (flags & FIND_FUNCTION) != 0;
-				}
-				else if (pdomBinding instanceof ICPPNamespace || pdomBinding instanceof ICPPNamespaceAlias) {
+				} else if (pdomBinding instanceof ICPPNamespace || pdomBinding instanceof ICPPNamespaceAlias) {
 					matches= (flags & FIND_NAMESPACE) != 0;
-				}
-				else if (pdomBinding instanceof ITypedef) {
+				} else if (pdomBinding instanceof ITypedef) {
 					matches= (flags & FIND_TYPEDEF) != 0;
 				}
 				if (matches) {
@@ -196,7 +206,7 @@ public class PDOMSearchPatternQuery extends PDOMSearchQuery {
 
 	@Override
 	public String getResultLabel(int numMatches) {
-		String patternInScope = CSearchMessages.bind(
+		String patternInScope = NLS.bind(
 				CSearchMessages.PDOMSearchPatternQuery_PatternQuery_labelPatternInScope, patternStr, scopeDesc);
 		return getResultLabel(patternInScope, numMatches); 
 	}

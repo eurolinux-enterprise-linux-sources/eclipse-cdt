@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2009 QNX Software Systems and others.
+ *  Copyright (c) 2009, 2010 QNX Software Systems and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -97,6 +97,8 @@ public class MultiLaunchConfigurationSelectionDialog extends TitleAreaDialog imp
 					} catch (CoreException e) {
 						return false;
 					}
+				} else if (element instanceof ILaunchConfiguration) {
+					return MultiLaunchConfigurationDelegate.isValidLaunchReference((ILaunchConfiguration) element);
 				}
 				return true;
 			}
@@ -359,10 +361,10 @@ public class MultiLaunchConfigurationSelectionDialog extends TitleAreaDialog imp
 	}
 
 	public void setInitialSelection(LaunchElement el) {
-		action = el.getAction();
-		actionParam = el.getActionParam();
-		isDefaultMode = el.getMode().equals(MultiLaunchConfigurationDelegate.DEFAULT_MODE);
-	    fInitialSelection = new StructuredSelection(el.getData());   
+		action = el.action;
+		actionParam = el.actionParam;
+		isDefaultMode = el.mode.equals(MultiLaunchConfigurationDelegate.DEFAULT_MODE);
+	    fInitialSelection = new StructuredSelection(el.data);   
 	    fSelection = fInitialSelection;
     }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 Intel Corporation and others.
+ * Copyright (c) 2004, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -52,6 +52,10 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 class UpdateManagedProject20 {
 	private static final String ID_SEPARATOR = ".";	//$NON-NLS-1$
 	
@@ -392,10 +396,12 @@ class UpdateManagedProject20 {
 		for(int i = 0; i < options.length; i++){
 			IOption curOption = options[i]; 
 			IOption parent = curOption.getSuperClass();
-			//String curOptionId = curOption.getId();
-			
 			if(parent == null)
 				continue;
+			
+			for (;parent.getSuperClass()!=null;parent = parent.getSuperClass()) {
+				// empty body, the loop is to find superclass
+			}
 			
 			String parentId = parent.getId();
 			if(!parentId.equals(optId))

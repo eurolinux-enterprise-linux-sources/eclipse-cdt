@@ -232,7 +232,7 @@ public class CPPScopeMapper {
 		}
 		scope= scope.getParent();
 		while (scope != null && scope != tuscope) {
-			buf.append(':');  
+			buf.append(':');
 			scopeName= scope.getScopeName();
 			if (scopeName != null) {
 				buf.append(scope.getScopeName().getSimpleID());
@@ -295,7 +295,7 @@ public class CPPScopeMapper {
 			if (template instanceof IIndexBinding && template instanceof ICPPClassType) {
 				IBinding mapped= mapToAST((ICPPClassType) template);
 				if (mapped != template && mapped instanceof ICPPClassType) {
-					mapped= CPPTemplates.instantiate((ICPPClassTemplate) mapped, inst.getTemplateArguments());
+					mapped= CPPTemplates.instantiate((ICPPClassTemplate) mapped, inst.getTemplateArguments(), false);
 					if (mapped instanceof ICPPClassType)
 						return (ICPPClassType) mapped;
 				}

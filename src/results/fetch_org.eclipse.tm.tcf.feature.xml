@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Fetch script for feature@org.eclipse.tm.tcf.feature -->
+
+<project name="FetchScript" default="fetch">
+	<property name="quiet" value="true"/>
+
+	<target name="fetch">
+		<antcall target="fetch.element"/>
+		<antcall target="fetch.plugins"/>
+		<antcall target="fetch.recursively"/>
+	</target>
+	<target name="fetch.element" if="featureOnly">
+		<available property="${buildDirectory}/features/org.eclipse.tm.tcf.feature/feature.xml" file="${buildDirectory}/features/org.eclipse.tm.tcf.feature/feature.xml"		/>
+		<antcall target="FetchFromSVN">
+			<param name="revision" value="HEAD"/>
+			<param name="fileToCheck" value="${buildDirectory}/features/org.eclipse.tm.tcf.feature/feature.xml"/>
+			<param name="username" value=""/>
+			<param name="elementName" value="org.eclipse.tm.tcf.feature"/>
+			<param name="tagPath" value="tags"/>
+			<param name="tag" value="tags"/>
+			<param name="path" value="0.3.0/features/org.eclipse.tm.tcf.feature"/>
+			<param name="destinationFolder" value="${buildDirectory}/features"/>
+			<param name="force" value="false"/>
+			<param name="peg" value="HEAD"/>
+			<param name="password" value=""/>
+			<param name="url" value="svn://dev.eclipse.org/svnroot/dsdp/org.eclipse.tm.tcf"/>
+		</antcall>
+	</target>
+	<target name="fetch.plugins" if="featureAndPlugins">
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.core/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.core/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.core/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.core/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromSVN">
+			<param name="revision" value="HEAD"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.tm.tcf.core/plugin.xml"/>
+			<param name="username" value=""/>
+			<param name="elementName" value="org.eclipse.tm.tcf.core"/>
+			<param name="tagPath" value="tags"/>
+			<param name="tag" value="tags"/>
+			<param name="path" value="0.3.0/plugins/org.eclipse.tm.tcf.core"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="force" value="false"/>
+			<param name="peg" value="HEAD"/>
+			<param name="password" value=""/>
+			<param name="url" value="svn://dev.eclipse.org/svnroot/dsdp/org.eclipse.tm.tcf"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromSVN">
+			<param name="revision" value="HEAD"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.tm.tcf/plugin.xml"/>
+			<param name="username" value=""/>
+			<param name="elementName" value="org.eclipse.tm.tcf"/>
+			<param name="tagPath" value="tags"/>
+			<param name="tag" value="tags"/>
+			<param name="path" value="0.3.0/plugins/org.eclipse.tm.tcf"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="force" value="false"/>
+			<param name="peg" value="HEAD"/>
+			<param name="password" value=""/>
+			<param name="url" value="svn://dev.eclipse.org/svnroot/dsdp/org.eclipse.tm.tcf"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromSVN">
+			<param name="revision" value="HEAD"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug/plugin.xml"/>
+			<param name="username" value=""/>
+			<param name="elementName" value="org.eclipse.tm.tcf.debug"/>
+			<param name="tagPath" value="tags"/>
+			<param name="tag" value="tags"/>
+			<param name="path" value="0.3.0/plugins/org.eclipse.tm.tcf.debug"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="force" value="false"/>
+			<param name="peg" value="HEAD"/>
+			<param name="password" value=""/>
+			<param name="url" value="svn://dev.eclipse.org/svnroot/dsdp/org.eclipse.tm.tcf"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug.ui/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug.ui/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromSVN">
+			<param name="revision" value="HEAD"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.tm.tcf.debug.ui/plugin.xml"/>
+			<param name="username" value=""/>
+			<param name="elementName" value="org.eclipse.tm.tcf.debug.ui"/>
+			<param name="tagPath" value="tags"/>
+			<param name="tag" value="tags"/>
+			<param name="path" value="0.3.0/plugins/org.eclipse.tm.tcf.debug.ui"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="force" value="false"/>
+			<param name="peg" value="HEAD"/>
+			<param name="password" value=""/>
+			<param name="url" value="svn://dev.eclipse.org/svnroot/dsdp/org.eclipse.tm.tcf"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.rse/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.rse/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.rse/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.rse/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromSVN">
+			<param name="revision" value="HEAD"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.tm.tcf.rse/plugin.xml"/>
+			<param name="username" value=""/>
+			<param name="elementName" value="org.eclipse.tm.tcf.rse"/>
+			<param name="tagPath" value="tags"/>
+			<param name="tag" value="tags"/>
+			<param name="path" value="0.3.0/plugins/org.eclipse.tm.tcf.rse"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="force" value="false"/>
+			<param name="peg" value="HEAD"/>
+			<param name="password" value=""/>
+			<param name="url" value="svn://dev.eclipse.org/svnroot/dsdp/org.eclipse.tm.tcf"/>
+		</antcall>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.cdt.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.cdt.ui/plugin.xml"		/>
+		<available property="${buildDirectory}/plugins/org.eclipse.tm.tcf.cdt.ui/plugin.xml" file="${buildDirectory}/plugins/org.eclipse.tm.tcf.cdt.ui/META-INF/MANIFEST.MF"		/>
+		<antcall target="FetchFromSVN">
+			<param name="revision" value="HEAD"/>
+			<param name="fileToCheck" value="${buildDirectory}/plugins/org.eclipse.tm.tcf.cdt.ui/plugin.xml"/>
+			<param name="username" value=""/>
+			<param name="elementName" value="org.eclipse.tm.tcf.cdt.ui"/>
+			<param name="tagPath" value="tags"/>
+			<param name="tag" value="tags"/>
+			<param name="path" value="0.3.0/plugins/org.eclipse.tm.tcf.cdt.ui"/>
+			<param name="destinationFolder" value="${buildDirectory}/plugins"/>
+			<param name="force" value="false"/>
+			<param name="peg" value="HEAD"/>
+			<param name="password" value=""/>
+			<param name="url" value="svn://dev.eclipse.org/svnroot/dsdp/org.eclipse.tm.tcf"/>
+		</antcall>
+	</target>
+	<target name="fetch.recursively" if="featuresRecursively">
+	</target>
+	<target name="FetchFromSVN" unless="${fileToCheck}">
+		<svn command="export" url="${url}/${tagPath}/${path}" pegRev="${peg}" rev="${revision}" dest="${destinationFolder}/${elementName}" username="${username}" password="${password}" force="${force}"		/>
+	</target>
+
+</project>

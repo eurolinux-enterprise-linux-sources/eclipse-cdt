@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension-point id="scriptableFeature" name="Scriptable Feature" schema="schema/scriptableFeature.exsd"/>
+
+   <extension
+         point="org.eclipse.ui.startup">
+      <startup
+            class="org.eclipse.cdt.scripting.ScriptingPlugin">
+      </startup>
+   </extension>
+
+   <extension
+         point="org.eclipse.equinox.http.registry.httpcontexts">
+      <httpcontext
+            id="jsonrpc">
+         <resource-mapping
+               path="/web_files">
+         </resource-mapping>
+      </httpcontext>
+   </extension>
+   <extension
+         point="org.eclipse.equinox.http.registry.servlets">
+      <servlet
+            alias="/jsonrpc"
+            class="org.eclipse.cdt.internal.scripting.RCPServlet">
+      </servlet>
+  </extension>
+  <extension
+        point="org.eclipse.cdt.scripting.scriptableFeature">
+     <scriptableClass
+           class="org.eclipse.cdt.scripting.Activities"
+           name="activities">
+     </scriptableClass>
+  </extension>
+    <extension
+         point="org.eclipse.core.runtime.preferences">
+      <initializer class="org.eclipse.cdt.scripting.PreferenceInitializer"/>
+   </extension>
+    	<extension
+         point="org.eclipse.ui.preferencePages">
+      <page
+            name="Scripting"
+            category="org.eclipse.cdt.ui.preferences.CPluginPreferencePage"
+            class="org.eclipse.cdt.scripting.ScriptingPreferencePage"
+            id="org.eclipse.cdt.debug.edc.ui.ScriptingPreferencePage">
+      </page>
+   </extension>
+ 
+</plugin>

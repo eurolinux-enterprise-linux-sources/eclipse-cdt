@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
@@ -23,6 +24,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.cdt.dsf.internal.DsfPlugin;
+import org.eclipse.cdt.dsf.internal.LoggingUtils;
 import org.eclipse.core.runtime.ILog;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Platform;
@@ -48,11 +50,6 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
      */
     private String fName;
     
-    /**
-     * Instance number of this executor, used with the executor name.
-     */
-    private int fInstanceNumber;
-    
     /** Thread factory that creates the single thread to be used for this executor */
     static class DsfThreadFactory implements ThreadFactory {
         private String fThreadName; 
@@ -77,9 +74,8 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
      * @param name Name used to create executor's thread.
      */
     public DefaultDsfExecutor(String name) {
-        super(1, new DsfThreadFactory(name + " - " + fgInstanceCounter)); //$NON-NLS-1$
+        super(1, new DsfThreadFactory(name + " - " + fgInstanceCounter++)); //$NON-NLS-1$
         fName = name;
-        fInstanceNumber = fgInstanceCounter++;
         
         if(DEBUG_EXECUTOR || ASSERTIONS_ENABLED) {
             // If tracing, pre-start the dispatch thread, and add it to the map.
@@ -90,6 +86,16 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
     
     public boolean isInExecutorThread() {
         return Thread.currentThread().equals( ((DsfThreadFactory)getThreadFactory()).fThread );
+    }
+
+    /**
+	 * @since 2.1
+	 */
+    public int getCurrentExecutionDepth() {
+    	if (fCurrentlyExecuting != null) {
+    		return fCurrentlyExecuting.fDepth;
+    	}
+        return -1;
     }
 
     protected String getName() { 
@@ -157,6 +163,7 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
     abstract class TracingWrapper {
         /** Sequence number of this runnable/callable */
         int fSequenceNumber = -1; 
+        int fDepth = 0;
         
         /** Trace of where the runnable/callable was submitted to the executor */
         StackTraceWrapper fSubmittedAt = null; 
@@ -164,15 +171,49 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
         /** Reference to the runnable/callable that submitted this runnable/callable to the executor */
         TracingWrapper fSubmittedBy = null;
 
-        /**
-         * @param offset the number of items in the stack trace not to be printed
-         */
-        TracingWrapper(int offset) {
-            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-            // guard against the offset being greater than the stack trace
-            offset = Math.min(offset, stackTrace.length);
-            fSubmittedAt = new StackTraceWrapper(new StackTraceElement[stackTrace.length - offset]); 
-            System.arraycopy(stackTrace, offset - 1, fSubmittedAt.fStackTraceElements, 0, fSubmittedAt.fStackTraceElements.length);
+		/**
+		 * The names of the executor submitter methods we support, ordered by
+		 * popularity so as to optimize the tracing logic. (For the curious,
+		 * 'execute' is by far the most commonly called--ten times more often
+		 * than 'submit', in fact).
+		 */
+        private final String[] SUBMITTER_METHOD_NAMES = {
+        	"execute", "submit", "schedule", "scheduleAtFixedRate", "scheduleWithFixedDelay" }; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$
+        
+		/**
+		 */
+        TracingWrapper() {
+        	
+			// Get the this thread's stack trace and then search for the call
+			// into the executor's submitter method. We'll want to ignore
+			// everything up to and including that call.
+        	StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        	int frameIgnoreCount = 1;
+        	String executorClassName = this.getClass().getEnclosingClass().getSimpleName();	// e.g., "DefaultDsfExecutor"
+        	outer: for (StackTraceElement frame : stackTrace) {
+        		final String framestr = frame.toString();
+        		for (String methodName : SUBMITTER_METHOD_NAMES) {
+	        		if (framestr.contains(executorClassName + "." + methodName + "(")) { //$NON-NLS-1$ //$NON-NLS-2$
+	        			break outer;	// exit both loops
+	        		}
+        		}
+    			frameIgnoreCount++;
+        	}
+        	
+        	if (frameIgnoreCount == stackTrace.length) {
+				// Internal error, really. We were unable to identify the
+				// executor's submission function. Our check above must be
+				// overlooking a possibility
+        		frameIgnoreCount = 0;
+        	}
+        	
+        	// guard against the offset being greater than the stack trace
+        	frameIgnoreCount = Math.min(frameIgnoreCount, stackTrace.length);
+        	fSubmittedAt = new StackTraceWrapper(new StackTraceElement[stackTrace.length - frameIgnoreCount]);
+            if (fSubmittedAt.fStackTraceElements.length > 0) {
+	            System.arraycopy(stackTrace, frameIgnoreCount, fSubmittedAt.fStackTraceElements, 0, fSubmittedAt.fStackTraceElements.length);
+            }
+            
             if (isInExecutorThread() &&  fCurrentlyExecuting != null) {
                 fSubmittedBy = fCurrentlyExecuting;
             }
@@ -180,6 +221,7 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
         
         void traceExecution() {
             fSequenceNumber = fSequenceCounter++;
+            fDepth = fSubmittedBy == null ? 0 : fSubmittedBy.fDepth + 1;
             fCurrentlyExecuting = this;
 
             // Write to console only if tracing is enabled (as opposed to tracing or assertions).
@@ -191,58 +233,108 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
                 traceBuilder.append(' ');
     
                 // Record the executor #
-                traceBuilder.append('#');
+                traceBuilder.append("DSF execution #"); //$NON-NLS-1$
                 traceBuilder.append(fSequenceNumber);
 
                 // Record the executor name
-                traceBuilder.append('(');
-                traceBuilder.append(fName);
-                traceBuilder.append(" - "); //$NON-NLS-1$
-                traceBuilder.append(fInstanceNumber);
+                traceBuilder.append(". Executor is ("); //$NON-NLS-1$
+                traceBuilder.append(((DsfThreadFactory)getThreadFactory()).fThreadName);
                 traceBuilder.append(')');
-                traceBuilder.append(' ');
 
-                // Append executable class name
-                traceBuilder.append(getExecutable().getClass().getName());
+				// This will be a Runnable or a Callable. Hopefully it will also
+				// be a DsfExecutable and thus be instrumented with trace/debug
+				// information. In nearly every case, it will be an anonymous
+				// inner class.
+                final Object executable = getExecutable();
                 
-                // Add executable's toString().
-                traceBuilder.append("\n        "); //$NON-NLS-1$
-                traceBuilder.append(getExecutable().toString());
+				// Append executable class name. The anonymous inner class name
+				// name won't be very interesting; use the parent class instead.
+                traceBuilder.append("\n\tExecutable detail: \n\t\ttype = "); //$NON-NLS-1$
+                Class<? extends Object> execClass = executable.getClass();
+                traceBuilder.append(execClass.isAnonymousClass() ? execClass.getSuperclass().getName() : execClass.getName());
+                
+                // Append the executable reference
+                final String refstr = LoggingUtils.toString(executable, false);
+                String tostr = LoggingUtils.trimTrailingNewlines(executable.toString());
+                traceBuilder.append("\n\t\t"); //$NON-NLS-1$
+                traceBuilder.append("instance = " + refstr); //$NON-NLS-1$
+                if (!tostr.equals(refstr)) {
+                	traceBuilder.append(" ["); //$NON-NLS-1$
+                	traceBuilder.append(tostr);
+                	traceBuilder.append(']');                	
+                }
 
-                // Append "create by" info.
-                if (getExecutable() instanceof DsfExecutable) {
-                    DsfExecutable dsfExecutable = (DsfExecutable)getExecutable(); 
-                    if (dsfExecutable.fCreatedAt != null || dsfExecutable.fCreatedBy != null) {
-                        traceBuilder.append("\n            created  "); //$NON-NLS-1$
-                        if (dsfExecutable.fCreatedBy != null) {
-                            traceBuilder.append(" by #"); //$NON-NLS-1$
-                            traceBuilder.append(dsfExecutable.fCreatedBy.fSequenceNumber);
+				// Determine if the created-at and submitted-at information is
+				// the same. If so, consolidate.
+                StackTraceElement[] createdAtStack = null;
+                StackTraceElement[] submittedAtStack = (fSubmittedAt == null) ? null : fSubmittedAt.fStackTraceElements;
+                int createdBySeqNum = Integer.MIN_VALUE;
+                int submittedBySeqNum = (fSubmittedBy == null) ? Integer.MIN_VALUE : fSubmittedBy.fSequenceNumber;
+                if (executable instanceof DsfExecutable) {
+                    DsfExecutable dsfExecutable = (DsfExecutable)executable; 
+                    createdAtStack = (dsfExecutable.fCreatedAt == null) ? null : dsfExecutable.fCreatedAt.fStackTraceElements;
+                    createdBySeqNum = (dsfExecutable.fCreatedBy == null) ? Integer.MIN_VALUE : dsfExecutable.fCreatedBy.fSequenceNumber;
+                }
+
+                boolean canConsolidate = false;
+                if ((createdBySeqNum == submittedBySeqNum) && (createdAtStack != null) && (submittedAtStack != null)) {
+                	if ((createdAtStack.length == submittedAtStack.length) ||
+                		(createdAtStack.length >=3 && submittedAtStack.length >= 3)) {
+                		
+                		canConsolidate = true;
+                		int count = Math.min(createdAtStack.length, 3);
+                		for (int i = 0; i < count; i++) {
+                			if (createdAtStack[i].toString().compareTo(submittedAtStack[i].toString()) != 0) {
+                				canConsolidate = false;
+                				break;
+                			}
+                		}
+                	}
+                }
+
+                if (canConsolidate) {
+            		traceBuilder.append("\n\t\tcreated and submitted"); //$NON-NLS-1$
+                    if (createdBySeqNum != Integer.MIN_VALUE) {
+                        traceBuilder.append(" by #"); //$NON-NLS-1$
+                        traceBuilder.append(createdBySeqNum);
+                    }
+                    if (createdAtStack != null) {
+                        traceBuilder.append(" at:"); //$NON-NLS-1$
+                        for (int i = 0; i < createdAtStack.length && i < 3; i++) {
+                            traceBuilder.append("\n\t\t\t"); //$NON-NLS-1$
+                            traceBuilder.append(createdAtStack[i].toString());
                         }
-                        if (dsfExecutable.fCreatedAt != null) {
-                            traceBuilder.append("\n                      at "); //$NON-NLS-1$
-                            traceBuilder.append(dsfExecutable.fCreatedAt.fStackTraceElements[0].toString());
-                            for (int i = 1; i < dsfExecutable.fCreatedAt.fStackTraceElements.length && i < 3; i++) {
-                                traceBuilder.append("\n                         "); //$NON-NLS-1$
-                                traceBuilder.append(dsfExecutable.fCreatedAt.fStackTraceElements[i].toString());
-                            }
+                    }
+                }
+                else {
+	                // Append "create by" info.
+                    if (createdAtStack != null || createdBySeqNum != Integer.MIN_VALUE) {
+                        traceBuilder.append("\n\t\tcreated  "); //$NON-NLS-1$
+                        if (createdBySeqNum != Integer.MIN_VALUE) {
+                            traceBuilder.append(" by #"); //$NON-NLS-1$
+                            traceBuilder.append(createdBySeqNum);
+                        }
+                        if (createdAtStack != null) {
+                            traceBuilder.append(" at:"); //$NON-NLS-1$
+                            for (int i = 0; i < createdAtStack.length && i < 3; i++) {
+                                traceBuilder.append("\n\t\t\t"); //$NON-NLS-1$
+                                traceBuilder.append(createdAtStack[i].toString());
                         }   
                     }
                 }
     
                 // Submitted info
-                traceBuilder.append("\n            submitted"); //$NON-NLS-1$
+                traceBuilder.append("\n\t\tsubmitted"); //$NON-NLS-1$
                 if (fSubmittedBy != null) {
                     traceBuilder.append(" by #"); //$NON-NLS-1$
                     traceBuilder.append(fSubmittedBy.fSequenceNumber);
                 }
-                traceBuilder.append("\n                      at "); //$NON-NLS-1$
-                traceBuilder.append(fSubmittedAt.fStackTraceElements[0].toString());
-                for (int i = 1; i < fSubmittedAt.fStackTraceElements.length && i < 3; i++) {
-                    traceBuilder.append("\n                         "); //$NON-NLS-1$
+                traceBuilder.append(" at:"); //$NON-NLS-1$
+                for (int i = 0; i < fSubmittedAt.fStackTraceElements.length && i < 3; i++) {
+                    traceBuilder.append("\n\t\t\t"); //$NON-NLS-1$
                     traceBuilder.append(fSubmittedAt.fStackTraceElements[i].toString());
                 }
-                traceBuilder.append(" at "); //$NON-NLS-1$
-                traceBuilder.append(fSubmittedAt.fStackTraceElements[0].toString());
+                }
                                 
                 // Finally write out to console
                 DsfPlugin.debug(traceBuilder.toString());
@@ -255,8 +347,9 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
     
     class TracingWrapperRunnable extends TracingWrapper implements Runnable {
         final Runnable fRunnable;
-        public TracingWrapperRunnable(Runnable runnable, int offset) {
-            super(offset);
+        
+        
+        public TracingWrapperRunnable(Runnable runnable) {
             if (runnable == null) throw new NullPointerException();
             fRunnable = runnable;
 
@@ -282,14 +375,29 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
                 // programming error.
                 logException(e);
                 throw e;
+            } catch (Error e) {
+                logException(e);
+                throw e;
             }
         }
     }
     
     public class TracingWrapperCallable<T> extends TracingWrapper implements Callable<T> {
         final Callable<T> fCallable;
-        public TracingWrapperCallable(Callable<T> callable, int offset) {
-            super(offset);
+        
+        /**
+         * @deprecated use constructor that takes just the Callable parameter
+         */
+        @Deprecated
+		public TracingWrapperCallable(Callable<T> callable, int frameIgnoreCount) {
+            if (callable == null) throw new NullPointerException();
+            fCallable = callable;
+        }
+        
+        /**
+		 * @since 2.1
+		 */
+        public TracingWrapperCallable(Callable<T> callable) {
             if (callable == null) throw new NullPointerException();
             fCallable = callable;
         }
@@ -311,7 +419,7 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
     public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
         if(DEBUG_EXECUTOR || ASSERTIONS_ENABLED) {
             if ( !(callable instanceof TracingWrapper) ) {
-                callable = new TracingWrapperCallable<V>(callable, 6);
+                callable = new TracingWrapperCallable<V>(callable);
             }
         }
         return super.schedule(callable, delay, unit);
@@ -320,7 +428,7 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
      public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
          if(DEBUG_EXECUTOR || ASSERTIONS_ENABLED) {
              if ( !(command instanceof TracingWrapper) ) {
-                 command = new TracingWrapperRunnable(command, 6);
+                 command = new TracingWrapperRunnable(command);
              }
          }
          return super.schedule(command, delay, unit);
@@ -329,7 +437,7 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
     @Override
     public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
         if(DEBUG_EXECUTOR || ASSERTIONS_ENABLED) {
-            command = new TracingWrapperRunnable(command, 6);
+            command = new TracingWrapperRunnable(command);
         }
         return super.scheduleAtFixedRate(command, initialDelay, period, unit);
     }
@@ -337,15 +445,15 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
     @Override
     public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
         if(DEBUG_EXECUTOR || ASSERTIONS_ENABLED) {
-            command = new TracingWrapperRunnable(command, 6);
+            command = new TracingWrapperRunnable(command);
         }
         return super.scheduleWithFixedDelay(command, initialDelay, delay, unit);
     }
-
+    
     @Override
     public void execute(Runnable command) {
         if(DEBUG_EXECUTOR || ASSERTIONS_ENABLED) {
-            command = new TracingWrapperRunnable(command, 6);
+            command = new TracingWrapperRunnable(command);
         }
         super.execute(command);
     }     
@@ -353,7 +461,7 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
     @Override
     public Future<?> submit(Runnable command) {
         if(DEBUG_EXECUTOR || ASSERTIONS_ENABLED) {
-            command = new TracingWrapperRunnable(command, 6);
+            command = new TracingWrapperRunnable(command);
         }
         return super.submit(command);
     }
@@ -361,7 +469,7 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
     @Override
     public <T> Future<T> submit(Callable<T> callable) {
         if(DEBUG_EXECUTOR || ASSERTIONS_ENABLED) {
-            callable = new TracingWrapperCallable<T>(callable, 6);
+            callable = new TracingWrapperCallable<T>(callable);
         }
         return super.submit(callable);
     }
@@ -369,8 +477,26 @@ public class DefaultDsfExecutor extends ScheduledThreadPoolExecutor
     @Override
     public <T> Future<T> submit(Runnable command, T result) {
         if(DEBUG_EXECUTOR || ASSERTIONS_ENABLED) {
-            command = new TracingWrapperRunnable(command, 6);
+            command = new TracingWrapperRunnable(command);
         }
         return super.submit(command, result);
     }
+    
+    @Override
+	public void shutdown() {
+    	if (DEBUG_EXECUTOR && ("".equals(DEBUG_EXECUTOR_NAME) || fName.equals(DEBUG_EXECUTOR_NAME))) { //$NON-NLS-1$    		
+    		DsfPlugin.debug(DsfPlugin.getDebugTime() + " Executor (" + ((DsfThreadFactory)getThreadFactory()).fThreadName + ") is being shut down. Already submitted tasks will be executed, new ones will not.");	 //$NON-NLS-1$ //$NON-NLS-2$
+    	}
+    	super.shutdown();
+    }
+
+    @Override
+	public List<Runnable> shutdownNow() {
+    	if (DEBUG_EXECUTOR && ("".equals(DEBUG_EXECUTOR_NAME) || fName.equals(DEBUG_EXECUTOR_NAME))) { //$NON-NLS-1$
+    		DsfPlugin.debug(DsfPlugin.getDebugTime() + " Executor (" + ((DsfThreadFactory)getThreadFactory()).fThreadName + ") is being shut down. No queued or new tasks will be executed, and will attempt to cancel active ones.");	 //$NON-NLS-1$ //$NON-NLS-2$
+    	}
+    	return super.shutdownNow();
+    }
+    
+    
 }

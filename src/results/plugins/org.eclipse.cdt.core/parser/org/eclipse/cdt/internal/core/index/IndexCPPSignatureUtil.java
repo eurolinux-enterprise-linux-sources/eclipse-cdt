@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *    QNX - Initial API and implementation
+ *    Bryan Wilkinson (QNX) - Initial API and implementation
  *    Andrew Ferguson (Symbian)
  *    Markus Schorn (Wind River Systems)
  *    Sergey Prigogin (Google)
@@ -16,25 +16,24 @@ package org.eclipse.cdt.internal.core.index;
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.dom.ast.ASTTypeUtil;
 import org.eclipse.cdt.core.dom.ast.DOMException;
-import org.eclipse.cdt.core.dom.ast.IBasicType;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IFunction;
 import org.eclipse.cdt.core.dom.ast.IFunctionType;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassTemplatePartialSpecialization;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPConstructor;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunction;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateArgument;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateInstance;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.ICPPUnknownClassInstance;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.SemanticUtil;
 import org.eclipse.core.runtime.CoreException;
 
 /**
  * Determines the signatures and signature hashes for bindings that can have
  * siblings with the same name.
- * 
- * @author Bryan Wilkinson
  */
 public class IndexCPPSignatureUtil {
 	
@@ -60,8 +59,8 @@ public class IndexCPPSignatureUtil {
 			buffer.append(getTemplateArgString(partial.getTemplateArguments(), false));
 		} 
 		
-		if (binding instanceof IFunction) {
-			IFunction function = (IFunction) binding;
+		if (binding instanceof ICPPFunction) {
+			IFunction function = (ICPPFunction) binding;
 			buffer.append(getFunctionParameterString(function.getType()));
 		}
 		if (binding instanceof ICPPMethod && !(binding instanceof ICPPConstructor)) {
@@ -87,19 +86,11 @@ public class IndexCPPSignatureUtil {
 	/**
 	 * Constructs a string in the format:
 	 *   (paramName1,paramName2,...)
-	 * 
-	 * @param fType
-	 * @return
-	 * @throws DOMException
 	 */
-	private static String getFunctionParameterString(IFunctionType fType) throws DOMException {
-		IType[] types = fType.getParameterTypes();
-		if (types.length == 1) {
-			if (types[0] instanceof IBasicType) {
-				if (((IBasicType) types[0]).getType() == IBasicType.t_void) {
-					types = new IType[0];
-				}
-			}
+	private static String getFunctionParameterString(IFunctionType functionType) throws DOMException {
+		IType[] types = functionType.getParameterTypes();
+		if (types.length == 1 && SemanticUtil.isVoidType(types[0])) {
+			types = new IType[0];
 		}
 		StringBuilder result = new StringBuilder();
 		result.append('(');
@@ -108,6 +99,12 @@ public class IndexCPPSignatureUtil {
 				result.append(',');
 			}
 			result.append(ASTTypeUtil.getType(types[i]));
+		}
+		if (functionType instanceof ICPPFunctionType && ((ICPPFunctionType) functionType).takesVarArgs()) {
+			if (types.length != 0) {
+				result.append(',');
+			}
+			result.append("..."); //$NON-NLS-1$
 		}
 		result.append(')');
 		return result.toString();

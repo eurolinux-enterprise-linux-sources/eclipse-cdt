@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -61,7 +61,7 @@ import org.eclipse.cdt.internal.ui.viewsupport.SelectionListenerWithASTManager;
 public class QuickAssistLightBulbUpdater {
 
 	public static class AssistAnnotation extends Annotation implements IAnnotationPresentation {
-		//XXX: To be fully correct this should be a non-static fields in QuickAssistLightBulbUpdater
+		//XXX: To be fully correct this should be a non-static field in QuickAssistLightBulbUpdater
 		private static final int LAYER;
 
 		static {

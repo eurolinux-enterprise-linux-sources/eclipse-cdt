@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Institute for Software, HSR Hochschule fuer Technik  
+ * Copyright (c) 2008, 2009 Institute for Software, HSR Hochschule fuer Technik  
  * Rapperswil, University of applied sciences and others
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
@@ -20,6 +20,7 @@ import org.eclipse.core.runtime.OperationCanceledException;
 import org.eclipse.core.runtime.SubMonitor;
 import org.eclipse.jface.text.Region;
 import org.eclipse.jface.viewers.ISelection;
+import org.eclipse.ltk.core.refactoring.RefactoringDescriptor;
 import org.eclipse.ltk.core.refactoring.RefactoringStatus;
 
 import org.eclipse.cdt.core.dom.ast.ASTNodeProperty;
@@ -34,14 +35,22 @@ import org.eclipse.cdt.core.dom.ast.IASTFunctionDefinition;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
+import org.eclipse.cdt.core.dom.ast.IASTTranslationUnit;
 import org.eclipse.cdt.core.dom.ast.cpp.CPPASTVisitor;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
+import org.eclipse.cdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.cdt.core.model.ICElement;
+import org.eclipse.cdt.core.model.ICProject;
+
+import org.eclipse.cdt.internal.core.dom.rewrite.astwriter.ContainerNode;
 
 import org.eclipse.cdt.internal.ui.refactoring.AddDeclarationNodeToClassChange;
 import org.eclipse.cdt.internal.ui.refactoring.CRefactoring;
 import org.eclipse.cdt.internal.ui.refactoring.Container;
 import org.eclipse.cdt.internal.ui.refactoring.ModificationCollector;
+import org.eclipse.cdt.internal.ui.refactoring.implementmethod.InsertLocation;
+import org.eclipse.cdt.internal.ui.refactoring.implementmethod.MethodDefinitionInsertLocationFinder;
+import org.eclipse.cdt.internal.ui.refactoring.utils.NodeHelper;
 import org.eclipse.cdt.internal.ui.refactoring.utils.SelectionHelper;
 import org.eclipse.cdt.internal.ui.refactoring.utils.VisibilityEnum;
 
@@ -79,10 +88,11 @@ public class GenerateGettersAndSettersRefactoring extends CRefactoring {
 	}
 
 	private static final String MEMBER_DECLARATION = "MEMBER_DECLARATION"; //$NON-NLS-1$
-	private final GetterAndSetterContext context = new GetterAndSetterContext();	
+	private final GetterAndSetterContext context = new GetterAndSetterContext();
+	private InsertLocation definitionInsertLocation;	
 	
-	public GenerateGettersAndSettersRefactoring(IFile file, ISelection selection, ICElement element) {
-		super(file, selection, element);
+	public GenerateGettersAndSettersRefactoring(IFile file, ISelection selection, ICElement element, ICProject project) {
+		super(file, selection, element, project);
 	}
 	
 	@Override
@@ -104,10 +114,31 @@ public class GenerateGettersAndSettersRefactoring extends CRefactoring {
 		}		
 		return initStatus;
 	}
+	
+	
+
+	@Override
+	public RefactoringStatus checkFinalConditions(IProgressMonitor pm) throws CoreException,
+	OperationCanceledException {
+		RefactoringStatus finalStatus = null;
+		try {
+			lockIndex();
+			finalStatus = super.checkFinalConditions(pm);
+			if(!context.isImplementationInHeader()) {
+				definitionInsertLocation = findInsertLocation();
+				if(file.equals(definitionInsertLocation.getInsertFile())) {
+					finalStatus.addInfo(Messages.GenerateGettersAndSettersRefactoring_NoImplFile);
+				}
+			}
+		} catch (InterruptedException e) {}
+		finally {
+			unlockIndex();
+		}
+		return finalStatus;
+	}
 
 	private void initRefactoring(IProgressMonitor pm) {
 		loadTranslationUnit(initStatus, pm);
-		context.setUnit(unit);
 		context.selectedName = getSelectedName();
 		IASTCompositeTypeSpecifier compositeTypeSpecifier = null;
 		if(context.selectedName != null) {
@@ -185,13 +216,44 @@ public class GenerateGettersAndSettersRefactoring extends CRefactoring {
 
 	@Override
 	protected void collectModifications(IProgressMonitor pm,ModificationCollector collector) throws CoreException, OperationCanceledException {
-		ArrayList<IASTNode> getterAndSetters = new ArrayList<IASTNode>();
-		for(GetterSetterInsertEditProvider currentProvider : context.selectedFunctions){
-			getterAndSetters.add(currentProvider.getFunction());
-		}		
-		ICPPASTCompositeTypeSpecifier classDefinition = (ICPPASTCompositeTypeSpecifier) context.existingFields.get(context.existingFields.size()-1).getParent();
+		try {
+			lockIndex();
+			ArrayList<IASTNode> getterAndSetters = new ArrayList<IASTNode>();
+			ArrayList<IASTFunctionDefinition> definitions = new ArrayList<IASTFunctionDefinition>();
+			for(GetterSetterInsertEditProvider currentProvider : context.selectedFunctions){
+				if(context.isImplementationInHeader()) {
+					getterAndSetters.add(currentProvider.getFunctionDefinition(false));
+				}else {
+					getterAndSetters.add(currentProvider.getFunctionDeclaration());
+					definitions.add(currentProvider.getFunctionDefinition(true));
+				}
+			}
+			if(!context.isImplementationInHeader()) {
+				addDefinition(collector, definitions);
+			}
+			ICPPASTCompositeTypeSpecifier classDefinition = (ICPPASTCompositeTypeSpecifier) context.existingFields.get(context.existingFields.size()-1).getParent();
 
-		AddDeclarationNodeToClassChange.createChange(classDefinition, VisibilityEnum.v_public, getterAndSetters, false, collector);
+			AddDeclarationNodeToClassChange.createChange(classDefinition, VisibilityEnum.v_public, getterAndSetters, false, collector);
+		} catch (InterruptedException e) {}
+		finally {
+			unlockIndex();
+		}
+
+
+	}
+
+	private void addDefinition(ModificationCollector collector, ArrayList<IASTFunctionDefinition> definitions)
+			throws CoreException {
+		InsertLocation location = findInsertLocation();
+		IASTTranslationUnit targetUnit = location.getTargetTranslationUnit();
+		IASTNode parent = location.getPartenOfNodeToInsertBefore();
+		ASTRewrite rewrite = collector.rewriterForTranslationUnit(targetUnit);
+		IASTNode nodeToInsertBefore = location.getNodeToInsertBefore();
+		ContainerNode cont = new ContainerNode();
+		for (IASTFunctionDefinition functionDefinition : definitions) {
+			cont.addNode(functionDefinition);
+		}
+		rewrite = rewrite.insertBefore(parent, nodeToInsertBefore, cont, null);
 	}
 
 	public GetterAndSetterContext getContext() {
@@ -200,5 +262,25 @@ public class GenerateGettersAndSettersRefactoring extends CRefactoring {
 	
 	public Region getRegion() {
 		return region;
+	}
+	
+	private InsertLocation findInsertLocation() throws CoreException {
+		IASTSimpleDeclaration decl = context.existingFields.get(0);		
+		
+		InsertLocation insertLocation = MethodDefinitionInsertLocationFinder.find(decl.getFileLocation(), decl.getParent(), file);
+
+		if (!insertLocation.hasFile() || NodeHelper.isContainedInTemplateDeclaration(decl)) {
+			insertLocation.setInsertFile(file);
+			insertLocation.setNodeToInsertAfter(NodeHelper.findTopLevelParent(decl));
+		}
+		
+		return insertLocation;
+
+	}
+
+	@Override
+	protected RefactoringDescriptor getRefactoringDescriptor() {
+		// TODO egraf add Descriptor
+		return null;
 	}	
 }

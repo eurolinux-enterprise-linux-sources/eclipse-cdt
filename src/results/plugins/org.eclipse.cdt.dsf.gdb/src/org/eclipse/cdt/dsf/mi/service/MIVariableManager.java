@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Monta Vista and others.
+ * Copyright (c) 2008, 2010 Monta Vista and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,11 +10,13 @@
  *     Ericsson    - Modified for handling of multiple execution contexts
  *     Ericsson    - Major updates for GDB/MI implementation
  *     Ericsson    - Major re-factoring to deal with children
+ *     Axel Mueller - Bug 306555 - Add support for cast to type / view as array (IExpressions2)
  *******************************************************************************/
 package org.eclipse.cdt.dsf.mi.service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -26,40 +28,36 @@ import org.eclipse.cdt.dsf.concurrent.IDsfStatusConstants;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.debug.service.IExpressions;
-import org.eclipse.cdt.dsf.debug.service.IFormattedValues;
-import org.eclipse.cdt.dsf.debug.service.IRunControl;
-import org.eclipse.cdt.dsf.debug.service.IStack;
 import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionDMContext;
+import org.eclipse.cdt.dsf.debug.service.IExpressions2.ICastedExpressionDMContext;
+import org.eclipse.cdt.dsf.debug.service.IFormattedValues;
 import org.eclipse.cdt.dsf.debug.service.IFormattedValues.FormattedValueDMContext;
 import org.eclipse.cdt.dsf.debug.service.IFormattedValues.FormattedValueDMData;
 import org.eclipse.cdt.dsf.debug.service.IMemory.IMemoryChangedEvent;
+import org.eclipse.cdt.dsf.debug.service.IRunControl;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IExecutionDMContext;
+import org.eclipse.cdt.dsf.debug.service.IStack;
 import org.eclipse.cdt.dsf.debug.service.IStack.IFrameDMContext;
 import org.eclipse.cdt.dsf.debug.service.command.ICommand;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandControl;
+import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService.ICommandControlDMContext;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandListener;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandResult;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandToken;
 import org.eclipse.cdt.dsf.debug.service.command.IEventListener;
-import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService.ICommandControlDMContext;
+import org.eclipse.cdt.dsf.gdb.GDBTypeParser;
+import org.eclipse.cdt.dsf.gdb.GDBTypeParser.GDBType;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
+import org.eclipse.cdt.dsf.gdb.service.IGDBTraceControl.ITraceRecordSelectedChangedDMEvent;
 import org.eclipse.cdt.dsf.mi.service.MIExpressions.ExpressionInfo;
 import org.eclipse.cdt.dsf.mi.service.MIExpressions.MIExpressionDMC;
+import org.eclipse.cdt.dsf.mi.service.command.CommandFactory;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetAttributes;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetChildCount;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetChildren;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetValue;
 import org.eclipse.cdt.dsf.mi.service.command.commands.ExprMetaGetVar;
 import org.eclipse.cdt.dsf.mi.service.command.commands.MIDataEvaluateExpression;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIVarAssign;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIVarCreate;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIVarDelete;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIVarEvaluateExpression;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIVarInfoPathExpression;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIVarListChildren;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIVarSetFormat;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIVarShowAttributes;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIVarUpdate;
 import org.eclipse.cdt.dsf.mi.service.command.output.ExprMetaGetAttributesInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.ExprMetaGetChildCountInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.ExprMetaGetChildrenInfo;
@@ -215,7 +213,11 @@ public class MIVariableManager implements ICommandControl {
 		// The full expression that can be used to characterize this object
 		private String fullExp = null;
 		private String type = null;
-		private int numChildren = 0;
+		private GDBType gdbType;
+		// A hint at the number of children.  This value is obtained
+		// from -var-create or -var-list-children.  It may not be right in the case
+		// of C++ structures, where GDB has a level of children for private/public/protected.
+		private int numChildrenHint = 0;
 		private Boolean editable = null;
 
 		// The current values of the expression for each format. (null if not known yet)
@@ -262,21 +264,53 @@ public class MIVariableManager implements ICommandControl {
 		
 		public String getExpression() { return fullExp; }
 		public String getType() { return type; }
-		public int getNumChildren() { return numChildren; }
+
+		/** @since 3.0 */
+		public GDBType getGDBType() { return gdbType; }
+		/** 
+		 * Returns a hint to the number of children.  This hint is often correct,
+		 * except when we are dealing with C++ complex structures where
+		 * GDB has 'private/public/protected' as children.
+		 * 
+		 * Use <code>isNumChildrenHintTrustworthy()</code> to know if the
+		 * hint can be trusted.
+		 * 
+		 * Note that a hint of 0 children can always be trusted.
+		 * 
+		 * @since 3.0 */
+		public int getNumChildrenHint() { return numChildrenHint; }
+		/** 
+		 * Returns whether the number of children hint can be 
+		 * trusted for this variable object.
+		 * 
+		 * @since 3.0 
+		 */
+		public boolean isNumChildrenHintTrustworthy() {
+			// We cannot trust the hint about the number of children when we are
+			// dealing with a complex structure that could have the
+			// 'protected/public/private' children types.
+			// Note that a pointer could have such children, if it points to
+			// a complex structure.
+			//
+			// This is only valid for C++, so we should even check for it using
+			// -var-info-expression.  Do we have to use -var-info-expression for each
+			// variable object, or can we do it one time only for the whole program?
+			// Right now, we always assume we could be using C++
+			return (getNumChildrenHint() == 0 || isArray());
+		}
+ 
 		public String getValue(String format) { return valueMap.get(format); }
 		
         public ExpressionInfo[] getChildren() { return children; }
 
         
-        //FIX replace these methods with CDT's GDBTypeParser (see bug 200897 comment #5)
-        // int(*)[5] is a pointer to an array (so it is a pointer but not an array) (e.g., &b where int b[5])
-        // int *[5] is an array of pointers (so it is an array but not a pointer) (e.g., int *b[5])
-		public boolean isArray() { return (getType() == null) ? false : getType().endsWith("]") && !getType().contains("(*)") ; }//$NON-NLS-1$//$NON-NLS-2$
-		public boolean isPointer() { return (getType() == null) ? false : getType().contains("*")&& !isArray(); }//$NON-NLS-1$
-		public boolean isMethod() { return (getType() == null) ? false : getType().contains("()"); }//$NON-NLS-1$
-		// A complex variable is one with children.  However, it must not be a pointer since a pointer has one child
-		// according to GDB, but is still a 'simple' variable
-		public boolean isComplex() { return (getType() == null) ? false : getNumChildren() > 0 && !isPointer(); }
+		public boolean isArray() { return (getGDBType() == null) ? false : getGDBType().getType() == GDBType.ARRAY; }
+		public boolean isPointer() { return (getGDBType() == null) ? false : getGDBType().getType() == GDBType.POINTER; }
+		public boolean isMethod() { return (getGDBType() == null) ? false : getGDBType().getType() == GDBType.FUNCTION; }
+		// A complex variable is one with children.  However, it must not be a pointer since a pointer 
+		// does have children, but is still a 'simple' variable, as it can be modifed.  
+		// Note that the numChildrenHint can be trusted when asking if the number of children is 0 or not
+		public boolean isComplex() { return (getGDBType() == null) ? false : getGDBType().getType() != GDBType.POINTER && getNumChildrenHint() > 0; }
 		
 		public void setGdbName(String n) { gdbName = n; }
 		public void setCurrentFormat(String f) { format = f; }
@@ -284,7 +318,8 @@ public class MIVariableManager implements ICommandControl {
 		public void setExpressionData(String fullExpression, String t, int num) {
 			fullExp = fullExpression;
 			type = t;
-			numChildren = num;
+			gdbType = fGDBTypeParser.parse(t);
+			numChildrenHint = num;
 		}
 
 		public void setValue(String format, String val) { valueMap.put(format, val); }
@@ -402,7 +437,7 @@ public class MIVariableManager implements ICommandControl {
                 rm.done();
             } else {
                 fCommandControl.queueCommand(
-                        new MIVarShowAttributes(getRootToUpdate().getControlDMContext(), getGdbName()), 
+                		fCommandFactory.createMIVarShowAttributes(getRootToUpdate().getControlDMContext(), getGdbName()), 
                         new DataRequestMonitor<MIVarShowAttributesInfo>(fSession.getExecutor(), rm) {
                             @Override
                             protected void handleSuccess() {
@@ -490,7 +525,7 @@ public class MIVariableManager implements ICommandControl {
 				} else {
 					// We must first set the new format and then evaluate the variable
 					fCommandControl.queueCommand(
-							new MIVarSetFormat(getRootToUpdate().getControlDMContext(), getGdbName(), dmc.getFormatID()), 
+							fCommandFactory.createMIVarSetFormat(getRootToUpdate().getControlDMContext(), getGdbName(), dmc.getFormatID()), 
 							new DataRequestMonitor<MIVarSetFormatInfo>(fSession.getExecutor(), rm) {
 								@Override
 								protected void handleCompleted() {
@@ -526,7 +561,7 @@ public class MIVariableManager implements ICommandControl {
 		 */
 		private void evaluate(final DataRequestMonitor<FormattedValueDMData> rm) {
 			fCommandControl.queueCommand(
-					new MIVarEvaluateExpression(getRootToUpdate().getControlDMContext(), getGdbName()), 
+					fCommandFactory.createMIVarEvaluateExpression(getRootToUpdate().getControlDMContext(), getGdbName()), 
 					new DataRequestMonitor<MIVarEvaluateExpressionInfo>(fSession.getExecutor(), rm) {
 						@Override
 						protected void handleCompleted() {
@@ -563,7 +598,7 @@ public class MIVariableManager implements ICommandControl {
 		private void resetFormatToNatural() {
 			if (!getCurrentFormat().equals(IFormattedValues.NATURAL_FORMAT)) {
 				fCommandControl.queueCommand(
-						new MIVarSetFormat(getRootToUpdate().getControlDMContext(), getGdbName(), IFormattedValues.NATURAL_FORMAT), 
+						fCommandFactory.createMIVarSetFormat(getRootToUpdate().getControlDMContext(), getGdbName(), IFormattedValues.NATURAL_FORMAT), 
 						new DataRequestMonitor<MIVarSetFormatInfo>(fSession.getExecutor(), null) {
 							@Override
 							protected void handleCompleted() {
@@ -595,7 +630,9 @@ public class MIVariableManager implements ICommandControl {
 	        }
 	        
 			// If the variable does not have children, we can return an empty list right away
-			if (getNumChildren() == 0) {
+	        // The numChildrenHint value is trustworthy when wanting to know if there are children
+	        // at all.
+			if (getNumChildrenHint() == 0) {
 	        	// First store the empty list, for the next time
 				setChildren(new ExpressionInfo[0]);
 				rm.setData(getChildren());
@@ -608,11 +645,21 @@ public class MIVariableManager implements ICommandControl {
 	        // never need.  Using -var-list-children will create a variable object for every child
 	        // immediately, that is why won't don't want to use it for arrays.
 	        if (isArray()) {
-	        	ExpressionInfo[] childrenOfArray = new ExpressionInfo[getNumChildren()];
+	        	// We can trust the numChildrenHint value for arrays.
+	        	ExpressionInfo[] childrenOfArray = new ExpressionInfo[getNumChildrenHint()];
+	        	String exprName = exprDmc.getExpression();
+	        	
+        		int castingIndex = 0;
+	        	// in case of casts, need to resolve that before dereferencing, to be safe
+	        	if (exprDmc instanceof ICastedExpressionDMContext) {
+	        		// When casting, if we are dealing with a resulting array, we should surround
+	        		// it with parenthesis before we subscript it.
+	        		exprName = '(' + exprName + ')';
+	        		castingIndex = ((ICastedExpressionDMContext)exprDmc).getCastInfo().getArrayStartIndex();
+	        	}
 	        	for (int i= 0; i < childrenOfArray.length; i++) {
-	        		String indexStr = "[" + i + "]";//$NON-NLS-1$//$NON-NLS-2$
-	        		String fullExpr = exprDmc.getExpression() + indexStr;
-	        		String relExpr = exprDmc.getRelativeExpression() + indexStr;
+	        		String fullExpr = exprName + "[" + i + "]";//$NON-NLS-1$//$NON-NLS-2$
+	        		String relExpr = exprDmc.getRelativeExpression() + "[" + (castingIndex + i) + "]";//$NON-NLS-1$//$NON-NLS-2$
 
 	        		childrenOfArray[i] = new ExpressionInfo(fullExpr, relExpr);
 	        	}
@@ -629,7 +676,7 @@ public class MIVariableManager implements ICommandControl {
 	        // be called here with a fully created object.
 	        // Also no need to lock the object, since getting the children won't affect other operations
 	        fCommandControl.queueCommand(
-	        		new MIVarListChildren(getRootToUpdate().getControlDMContext(), getGdbName()),
+	        		fCommandFactory.createMIVarListChildren(getRootToUpdate().getControlDMContext(), getGdbName()),
 	        		new DataRequestMonitor<MIVarListChildrenInfo>(fSession.getExecutor(), rm) {
 	        			@Override
 	        			protected void handleSuccess() {
@@ -697,7 +744,7 @@ public class MIVariableManager implements ICommandControl {
 	        							}
 
 	        							if (childVar == null) {
-	        								childVar = new MIVariableObject(childId, MIVariableObject.this);
+	        								childVar = createVariableObject(childId, MIVariableObject.this);
 	        								childVar.setGdbName(child.getVarName());
 	        								childVar.setExpressionData(
 	        										childFullExpression,
@@ -746,7 +793,7 @@ public class MIVariableManager implements ICommandControl {
 	        						// To build the child id, we need the fully qualified expression which we
 	        						// can get from -var-info-path-expression starting from GDB 6.7 
 	        						fCommandControl.queueCommand(
-	        								new MIVarInfoPathExpression(getRootToUpdate().getControlDMContext(), child.getVarName()),
+	        								fCommandFactory.createMIVarInfoPathExpression(getRootToUpdate().getControlDMContext(), child.getVarName()),
 	    	        						new DataRequestMonitor<MIVarInfoPathExpressionInfo>(fSession.getExecutor(), childPathRm) {
 	        	        						@Override
 	        	        						protected void handleCompleted() {
@@ -798,11 +845,22 @@ public class MIVariableManager implements ICommandControl {
 		 * @param rm
 		 *            The data request monitor that will hold the count of children returned
 		 */
-		private void getChildrenCount(final DataRequestMonitor<Integer> rm) {
-			// No need to lock the object or wait for it to be ready since this operation does not
-			// affect other operations
-			rm.setData(getNumChildren());
-			rm.done();
+		private void getChildrenCount(MIExpressionDMC exprDmc, final DataRequestMonitor<Integer> rm) {
+			if (isNumChildrenHintTrustworthy()){
+				rm.setData(getNumChildrenHint());
+				rm.done();
+				return;
+			}
+			
+			getChildren(
+					exprDmc, 
+					new DataRequestMonitor<ExpressionInfo[]>(fSession.getExecutor(), rm) {
+						@Override
+						protected void handleSuccess() {
+							rm.setData(getData().length);
+							rm.done();
+						}
+					});
 		}
 		
 
@@ -881,7 +939,7 @@ public class MIVariableManager implements ICommandControl {
 
 			// No need to be in ready state or to lock the object
 			fCommandControl.queueCommand(
-					new MIVarAssign(getRootToUpdate().getControlDMContext(), getGdbName(), value),
+					fCommandFactory.createMIVarAssign(getRootToUpdate().getControlDMContext(), getGdbName(), value),
 					new DataRequestMonitor<MIVarAssignInfo>(fSession.getExecutor(), rm) {
 						@Override
 						protected void handleSuccess() {
@@ -914,7 +972,19 @@ public class MIVariableManager implements ICommandControl {
 		}
 	}
 	
-	private class MIRootVariableObject extends MIVariableObject {
+	/**
+	 * Method to allow to override the MIVariableObject creation
+	 * 
+     * @since 3.0
+     */
+	protected MIVariableObject createVariableObject(VariableObjectId id, MIVariableObject parentObj) {
+	    return new MIVariableObject(id, parentObj);
+	}
+	
+	/**
+     * @since 3.0
+     */
+	public class MIRootVariableObject extends MIVariableObject {
 
 		// Only root variables go through the GDB creation process
 		protected static final int STATE_NOT_CREATED = 10;
@@ -925,7 +995,7 @@ public class MIVariableManager implements ICommandControl {
 		// will have the same control context
 	    private ICommandControlDMContext fControlContext = null;
 	    
-		private boolean outOfDate = false;
+		private boolean fOutOfDate = false;
 		
 	    // Modifiable descendants are any variable object that is a descendant or itself for
 	    // which the value can change.
@@ -940,8 +1010,10 @@ public class MIVariableManager implements ICommandControl {
 		public ICommandControlDMContext getControlDMContext() { return fControlContext; }
 
 		public boolean isUpdating() { return currentState == STATE_UPDATING; }
-
-		public void markAsOutOfDate() { outOfDate = true; }
+        
+		public void setOutOfDate(boolean outOfDate) { fOutOfDate = outOfDate; }
+		
+		public boolean getOutOfDate() { return fOutOfDate; }
 		
 		// Remember that we must add ourself as a modifiable descendant if our value can change
 		public void addModifiableDescendant(String gdbName, MIVariableObject descendant) {
@@ -965,7 +1037,7 @@ public class MIVariableManager implements ICommandControl {
 				fControlContext = DMContexts.getAncestorOfType(exprCtx, ICommandControlDMContext.class);
 
 				fCommandControl.queueCommand(
-						new MIVarCreate(exprCtx, exprCtx.getExpression()), 
+						fCommandFactory.createMIVarCreate(exprCtx, exprCtx.getExpression()), 
 						new DataRequestMonitor<MIVarCreateInfo>(fSession.getExecutor(), rm) {
 							@Override
 							protected void handleCompleted() {
@@ -1033,7 +1105,7 @@ public class MIVariableManager implements ICommandControl {
 				// Object is not fully created or is being updated
 				// so add RequestMonitor to pending queue
 				updatesPending.add(rm);
-			} else if (outOfDate == false) {
+			} else if (getOutOfDate() == false) {
 				rm.setData(false);
 				rm.done();
 			} else {
@@ -1056,14 +1128,14 @@ public class MIVariableManager implements ICommandControl {
 				// of a variable object, we immediately set it back to natural with a second
 				// var-set-format command.  This is done in the getValue() method
 				fCommandControl.queueCommand(
-						new MIVarUpdate(getRootToUpdate().getControlDMContext(), getGdbName()),
+						fCommandFactory.createMIVarUpdate(getRootToUpdate().getControlDMContext(), getGdbName()),
 						new DataRequestMonitor<MIVarUpdateInfo>(fSession.getExecutor(), rm) {
 							@Override
 							protected void handleCompleted() {
 								currentState = STATE_READY;
 								
 								if (isSuccess()) {
-									outOfDate = false;
+									setOutOfDate(false);
 
 									MIVarChange[] changes = getData().getMIVarChanges();
 									if (changes.length > 0 && changes[0].isInScope() == false) {
@@ -1088,7 +1160,7 @@ public class MIVariableManager implements ICommandControl {
 										// We only mark this root as updated in our list if it is in-scope.
 										// For out-of-scope object, we don't ever need to re-update them so
 										// we don't need to add them to this list.
-										updatedRootList.add(MIRootVariableObject.this);
+										rootVariableUpdated(MIRootVariableObject.this);
 
 										rm.setData(false);
 										rm.done();
@@ -1126,7 +1198,7 @@ public class MIVariableManager implements ICommandControl {
 		public void deleteInGdb() {
 		    if (getGdbName() != null) {
 	    		fCommandControl.queueCommand(
-	    				new MIVarDelete(getRootToUpdate().getControlDMContext(), getGdbName()),
+	    				fCommandFactory.createMIVarDelete(getRootToUpdate().getControlDMContext(), getGdbName()),
 	    				new DataRequestMonitor<MIVarDeleteInfo>(fSession.getExecutor(), null));
 		        // Nothing to do in the requestMonitor, since the object was already
 		        // removed from our list before calling this method.
@@ -1138,9 +1210,16 @@ public class MIVariableManager implements ICommandControl {
 		    } else {
 		        // Variable was never created or was already deleted, no need to do anything.
 		    }
-		}		
-		
-
+		}
+	}
+	
+    /**
+ 	 * Method to allow to override the MIRootVariableObject creation.
+	 *
+     * @since 3.0
+     */
+	protected MIRootVariableObject createRootVariableObject(VariableObjectId id) {
+	    return new MIRootVariableObject(id);
 	}
 	
 	/**
@@ -1153,8 +1232,10 @@ public class MIVariableManager implements ICommandControl {
 	 *     
 	 * Note that if no frameContext is specified (only Execution, or even only Container), which can
 	 * characterize a global variable for example, we will only use the available information.
+	 * 
+	 * @since 3.0
 	 */
-	private class VariableObjectId {
+	public class VariableObjectId {
 		// We don't use the expression context because it is not safe to compare them
 		// See bug 187718.  So we store the expression itself, and it's parent execution context.
 		String fExpression = null;
@@ -1162,6 +1243,9 @@ public class MIVariableManager implements ICommandControl {
 		// We need the depth of the frame.  The frame level is not sufficient because 
         // the same frame will have a different level based on the current depth of the stack 
 		Integer fFrameId = null;
+		
+		public VariableObjectId() {
+		}
 		
 		@Override
 		public boolean equals(Object other) {
@@ -1219,6 +1303,16 @@ public class MIVariableManager implements ICommandControl {
 			fExpression = childFullExp;
 		}
 	}
+	
+    /**
+ 	 * Method to allow to override the VariableObjectId creation.
+	 *
+     * @since 3.0
+     */
+	protected VariableObjectId createVariableObjectId() {
+	    return new VariableObjectId();
+	}
+
 	
 	/**
 	 * This is the real work horse of managing our objects. Not only must every
@@ -1296,10 +1390,17 @@ public class MIVariableManager implements ICommandControl {
 		}
 	}
 
+    /**
+     * @since 3.0
+     */
+    private static final GDBTypeParser fGDBTypeParser = new GDBTypeParser();
+    
 	private final DsfSession fSession;
 	
 	/** Provides access to the GDB/MI back-end */
 	private final ICommandControl fCommandControl;
+	private CommandFactory fCommandFactory;
+
 	// The stack service needs to be used to get information such
 	// as the stack depth to differentiate between expressions that have the
 	// same name but refer to a different context
@@ -1329,7 +1430,8 @@ public class MIVariableManager implements ICommandControl {
 		fCommandControl = tracker.getService(ICommandControl.class);
 		fStackService  = tracker.getService(IStack.class);
 		fExpressionService = tracker.getService(IExpressions.class);
-		
+		fCommandFactory = tracker.getService(IMICommandControl.class).getCommandFactory();
+
 		// Register to receive service events for this session.
         fSession.addServiceEventListener(this, null);
 	}
@@ -1338,6 +1440,34 @@ public class MIVariableManager implements ICommandControl {
     	fSession.removeServiceEventListener(this);
 	}
 
+    /**
+     * @since 3.0
+     */
+	protected DsfSession getSession() {
+	    return fSession;
+	}
+	
+	/**
+     * @since 3.0
+     */
+	protected ICommandControl getCommandControl() {
+	    return fCommandControl;
+	}
+	
+    /**
+     * @since 3.0
+     */
+	protected void rootVariableUpdated(MIRootVariableObject rootObj) {
+	    updatedRootList.add(rootObj);
+	}
+	
+    /**
+     * @since 3.0
+     */
+	protected Map<VariableObjectId, MIVariableObject> getLRUCache() {
+		return lruVariableList;
+	}
+	
 	/** 
 	 * This method returns a variable object based on the specified
 	 * ExpressionDMC, creating it in GDB if it was not created already.
@@ -1354,7 +1484,7 @@ public class MIVariableManager implements ICommandControl {
                              final DataRequestMonitor<MIVariableObject> rm) {
 		// Generate an id for this expression so that we can determine if we already
 		// have a variable object tracking it.  If we don't we'll need to create one.
-		final VariableObjectId id = new VariableObjectId();
+		final VariableObjectId id = createVariableObjectId();
 		id.generateId(
 				exprCtx,
 				new RequestMonitor(fSession.getExecutor(), rm) {
@@ -1388,7 +1518,7 @@ public class MIVariableManager implements ICommandControl {
 					    // The variable object is out-of-scope and we
 						// should not use it.
 						if (shouldCreateNew) {
-							/**
+							/*
 							 * It may happen that when accessing a varObject we find it to be
 							 * out-of-scope.  The expression for which we are trying to access a varObject
 							 * could still be valid, and therefore we should try to create a new varObject for
@@ -1431,7 +1561,7 @@ public class MIVariableManager implements ICommandControl {
 
 		// Variable objects that are created directly like this, are considered ROOT variable objects
 		// in comparison to variable objects that are children of other variable objects.
-		final MIRootVariableObject newVarObj = new MIRootVariableObject(id);
+		final MIRootVariableObject newVarObj = createRootVariableObject(id);
 		
 		// We must put this object in our map right away, in case it is 
 		// requested again, before it completes its creation.
@@ -1443,7 +1573,7 @@ public class MIVariableManager implements ICommandControl {
 			protected void handleCompleted() {
 				if (isSuccess()) {
 					// Also store the object as a varObj that is up-to-date
-					updatedRootList.add(newVarObj);
+    				rootVariableUpdated(newVarObj);	
 					// VarObj can now be used by others
 					newVarObj.creationCompleted(true);
 
@@ -1522,14 +1652,36 @@ public class MIVariableManager implements ICommandControl {
             		new DataRequestMonitor<MIVariableObject>(fSession.getExecutor(), drm) {
             			@Override
             			protected void handleSuccess() {
-            				drm.setData(
-            						new ExprMetaGetVarInfo(
-            								exprCtx.getRelativeExpression(),
-            								getData().getNumChildren(), 
-            								getData().getType(),
-            								!getData().isComplex()));
-            				drm.done();
-            				processCommandDone(token, drm.getData());
+            				final MIVariableObject varObj = getData();
+            				if (varObj.isNumChildrenHintTrustworthy()) {
+               					drm.setData(
+            							new ExprMetaGetVarInfo(
+            									exprCtx.getRelativeExpression(),
+            									getData().getNumChildrenHint(), 
+            									getData().getType(),
+            									getData().getGDBType(),
+            									!getData().isComplex()));
+            					drm.done();
+            					processCommandDone(token, drm.getData());
+            				} else {
+            					// We have to ask for the children count because the hint could be wrong
+            					varObj.getChildrenCount(
+            							exprCtx, 
+            							new DataRequestMonitor<Integer>(fSession.getExecutor(), drm) {
+            								@Override
+            								protected void handleSuccess() {
+            									drm.setData(
+            											new ExprMetaGetVarInfo(
+            													exprCtx.getRelativeExpression(),
+            													getData(), 
+            													varObj.getType(),
+            													varObj.getGDBType(),
+            													!varObj.isComplex()));
+            									drm.done();
+            									processCommandDone(token, drm.getData());
+            								}
+            							});
+            				}
             			}
             		});
         } else if (command instanceof ExprMetaGetAttributes) {
@@ -1606,7 +1758,7 @@ public class MIVariableManager implements ICommandControl {
     	} else if (command instanceof ExprMetaGetChildCount) {
             @SuppressWarnings("unchecked")            
     		final DataRequestMonitor<ExprMetaGetChildCountInfo> drm = (DataRequestMonitor<ExprMetaGetChildCountInfo>)rm;
-            final IExpressionDMContext exprCtx = (IExpressionDMContext)(command.getContext());
+            final MIExpressionDMC exprCtx = (MIExpressionDMC)(command.getContext());
  
     		getVariable(
     				exprCtx, 
@@ -1614,6 +1766,7 @@ public class MIVariableManager implements ICommandControl {
     					@Override
     					protected void handleSuccess() {
     						getData().getChildrenCount(
+    								exprCtx,
     								new DataRequestMonitor<Integer>(fSession.getExecutor(), drm) {
     									@Override
     									protected void handleSuccess() {
@@ -1625,7 +1778,7 @@ public class MIVariableManager implements ICommandControl {
     					}
     				});
     	
-    	} else if (command instanceof MIDataEvaluateExpression) {
+    	} else if (command instanceof MIDataEvaluateExpression<?>) {
     		// This does not use the variable objects but sends the command directly to the back-end
 			fCommandControl.queueCommand(command, rm);
     	} else {
@@ -1684,7 +1837,7 @@ public class MIVariableManager implements ICommandControl {
     public void markAllOutOfDate() {
     	MIRootVariableObject root;
     	while ((root = updatedRootList.poll()) != null) {
-    		root.markAsOutOfDate();
+    		root.setOutOfDate(true);
     	}       
     }
 
@@ -1709,5 +1862,23 @@ public class MIVariableManager implements ICommandControl {
     	// which one is affected.  Mark them all as out of date.
     	// The views will fully refresh on a MemoryChangedEvent
     	markAllOutOfDate();
+    }
+    
+    /**
+	 * @since 3.0
+	 */
+    @DsfServiceEventHandler 
+    public void eventDispatched(ITraceRecordSelectedChangedDMEvent e) {
+    	// We have a big limitation with tracepoints!
+    	// GDB usually only reports a depth of 1, for every trace record, no
+    	// matter where it occurred.  This means that our naming scheme for VariableObjectId 
+    	// fails miserably because all objects will have the same depth and we will confuse
+    	// them.  Until we find a good solution, we have to clear our entire list of
+    	// of variable objects (and delete them in GDB to avoid having too many).
+    	Iterator<Map.Entry<VariableObjectId, MIVariableObject>> iterator = lruVariableList.entrySet().iterator();
+    	while (iterator.hasNext()){
+    		iterator.next();
+    		iterator.remove();
+    	}
     }
 }

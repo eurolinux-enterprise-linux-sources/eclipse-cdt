@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,10 +8,10 @@
  * Contributors:
  *     Intel Corporation - initial API and implementation
  *     Markus Schorn (Wind River Systems)
+ *     James Blackburn (Broadcom Corp.)
  *******************************************************************************/
 package org.eclipse.cdt.ui.newui;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import org.eclipse.core.resources.IContainer;
@@ -533,6 +533,7 @@ public abstract class AbstractCPropertyTab implements ICPropertyTab {
 			if (canBeVisible()) configChanged((ICResourceDescription)data);
 			break;
 		case ICPropertyTab.DISPOSE:
+			dispose();
 			break;
 		case ICPropertyTab.VISIBLE:
 			if (canBeVisible()) 
@@ -599,7 +600,7 @@ public abstract class AbstractCPropertyTab implements ICPropertyTab {
 			break;
 		}
 	}
-	 
+
 	/**
 	 * This method will be simplified after M5 release,
 	 * when Button.setGrayed() method will be accessible.
@@ -607,16 +608,11 @@ public abstract class AbstractCPropertyTab implements ICPropertyTab {
 	 * 
 	 * @param b
 	 * @param value
+	 * @deprecated call {@link Button#setGrayed(boolean)} instead
 	 */
+	@Deprecated
 	public static void setGrayed(Button b, boolean value) {
-		// TODO: uncomment before M5
-		// b.setGrayed(value);
-		if (GRAY_METHOD != null)
-			try {
-				GRAY_METHOD.invoke(b, new Object[] { new Boolean(value) });
-			}
-			catch (InvocationTargetException e) {}
-			catch (IllegalAccessException e) {}
+		b.setGrayed(value);
 	}
 
 	/**
@@ -688,6 +684,17 @@ public abstract class AbstractCPropertyTab implements ICPropertyTab {
 		}
 	}
 
+	/**
+	 * The writing mode for multiple configurations edits (configuration drop-down list
+	 * in project properties). This mode applies to lists of entries.
+	 * See preference Multiple Configurations Edit, String List Write Mode.
+	 * 
+	 * @return
+	 *    {@code true} if each list should be replaced as a whole with the
+	 *       list user is currently working with in UI<br/>
+	 *    {@code false} if changes apply only to individual entries and unaffected
+	 *       entries are preserved.
+	 */
 	protected boolean isWModifyMode() {
 		int wmode = CDTPrefUtil.getInt(CDTPrefUtil.KEY_WMODE);
 		return (wmode == CDTPrefUtil.WMODE_MODIFY);
@@ -699,5 +706,15 @@ public abstract class AbstractCPropertyTab implements ICPropertyTab {
 	
 	public void setHelpContextId(String id) {
 		helpId = PREFIX + id;
+	}
+
+	/** 
+	 * Allows subclasses to inform the container about changes relevant to the indexer.
+	 * The tab will be asked before the apply is performed. As a consequence of returning
+	 * <code>true</code> the user will be asked whether she wants to rebuild the index.
+	 * @since 5.2
+	 */
+	protected boolean isIndexerAffected() {
+		return false;
 	}
 }

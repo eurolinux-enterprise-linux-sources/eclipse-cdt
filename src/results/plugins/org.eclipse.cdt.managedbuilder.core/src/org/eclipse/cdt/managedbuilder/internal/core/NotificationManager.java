@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,8 +10,8 @@
  *******************************************************************************/
 package org.eclipse.cdt.managedbuilder.internal.core;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.cdt.managedbuilder.core.IHoldsOptions;
 import org.eclipse.cdt.managedbuilder.core.IOption;
@@ -19,10 +19,10 @@ import org.eclipse.cdt.managedbuilder.core.IResourceInfo;
 
 public class NotificationManager /*implements ISettingsChangeListener */{
 	private static NotificationManager fInstance;
-	private List fListeners;
+	private List<ISettingsChangeListener> fListeners;
 	
 	private NotificationManager(){
-		fListeners = new ArrayList();
+		fListeners = new CopyOnWriteArrayList<ISettingsChangeListener>();
 	}
 	
 	public static NotificationManager getInstance(){
@@ -42,10 +42,8 @@ public class NotificationManager /*implements ISettingsChangeListener */{
 	}
 	
 	private void notifyListeners(SettingsChangeEvent event){
-		ISettingsChangeListener listeners[] = (ISettingsChangeListener[])fListeners.toArray(new ISettingsChangeListener[fListeners.size()]); 
-		for(int i = 0; i < listeners.length; i++){
-			listeners[i].settingsChanged(event);
-		}
+		for (ISettingsChangeListener listener : fListeners)
+			listener.settingsChanged(event);
 	}
 	
 	private static SettingsChangeEvent createOptionChangedEvent(IResourceInfo rcInfo, IHoldsOptions holder, IOption option, Object oldValue){
@@ -57,18 +55,11 @@ public class NotificationManager /*implements ISettingsChangeListener */{
 	}
 
 	public void subscribe(ISettingsChangeListener listener){
-//		synchronized (this) {
-			fListeners.add(listener);
-//		}
+		fListeners.add(listener);
 	}
 	
 	public void unsubscribe(ISettingsChangeListener listener){
-//		synchronized (this) {
-			fListeners.remove(listener);
-//		}
+		fListeners.remove(listener);
 	}
-	
-	
-	
 	
 }

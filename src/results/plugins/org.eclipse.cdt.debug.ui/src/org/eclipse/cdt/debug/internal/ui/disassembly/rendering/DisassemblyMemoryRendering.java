@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 ARM Limited and others.
+ * Copyright (c) 2008, 2010 ARM Limited and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -15,7 +15,6 @@ import org.eclipse.cdt.debug.core.disassembly.IDisassemblyContextProvider;
 import org.eclipse.cdt.debug.internal.ui.disassembly.viewer.DisassemblyPane;
 import org.eclipse.cdt.debug.internal.ui.disassembly.viewer.VirtualDocument;
 import org.eclipse.cdt.debug.internal.ui.disassembly.viewer.VirtualSourceViewer;
-import org.eclipse.cdt.debug.internal.ui.views.disassembly.DisassemblyAnnotationModel;
 import org.eclipse.cdt.debug.ui.disassembly.IDocumentPresentation;
 import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.debug.core.model.IMemoryBlock;

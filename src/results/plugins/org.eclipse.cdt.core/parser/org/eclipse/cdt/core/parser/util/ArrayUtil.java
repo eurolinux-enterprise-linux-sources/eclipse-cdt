@@ -10,18 +10,18 @@
  *     Markus Schorn (Wind River Systems)
  *     Andrew Ferguson (Symbian)
  *     Mike Kucera (IBM)
+ *     Sergey Prigogin (Google)
  *******************************************************************************/
 package org.eclipse.cdt.core.parser.util;
 
 import java.lang.reflect.Array;
 
 /**
- * @noextend This interface is not intended to be extended by clients.
- * @noinstantiate This class is not intended to be instantiated by clients.
+ * @noextend This class is not intended to be subclassed by clients.
  */
-public class ArrayUtil {
+public abstract class ArrayUtil {
     private static final int DEFAULT_LENGTH = 2;
-    
+
     /**
      * Assumes that array contains nulls at the end, only. 
      * Appends element after the last non-null element. 
@@ -43,7 +43,7 @@ public class ArrayUtil {
     		return array;
     	}
 
-    	Object[] temp = (Object[]) Array.newInstance(c, array.length * 2);
+    	Object[] temp = (Object[]) Array.newInstance(c, Math.max(array.length * 2, DEFAULT_LENGTH));
     	System.arraycopy(array, 0, temp, 0, array.length);
     	temp[array.length] = obj;
     	return temp;
@@ -56,20 +56,18 @@ public class ArrayUtil {
     private static int findFirstNull(Object[] array) {
     	boolean haveNull= false;
     	int left= 0;
-    	int right= array.length-1;
+    	int right= array.length - 1;
     	while (left <= right) {
-    		int mid= (left+right)/2;
+    		int mid= (left + right) / 2;
     		if (array[mid] == null) {
     			haveNull= true;
-    			right= mid-1;
-    		}
-    		else {
-    			left= mid+1;
+    			right= mid - 1;
+    		} else {
+    			left= mid + 1;
     		}
     	}
-		return haveNull ? right+1 : -1;
+		return haveNull ? right + 1 : -1;
 	}
-    
 
     /**
      * Assumes that array contains nulls at the end, only. 
@@ -87,12 +85,42 @@ public class ArrayUtil {
 
     	if (currentLength < array.length) {
     		assert array[currentLength] == null;
-    		assert currentLength == 0 || array[currentLength-1] != null;
+    		assert currentLength == 0 || array[currentLength - 1] != null;
     		array[currentLength]= obj;
     		return array;
     	}
 
     	Object[] temp = (Object[]) Array.newInstance(c, array.length * 2);
+    	System.arraycopy(array, 0, temp, 0, array.length);
+    	temp[array.length] = obj;
+    	return temp;
+    }
+
+    /**
+     * Assumes that array contains nulls at the end, only. 
+     * Appends element after the last non-null element. 
+     * If the array is not large enough, a larger one is allocated.
+     * Null <code>array</code> is supported for backward compatibility only and only when T is Object.
+     */
+    @SuppressWarnings("unchecked")
+	static public <T> T[] append(T[] array, T obj) {
+    	if (obj == null)
+    		return array;
+    	if (array == null || array.length == 0) {
+    		Class<? extends Object> c = array != null ? array.getClass().getComponentType() : Object.class;
+    		array = (T[]) Array.newInstance(c, DEFAULT_LENGTH);
+    		array[0] = obj;
+    		return array;
+    	}
+
+    	int i= findFirstNull(array);
+    	if (i >= 0) {
+    		array[i]= obj;
+    		return array;
+    	}
+
+    	T[] temp = (T[]) Array.newInstance(array.getClass().getComponentType(),
+    			Math.max(array.length * 2, DEFAULT_LENGTH));
     	System.arraycopy(array, 0, temp, 0, array.length);
     	temp[array.length] = obj;
     	return temp;
@@ -107,10 +135,6 @@ public class ArrayUtil {
     	return (T[]) append(c, array, currentLength, obj);
     }
 
-    static public Object[] append(Object[] array, Object obj) {
-        return append(Object.class, array, obj);
-    }
-    
     /**
      * Trims the given array and returns a new array with no null entries.
      * Assumes that nulls can be found at the end, only.
@@ -126,16 +150,15 @@ public class ArrayUtil {
     static public Object[] trim(Class<?> c, Object[] array, boolean forceNew) {
         if (array == null)
             return (Object[]) Array.newInstance(c, 0);
-        
+
         int i = array.length;
-        if (i==0 || array[i-1] != null) {
+        if (i == 0 || array[i - 1] != null) {
         	if (!forceNew) {
         		return array;
         	}
-        }
-        else {
-        	i=findFirstNull(array);
-        	assert i>=0;
+        } else {
+        	i= findFirstNull(array);
+        	assert i >= 0;
         }
 
         Object[] temp = (Object[]) Array.newInstance(c, i);
@@ -143,10 +166,48 @@ public class ArrayUtil {
         return temp;
     }
 
-
     public static Object[] trim(Class<?> c, Object[] array) {
         return trim(c, array, false);
     }
+
+    /**
+     * Trims the given array and returns a new array with no null entries.
+     * Assumes that nulls can be found at the end, only.
+     * if forceNew == true, a new array will always be created.
+     * if forceNew == false, a new array will only be created if the original array
+     * contained null entries.
+     *  
+     * @param array the array to be trimmed
+     * @param forceNew
+     * @since 5.2
+     */
+    @SuppressWarnings("unchecked")
+	static public <T> T[] trim(T[] array, boolean forceNew) {
+        int i = array.length;
+        if (i == 0 || array[i - 1] != null) {
+        	if (!forceNew) {
+        		return array;
+        	}
+        } else {
+        	i= findFirstNull(array);
+        	assert i >= 0;
+        }
+
+        T[] temp = (T[]) Array.newInstance(array.getClass().getComponentType(), i);
+        System.arraycopy(array, 0, temp, 0, i);
+        return temp;
+    }
+
+    /**
+     * Trims the given array and returns a new array with no null entries.
+     * Assumes that nulls can be found at the end, only.
+     *  
+     * @param array the array to be trimmed
+     * @since 5.2
+     */
+	static public <T> T[] trim(T[] array) {
+		return trim(array, false);
+	}
 
     /**
      * Assumes that both arrays contain nulls at the end, only.
@@ -154,7 +215,7 @@ public class ArrayUtil {
     public static Object[] addAll(Class<?> c, Object[] dest, Object[] source) {
         if (source == null || source.length == 0)
             return dest;
-        
+
         int numToAdd = findFirstNull(source);
         if (numToAdd <= 0) {
         	if (numToAdd == 0) {
@@ -162,18 +223,18 @@ public class ArrayUtil {
         	}
         	numToAdd= source.length;
         }
-        
+
         if (dest == null || dest.length == 0) {
             dest = (Object[]) Array.newInstance(c, numToAdd);
             System.arraycopy(source, 0, dest, 0, numToAdd);
             return dest;
         }
-        
+
         int firstFree = findFirstNull(dest);
         if (firstFree < 0) {
         	firstFree= dest.length;
         }
-        
+
         if (firstFree + numToAdd <= dest.length) {
             System.arraycopy(source, 0, dest, firstFree, numToAdd);
             return dest;
@@ -183,7 +244,47 @@ public class ArrayUtil {
         System.arraycopy(source, 0, temp, firstFree, numToAdd);
         return temp;
     }
-    
+
+    /**
+     * Concatenates two arrays skipping <code>null</code> elements.
+     * Assumes that both arrays contain <code>null</code>s at the end, only.
+     * @since 5.2
+     */
+    @SuppressWarnings("unchecked")
+	public static <T> T[] addAll(T[] dest, T[] source) {
+        if (source == null || source.length == 0)
+            return dest;
+
+        int numToAdd = findFirstNull(source);
+        if (numToAdd <= 0) {
+        	if (numToAdd == 0) {
+        		return dest;
+        	}
+        	numToAdd= source.length;
+        }
+
+        if (dest == null || dest.length == 0) {
+    		Class<? extends Object> c = dest != null ? dest.getClass().getComponentType() : source.getClass().getComponentType();
+            dest = (T[]) Array.newInstance(c, numToAdd);
+            System.arraycopy(source, 0, dest, 0, numToAdd);
+            return dest;
+        }
+
+        int firstFree = findFirstNull(dest);
+        if (firstFree < 0) {
+        	firstFree= dest.length;
+        }
+
+        if (firstFree + numToAdd <= dest.length) {
+            System.arraycopy(source, 0, dest, firstFree, numToAdd);
+            return dest;
+        }
+        T[] temp = (T[]) Array.newInstance(dest.getClass().getComponentType(), firstFree + numToAdd);
+        System.arraycopy(dest, 0, temp, 0, firstFree);
+        System.arraycopy(source, 0, temp, firstFree, numToAdd);
+        return temp;
+    }
+
     /**
      * Returns whether the specified array contains the specified object. Comparison is by
      * object identity.
@@ -192,9 +293,9 @@ public class ArrayUtil {
      * @return true if the specified array contains the specified object, or the specified array is null
      */
     public static boolean contains(Object[] array, Object obj) {
-    	return indexOf(array, obj)!=-1;
+    	return indexOf(array, obj) >= 0;
     }
-    
+
     /**
      * Returns the index into the specified array of the specified object, or -1 if the array does not
      * contain the object, or if the array is null.  Comparison is by object identity.
@@ -205,7 +306,7 @@ public class ArrayUtil {
      */
     public static int indexOf(Object[] array, Object obj) {
     	int result = -1;
-    	if (array!=null) {
+    	if (array != null) {
     		for (int i = 0; i < array.length; i++) {
     			if (array[i] == obj)
     				return i;
@@ -213,7 +314,7 @@ public class ArrayUtil {
     	}
     	return result;
     }
-    
+
     /**
      * Assumes that array contains nulls at the end, only. 
      * Returns whether the specified array contains the specified object. Comparison is by
@@ -237,7 +338,7 @@ public class ArrayUtil {
      */    
 	public static int indexOfEqual(Object[] comments, Object comment) {
     	int result = -1;
-    	if (comments!=null) {
+    	if (comments != null) {
     		for (int i= 0; (i < comments.length) && (comments[i] != null); i++) {
     			if (comments[i].equals(comment))
     				return i;
@@ -246,36 +347,68 @@ public class ArrayUtil {
     	return result;
     }
 
-	
 	/**
-	 * Note that this should only be used when the placement of 
-	 * nulls within the array is unknown (due to performance efficiency).  
+	 * Note that this should only be used when the placement of nulls within the array
+	 * is unknown (due to performance efficiency).  
 	 * 
-	 * Removes all of the nulls from the array and returns a new
-     * array that contains all of the non-null elements.
+	 * Removes all of the nulls from the array and returns a new array that contains all
+	 * of the non-null elements.
      *
-     * If there are no nulls in the original array then the original
-     * array is returned.
+     * If there are no nulls in the original array then the original array is returned.
 	 */
 	public static Object[] removeNulls(Class<?> c, Object[] array) {
         if (array == null)
             return (Object[]) Array.newInstance(c, 0);
-        
+
         int i;
 		int validEntries = 0;
 		for (i = 0; i < array.length; i++) {
-	         if (array[i] != null) validEntries++;
+	         if (array[i] != null)
+	        	 validEntries++;
 	    }
-		
+
 		if (array.length == validEntries) 
 			return array;
-		
+
 		Object[] newArray = (Object[]) Array.newInstance(c, validEntries);
 		int j = 0;
         for (i = 0; i < array.length; i++) {
-            if (array[i] != null) newArray[j++] = array[i];
+            if (array[i] != null)
+            	newArray[j++] = array[i];
         }
-		
+
+		return newArray;
+	}
+
+	/**
+	 * Note that this should only be used when the placement of nulls within the array
+	 * is unknown (due to performance efficiency).  
+	 * 
+	 * Removes all of the nulls from the array and returns a new array that contains all
+	 * of the non-null elements.
+     *
+     * If there are no nulls in the original array then the original array is returned.
+	 * @since 5.2
+	 */
+	@SuppressWarnings("unchecked")
+	public static <T> T[] removeNulls(T[] array) {
+        int i;
+		int validEntries = 0;
+		for (i = 0; i < array.length; i++) {
+	         if (array[i] != null)
+	        	 validEntries++;
+	    }
+
+		if (array.length == validEntries) 
+			return array;
+
+		T[] newArray = (T[]) Array.newInstance(array.getClass().getComponentType(), validEntries);
+		int j = 0;
+        for (i = 0; i < array.length; i++) {
+            if (array[i] != null)
+            	newArray[j++] = array[i];
+        }
+
 		return newArray;
 	}
 
@@ -286,10 +419,10 @@ public class ArrayUtil {
 	 * The position of the last non-null element in the array must also be known. 
 	 */
 	public static Object[] removeNullsAfter(Class<?> c, Object[] array, int index) {
-        final int newLen= index+1;
+        final int newLen= index + 1;
         if (array != null && array.length == newLen)
 			return array;
-        
+
         Object[] newArray = (Object[]) Array.newInstance(c, newLen);
         if (array != null && newLen > 0)
         	System.arraycopy(array, 0, newArray, 0, newLen);
@@ -306,7 +439,7 @@ public class ArrayUtil {
 	}
 
 	/**
-	 * Insert the obj at the beginning of the array, shifting the whole thing one index
+	 * Inserts the obj at the beginning of the array, shifting the whole thing one index
 	 * Assumes that array contains nulls at the end, only. 
 	 */
 	public static Object[] prepend(Class<?> c, Object[] array, Object obj) {
@@ -317,7 +450,7 @@ public class ArrayUtil {
             array[0] = obj;
             return array;
         }
-        
+
         int i = findFirstNull(array);
         if (i >= 0) {
 			System.arraycopy(array, 0, array, 1, i);
@@ -326,12 +459,48 @@ public class ArrayUtil {
 			Object[] temp = (Object[]) Array.newInstance(c, array.length * 2);
 	        System.arraycopy(array, 0, temp, 1, array.length);
 	        temp[0] = obj;
-	        array = temp;	
+	        array = temp;
 		}
-        
+
         return array;
 	}
-	
+
+	/**
+	 * Inserts the obj at the beginning of the array, shifting the whole thing one index
+	 * Assumes that array contains nulls at the end, only. 
+	 * array must not be <code>null</code>.
+	 * @since 5.2
+	 */
+	public static <T> T[] prepend(T[] array, T obj) {
+		assert array != null;
+		
+		if (obj == null)
+    		return array;
+        if (array.length == 0) {
+            array = newArray(array, DEFAULT_LENGTH);
+            array[0] = obj;
+            return array;
+        }
+
+        int i = findFirstNull(array);
+        if (i >= 0) {
+			System.arraycopy(array, 0, array, 1, i);
+			array[0] = obj;
+        } else {
+			T[] temp = newArray(array, array.length*2);
+	        System.arraycopy(array, 0, temp, 1, array.length);
+	        temp[0] = obj;
+	        array = temp;
+		}
+
+        return array;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static <T> T[] newArray(T[] array, int newLen) {
+		return (T[]) Array.newInstance(array.getClass().getComponentType(), newLen);
+	}
+
 	/**
 	 * Removes first occurrence of element in array and moves objects behind up front.
 	 * @since 4.0
@@ -340,21 +509,21 @@ public class ArrayUtil {
 		if (array != null) {
 			for (int i = 0; i < array.length; i++) {
 				if (element == array[i]) {
-					System.arraycopy(array, i+1, array, i, array.length-i-1);
-					array[array.length-1]= null;
+					System.arraycopy(array, i + 1, array, i, array.length - i - 1);
+					array[array.length - 1]= null;
 					return;
 				}
 			}
 		}
 	}
-	
+
     static public int[] setInt(int[] array, int idx, int val) {
         if (array == null) {
-            array = new int[ DEFAULT_LENGTH > idx + 1 ? DEFAULT_LENGTH : idx + 1];
+            array = new int[DEFAULT_LENGTH > idx + 1 ? DEFAULT_LENGTH : idx + 1];
             array[idx] = val;
             return array;
         }
-        
+
         if (array.length <= idx) {
             int newLen = array.length * 2;
             while (newLen <= idx)
@@ -367,7 +536,7 @@ public class ArrayUtil {
         array[idx] = val;
         return array;
     }
-    
+
     /**
      * Stores the specified array contents in a new array of specified
      * runtime type.
@@ -377,7 +546,7 @@ public class ArrayUtil {
      * specified runtime type, or null if source is null.
      */
     @SuppressWarnings("unchecked")
-    public static <S,T> T[] convert(Class<T> target, S[] source) {
+    public static <S, T> T[] convert(Class<T> target, S[] source) {
     	T[] result= null;
     	if (source != null) {
     		result= (T[]) Array.newInstance(target, source.length);
@@ -387,8 +556,7 @@ public class ArrayUtil {
     	}
     	return result;
     }
-    
-    
+
     /**
      * Returns a new array that contains all of the elements of the 
      * given array except the first one.
@@ -400,12 +568,12 @@ public class ArrayUtil {
     @SuppressWarnings("unchecked")
 	public static <T> T[] removeFirst(T[] args) {
     	int n = args.length;
-    	if(n <= 0)
+    	if (n <= 0)
     		throw new IllegalArgumentException();
     	
-    	T[] newArgs = (T[]) Array.newInstance(args.getClass().getComponentType(), n-1);
-    	for(int i = 1; i < n; i++) {
-    		newArgs[i-1] = args[i];
+    	T[] newArgs = (T[]) Array.newInstance(args.getClass().getComponentType(), n - 1);
+    	for (int i = 1; i < n; i++) {
+    		newArgs[i - 1] = args[i];
     	}
     	return newArgs;
     }

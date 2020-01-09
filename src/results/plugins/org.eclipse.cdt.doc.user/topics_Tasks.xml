@@ -30,7 +30,9 @@
 		<topic label="Building projects" href="tasks/cdt_o_build_task.htm">
 			<topic label="Renaming a project" href="tasks/cdt_t_proj_rename.htm"/>
 			<topic label="Defining Project Build settings" href="tasks/cdt_t_proj_build_set.htm"/>
-			<topic label="Filtering Errors" href="tasks/cdt_t_proj_error_parser.htm"/>
+   <topic href="tasks/cdt_t_add_build_var.htm" label="Adding and Editing Build Variables">
+   </topic>
+			<topic label="Tuning Error Parsers" href="tasks/cdt_t_proj_error_parser.htm"/>
 			<topic label="Selecting a binary parser" href="tasks/cdt_t_proj_parser.htm"/>
 			<topic label="Adding Include paths and symbols" href="tasks/cdt_t_proj_paths.htm"/>
 			<topic label="Selecting a project type" href="tasks/cdt_t_proj_platf.htm"/>
@@ -38,11 +40,12 @@
 			<topic label="Removing Build Automatically" href="tasks/cdt_t_autobuild.htm"/>
 			<topic label="Autosaving on a build" href="tasks/cdt_t_autosave.htm"/>
 			<topic label="Creating a make target" href="tasks/cdt_t_addmaketarget.htm"/>
+   <topic href="tasks/cdt_t_proj_referenced_configs.htm" label="Creating Project References">
+   </topic>
 			<topic label="Customizing the Console view" href="tasks/cdt_t_cbuild_pref.htm"/>
-			<topic label="Viewing and managing compile errors" href="tasks/cdt_o_tasksview.htm">
+			<topic label="Tracking down compilation errors" href="tasks/cdt_o_builderrors.htm">
 				<topic label="Jumping to errors" href="tasks/cdt_t_jumperror.htm"/>
 				<topic label="Filtering the Problems view" href="tasks/cdt_t_filtererror.htm"/>
-				<topic label="Setting reminders" href="tasks/cdt_t_setreminder.htm"/>
 			</topic>
 		</topic>
 		<topic label="Running and debugging projects" href="tasks/cdt_o_run.htm">

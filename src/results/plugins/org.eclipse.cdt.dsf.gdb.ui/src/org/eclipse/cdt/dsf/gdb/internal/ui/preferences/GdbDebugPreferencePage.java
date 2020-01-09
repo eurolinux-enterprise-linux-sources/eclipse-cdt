@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009 Ericsson and others.
+ * Copyright (c) 2009, 2010 Ericsson and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -42,7 +42,7 @@ public class GdbDebugPreferencePage extends FieldEditorPreferencePage implements
 	@Override
 	public void createControl(Composite parent) {
 		super.createControl(parent);
-		PlatformUI.getWorkbench().getHelpSystem().setHelp(getControl(), IGdbDebugPreferenceConstants.PREFERENCE_PAGE);
+		PlatformUI.getWorkbench().getHelpSystem().setHelp(getControl(), GdbUIPlugin.PLUGIN_ID + ".dsfgdb_preference_page"); //$NON-NLS-1$
 	}
 
 	@Override
@@ -77,6 +77,22 @@ public class GdbDebugPreferencePage extends FieldEditorPreferencePage implements
 		boolField= new BooleanFieldEditor(
 				IGdbDebugPreferenceConstants.PREF_AUTO_TERMINATE_GDB,
 				MessagesForPreferences.GdbDebugPreferencePage_autoTerminateGdb_label,
+				group);
+
+		boolField.fillIntoGrid(group, 3);
+		addField(boolField);
+		// need to set layout again
+		group.setLayout(groupLayout);
+
+		group= new Group(parent, SWT.NONE);
+		group.setText(MessagesForPreferences.GdbDebugPreferencePage_hover_label);
+		groupLayout= new GridLayout(3, false);
+		group.setLayout(groupLayout);
+		group.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+		boolField= new BooleanFieldEditor(
+				IGdbDebugPreferenceConstants.PREF_USE_INSPECTOR_HOVER,
+				MessagesForPreferences.GdbDebugPreferencePage_useInspectorHover_label,
 				group);
 
 		boolField.fillIntoGrid(group, 3);

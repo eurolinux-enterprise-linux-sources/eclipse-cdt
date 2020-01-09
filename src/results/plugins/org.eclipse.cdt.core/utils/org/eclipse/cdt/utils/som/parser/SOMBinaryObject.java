@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 IBM Corporation and others.
+ * Copyright (c) 2004, 2009 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -197,14 +197,14 @@ public class SOMBinaryObject extends BinaryObjectAdapter {
 	protected void addSymbols(SOM.Symbol[] peSyms, byte[] table, List<Symbol> list) {
 		CPPFilt cppfilt = getCPPFilt();
 		Addr2line addr2line = getAddr2line(false);
-		for (int i = 0; i < peSyms.length; i++) {
-			if (peSyms[i].isFunction() || peSyms[i].isVariable()) {
-				String name = peSyms[i].getName(table);
+		for (org.eclipse.cdt.utils.som.SOM.Symbol peSym : peSyms) {
+			if (peSym.isFunction() || peSym.isVariable()) {
+				String name = peSym.getName(table);
 				if (name == null || name.trim().length() == 0 || !Character.isJavaIdentifierStart(name.charAt(0))) {
 					continue;
 				}
-				int type = peSyms[i].isFunction() ? ISymbol.FUNCTION : ISymbol.VARIABLE;
-				IAddress addr = new Addr32(peSyms[i].symbol_value);
+				int type = peSym.isFunction() ? ISymbol.FUNCTION : ISymbol.VARIABLE;
+				IAddress addr = new Addr32(peSym.symbol_value);
 				int size = 4;
 				if (cppfilt != null) {
 					try {
@@ -314,7 +314,7 @@ public class SOMBinaryObject extends BinaryObjectAdapter {
 	 * 
 	 * @see org.eclipse.core.runtime.IAdaptable#getAdapter(java.lang.Class)
 	 */
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	@Override
 	public Object getAdapter(Class adapter) {
 		if (adapter == Addr2line.class) {

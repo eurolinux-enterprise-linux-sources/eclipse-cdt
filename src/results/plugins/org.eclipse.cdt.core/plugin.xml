@@ -22,7 +22,7 @@
 <!-- =================================================================================== -->
 <!-- Extension Point: IBinaryParser, use to detect wheter an IFile is a binary           -->
 <!-- =================================================================================== -->
-   <extension-point id="BinaryParser" name="%BinaryParser.name"/>
+   <extension-point id="BinaryParser" name="%BinaryParser.name" schema="schema/BinaryParser.exsd"/>
 <!-- =================================================================================== -->
 <!-- Extension Point: IPathEntryStore, use to provide a storage for PathEtnry            -->
 <!-- =================================================================================== -->
@@ -30,7 +30,7 @@
 <!-- =================================================================================== -->
 <!-- Obsolete extension point, use the IPathEntry mechanism to provide include/macros    -->
 <!-- =================================================================================== -->
-   <extension-point id="ScannerInfoProvider" name="%ScannerInfoProvider.name"/>
+   <extension-point id="ScannerInfoProvider" name="%ScannerInfoProvider.name" schema="schema/CExtensionGeneric.exsd"/>
 <!-- =================================================================================== -->
 <!-- PathEntryContainer initialization, this is part of the IPathEntry framework         -->
 <!-- =================================================================================== -->
@@ -142,7 +142,7 @@
          point="org.eclipse.cdt.core.BinaryParser">
       <cextension>
          <run
-               class="org.eclipse.cdt.utils.macho.parser.internal.MachOParser64">
+               class="org.eclipse.cdt.utils.macho.parser.MachOParser64">
          </run>
       </cextension>
    </extension>
@@ -150,19 +150,27 @@
 <!-- Define the list of Error Parser provided by the CDT                                 -->
 <!-- =================================================================================== -->
    <extension
-         id="MakeErrorParser"
-         name="%CDTGNUMakeErrorParser.name"
-         point="org.eclipse.cdt.core.ErrorParser">
-      <errorparser
-            class="org.eclipse.cdt.internal.errorparsers.MakeErrorParser">
-      </errorparser>
-   </extension>
-   <extension
          id="GCCErrorParser"
          name="%CDTGNUCErrorParser.name"
          point="org.eclipse.cdt.core.ErrorParser">
       <errorparser
-            class="org.eclipse.cdt.internal.errorparsers.GCCErrorParser">
+            class="org.eclipse.cdt.core.errorparsers.RegexErrorParser"
+            id="org.eclipse.cdt.core.GCCErrorParser"
+            name="%CDTGNUCErrorParser.name">
+         <pattern description-expr="" eat-processed-line="true" file-expr="" line-expr="" regex="%CDTGNUCErrorParser.regex.ReportedOnlyOnce" severity="Ignore"/>
+         <pattern description-expr="" eat-processed-line="true" file-expr="" line-expr="" regex="%CDTGNUCErrorParser.regex.ForEachFunctionItAppearsIn" severity="Ignore"/>
+         <pattern description-expr="" eat-processed-line="true" file-expr="" line-expr="" regex="%CDTGNUCErrorParser.regex.ReportedOnlyOncePerInputFile" severity="Ignore"/>
+         <pattern description-expr="$4" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.ErrorUndeclared" severity="Error" variable-expr="$5"/>
+         <pattern description-expr="$4" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.ErrorConflictingTypesFor" severity="Error" variable-expr="$5"/>
+         <pattern description-expr="$4" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.ParseErrorBefore" severity="Error" variable-expr="$5"/>
+         <pattern description-expr="$4" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.DefinedButNotUsed" severity="Warning" variable-expr="$5"/>
+         <pattern description-expr="$4" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.WarningConflictingTypesFor" severity="Warning" variable-expr="$5"/>
+         <pattern description-expr="$5" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNULinkerErrorParser.regex.WarningDangerousFunction" severity="Warning" variable-expr="$6"/>
+         <pattern description-expr="$4" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.InstantiatedFromHere" severity="Info"/>
+         <pattern description-expr="$7" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.GenericError" severity="Error"/>
+         <pattern description-expr="$7" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.GenericWarning" severity="Warning"/>
+         <pattern description-expr="$9" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.GenericInfo" severity="Info"/>
+         <pattern description-expr="$4" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="%CDTGNUCErrorParser.regex.OtherError" severity="Error"/>
       </errorparser>
    </extension>
    <extension
@@ -170,6 +178,8 @@
          name="%CDTGNUAssemblerErrorParser.name"
          point="org.eclipse.cdt.core.ErrorParser">
       <errorparser
+            id="org.eclipse.cdt.core.GASErrorParser"
+            name="%CDTGNUAssemblerErrorParser.name"
             class="org.eclipse.cdt.internal.errorparsers.GASErrorParser">
       </errorparser>
    </extension>
@@ -178,7 +188,90 @@
          name="%CDTGNULinkerErrorParser.name"
          point="org.eclipse.cdt.core.ErrorParser">
       <errorparser
-            class="org.eclipse.cdt.internal.errorparsers.GLDErrorParser">
+            class="org.eclipse.cdt.core.errorparsers.RegexErrorParser"
+            id="org.eclipse.cdt.core.GLDErrorParser"
+            name="%CDTGNULinkerErrorParser.name">
+         <pattern
+               description-expr="$3"
+               eat-processed-line="true"
+               file-expr="$1"
+               line-expr=""
+               regex="%CDTGNULinkerErrorParser.regex.InFunction"
+               severity="Ignore"/>
+         <pattern
+               description-expr="$5"
+               eat-processed-line="true"
+               file-expr="$1"
+               line-expr="$2"
+               regex="%CDTGNULinkerErrorParser.regex.WarningDangerousFunction"
+               severity="Warning"/>
+         <pattern
+               description-expr="$2"
+               eat-processed-line="true"
+               file-expr="$1"
+               line-expr=""
+               regex="%CDTGNULinkerErrorParser.regex.TextWarning"
+               severity="Warning"/>
+         <pattern
+               description-expr="$2"
+               eat-processed-line="true"
+               file-expr="$1"
+               line-expr=""
+               regex="%CDTGNULinkerErrorParser.regex.TextError"
+               severity="Error"/>
+         <pattern
+               description-expr="$3"
+               eat-processed-line="true"
+               file-expr=""
+               line-expr=""
+               regex="%CDTGNULinkerErrorParser.regex.ldWarning"
+               severity="Warning"/>
+         <pattern
+               description-expr="$3"
+               eat-processed-line="true"
+               file-expr=""
+               line-expr=""
+               regex="%CDTGNULinkerErrorParser.regex.ldError"
+               severity="Error"/>
+      </errorparser>
+   </extension>
+<!-- MakeErrorParser is deprecated as of CDT 7.0 (replaced with WorkingDirLocator and GmakeErrorParser) -->
+   <extension
+         id="MakeErrorParser"
+         name="%CDTGNUMakeErrorParser.name.deprecated"
+         point="org.eclipse.cdt.core.ErrorParser">
+      <errorparser
+            id="org.eclipse.cdt.core.MakeErrorParser"
+            name="%CDTGNUMakeErrorParser.name.deprecated"
+            class="org.eclipse.cdt.internal.errorparsers.MakeErrorParser">
+      </errorparser>
+   </extension>
+   <extension
+         id="WorkingDirLocator"
+         name="%CDTWorkingDirLocator.name"
+         point="org.eclipse.cdt.core.ErrorParser">
+      <errorparser
+            class="org.eclipse.cdt.internal.errorparsers.CWDLocator"
+            id="org.eclipse.cdt.core.CWDLocator"
+            name="%CDTWorkingDirLocator.name">
+      </errorparser>
+   </extension>
+   <extension
+         id="GmakeErrorParser"
+         name="%CDTGNUMakeErrorParser.name"
+         point="org.eclipse.cdt.core.ErrorParser">
+      <errorparser
+            class="org.eclipse.cdt.core.errorparsers.RegexErrorParser"
+            id="org.eclipse.cdt.core.GmakeErrorParser"
+            name="%CDTGNUMakeErrorParser.name">
+         <pattern description-expr="$0" eat-processed-line="true" file-expr="" line-expr="" regex=".*make.*:.*Error.*\(ignored\)" severity="Info"/>
+         <pattern description-expr="make: $3" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="(.*):(\d*): (\*\*\* .*)" severity="Error"/>
+         <pattern description-expr="$0" eat-processed-line="true" file-expr="" line-expr="" regex=".*make.*: \*\*\* .*" severity="Error"/>
+         <pattern description-expr="$0" eat-processed-line="true" file-expr="" line-expr="" regex=".*make.*: Target (.*) not remade because of errors." severity="Error"/>
+         <pattern description-expr="make: $3" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="(.*[Mm]akefile):(\d*): warning: (.*)" severity="Warning"/>
+         <pattern description-expr="$0" eat-processed-line="true" file-expr="" line-expr="" regex=".*make.*\[.*\] Error [-]{0,1}\d*.*" severity="Warning"/>
+         <pattern description-expr="make: $3" eat-processed-line="true" file-expr="$1" line-expr="$2" regex="(.*):(\d*): (\S*: No such file or directory)" severity="Warning"/>
+         <pattern description-expr="$0" eat-processed-line="true" file-expr="" line-expr="" regex=".*make.*: Circular .* dependency dropped." severity="Warning"/>
       </errorparser>
    </extension>
    <extension
@@ -186,6 +279,8 @@
          name="%CDTVisualCErrorParser.name"
          point="org.eclipse.cdt.core.ErrorParser">
       <errorparser
+            id="org.eclipse.cdt.core.VCErrorParser"
+            name="%CDTVisualCErrorParser.name"
             class="org.eclipse.cdt.internal.errorparsers.VCErrorParser">
       </errorparser>
    </extension>
@@ -461,12 +556,6 @@
       <run class="org.eclipse.cdt.internal.core.pdom.indexer.PDOMFastIndexer"/>
    </extension>
    <extension
-         name="%CDTIndexer.domsourceindexer"
-         id="domsourceindexer"
-         point="org.eclipse.cdt.core.CIndexer">
-      <run class="org.eclipse.cdt.internal.core.pdom.indexer.PDOMFullIndexer"/>
-   </extension>
-   <extension
          point="org.eclipse.core.variables.dynamicVariables">
       <variable
             name="cdt_pathentry_var"
@@ -525,14 +614,6 @@
       </pathEntryContainerInitializer>
    </extension>
    <extension
-         point="org.eclipse.cdt.core.ScannerInfoProvider">
-      <cextension>
-         <run
-              class="org.eclipse.cdt.core.index.export.ConfigurableScannerInfoProvider">
-         </run>
-      </cextension>
-   </extension>
-   <extension
          point="org.eclipse.cdt.core.CIndex">
       <ExportProjectProvider
             class="org.eclipse.cdt.core.index.export.ExternalExportProjectProvider">
@@ -546,6 +627,8 @@
                     schema="schema/templates.exsd"/>
    <extension-point id="templateProcessTypes" name="%templateProcessTypes.name" schema="schema/templateProcessTypes.exsd"/>
    <extension-point id="templateAssociations" name="%templateAssociations.name" schema="schema/templateAssociations.exsd"/>
+   <extension-point id="ScannerInfoProvider2" name="%scannerInfoProvider2.name" schema="schema/ScannerInfoProvider2.exsd"/>
+   <extension-point id="EFSExtensionProvider" name="EFSExtensionProvider" schema="schema/EFSExtensionProvider.exsd"/>
 
    <extension
          point="org.eclipse.cdt.core.templateProcessTypes">

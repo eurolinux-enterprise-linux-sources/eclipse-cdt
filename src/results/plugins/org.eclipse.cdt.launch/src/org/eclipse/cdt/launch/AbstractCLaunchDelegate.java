@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2008 QNX Software Systems and others.
+ * Copyright (c) 2005, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -23,8 +23,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.cdt.core.IBinaryParser.IBinaryObject;
@@ -74,6 +74,14 @@ import org.eclipse.debug.ui.RefreshTab;
 import com.ibm.icu.text.DateFormat;
 import com.ibm.icu.text.MessageFormat;
 
+/**
+ * AbstractCLaunchDelegate is the launch delegate used by most CDI based debuggers.
+ * It has been superseded by AbstractCLaunchDelegate2 which is used by most DSF based
+ * debuggers. AbstractCLaunchDelegate has been left unmodified because it is commonly
+ * used by CDT clients and contains lots of obscure code created long ago to handle
+ * issues whose relevance is unclear today.
+ *
+ */
 abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegate {
 
     /**
@@ -118,7 +126,12 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
         }
     }
 
-    /* (non-Javadoc)
+    
+    public AbstractCLaunchDelegate() {
+		super();
+	}
+
+	/* (non-Javadoc)
      * @see org.eclipse.debug.core.model.LaunchConfigurationDelegate#getLaunch(org.eclipse.debug.core.ILaunchConfiguration, java.lang.String)
      */
     @Override
@@ -136,6 +149,11 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
 	private List orderedProjects;
 	private String preLaunchBuildConfiguration;
 
+	/**
+	 * Used in conjunction with build before launch settings in the main tab.
+	 */
+	private boolean workspaceBuildBeforeLaunch;
+	
 	abstract public void launch(ILaunchConfiguration configuration, String mode, ILaunch launch, IProgressMonitor monitor)
 			throws CoreException;
 
@@ -224,6 +242,10 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
 		throw new CoreException(new Status(IStatus.OK, getPluginID(), code, message, null));
 	}
 
+	/**
+	 * @return the ID of the plugin hosting the launch delegate. It's used to
+	 *         create {@link IStatus} objects.
+	 */
 	abstract protected String getPluginID();
 
     /**
@@ -383,7 +405,7 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
 	 */
 	@Deprecated
 	protected IFile getProgramFile(ILaunchConfiguration config) throws CoreException {
-		ICProject cproject = verifyCProject(config);
+		ICProject cproject = CDebugUtils.verifyCProject(config);
 		String fileName = CDebugUtils.getProgramName(config);
 		if (fileName == null) {
 			abort(LaunchMessages.getString("AbstractCLaunchDelegate.Program_file_not_specified"), null, //$NON-NLS-1$
@@ -402,62 +424,18 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
 		return programPath;
 	}
 
+	/**
+	 * @deprecated use {@link CDebugUtils#verifyCProject(ILaunchConfiguration)}
+	 */
 	protected ICProject verifyCProject(ILaunchConfiguration config) throws CoreException {
-		String name = CDebugUtils.getProjectName(config);
-		if (name == null) {
-			abort(LaunchMessages.getString("AbstractCLaunchDelegate.C_Project_not_specified"), null, //$NON-NLS-1$
-					ICDTLaunchConfigurationConstants.ERR_UNSPECIFIED_PROJECT);
-		}
-		ICProject cproject = CDebugUtils.getCProject(config);
-		if (cproject == null) {
-			IProject proj = ResourcesPlugin.getWorkspace().getRoot().getProject(name);
-			if (!proj.exists()) {
-				abort(
-						LaunchMessages.getFormattedString("AbstractCLaunchDelegate.Project_NAME_does_not_exist", name), null, //$NON-NLS-1$
-						ICDTLaunchConfigurationConstants.ERR_NOT_A_C_PROJECT);
-			} else if (!proj.isOpen()) {
-				abort(LaunchMessages.getFormattedString("AbstractCLaunchDelegate.Project_NAME_is_closed", name), null, //$NON-NLS-1$
-						ICDTLaunchConfigurationConstants.ERR_NOT_A_C_PROJECT);
-			}
-			abort(LaunchMessages.getString("AbstractCLaunchDelegate.Not_a_C_CPP_project"), null, //$NON-NLS-1$
-					ICDTLaunchConfigurationConstants.ERR_NOT_A_C_PROJECT);
-		}
-		return cproject;
+		return CDebugUtils.verifyCProject(config);
 	}
 
+	/**
+	 * @deprecated use {@link CDebugUtils#verifyProgramPath(ILaunchConfiguration)
+	 */
 	protected IPath verifyProgramPath(ILaunchConfiguration config) throws CoreException {
-		ICProject cproject = verifyCProject(config);
-		IPath programPath = CDebugUtils.getProgramPath(config);
-		if (programPath == null || programPath.isEmpty()) {
-			abort(LaunchMessages.getString("AbstractCLaunchDelegate.Program_file_not_specified"), null, //$NON-NLS-1$
-					ICDTLaunchConfigurationConstants.ERR_UNSPECIFIED_PROGRAM);
-		}
-		if (!programPath.isAbsolute()) {
-			IPath location = cproject.getProject().getLocation();
-			if (location != null) {
-				programPath = location.append(programPath);
-				if (!programPath.toFile().exists()) {
-					// Try the old way, which is required to support linked resources.
-					IFile projFile = null;
-					try {
-						projFile = project.getFile(CDebugUtils.getProgramPath(config));
-					}
-					catch (IllegalArgumentException exc) {}	// thrown if relative path that resolves to a root file (e.g., "..\somefile")
-					if (projFile != null && projFile.exists()) {
-						programPath = projFile.getLocation();
-					}
-				}
-			}
-		}
-		if (!programPath.toFile().exists()) {
-			abort(
-					LaunchMessages.getString("AbstractCLaunchDelegate.Program_file_does_not_exist"), //$NON-NLS-1$
-					new FileNotFoundException(
-							LaunchMessages.getFormattedString(
-																"AbstractCLaunchDelegate.PROGRAM_PATH_not_found", programPath.toOSString())), //$NON-NLS-1$
-					ICDTLaunchConfigurationConstants.ERR_PROGRAM_NOT_EXIST);
-		}
-		return programPath;
+		return CDebugUtils.verifyProgramPath(config);
 	}
 
 	protected IPath verifyProgramFile(ILaunchConfiguration config) throws CoreException {
@@ -591,11 +569,24 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
 	 * @return whether the debug platform should perform an incremental
 	 *         workspace build before the launch
 	 * @throws CoreException
-	 *             if an exception occurrs while building
+	 *             if an exception occurs while building
 	 */
 	@Override
 	public boolean buildForLaunch(ILaunchConfiguration configuration, String mode, IProgressMonitor monitor) throws CoreException {
-		//This matches the old code, but I don't know that it is the right behaviour.
+
+		workspaceBuildBeforeLaunch = true;
+		
+		// check the build before launch setting and honor it
+		int buildBeforeLaunchValue = configuration.getAttribute(ICDTLaunchConfigurationConstants.ATTR_BUILD_BEFORE_LAUNCH,
+				ICDTLaunchConfigurationConstants.BUILD_BEFORE_LAUNCH_USE_WORKSPACE_SETTING);
+
+		// we shouldn't be getting called if the workspace setting is disabled, so assume we need to
+		// build unless the user explicitly disabled it in the main tab of the launch.
+		if (buildBeforeLaunchValue == ICDTLaunchConfigurationConstants.BUILD_BEFORE_LAUNCH_DISABLED) {
+			return false;
+		}
+		
+		//This matches the old code, but I don't know that it is the right behavior.
 		//We should be building the local project as well, not just the ordered projects
 		if(orderedProjects == null) {		
 			return false;
@@ -666,6 +657,26 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
 	 */
 	@Override
 	public boolean finalLaunchCheck(ILaunchConfiguration configuration, String mode, IProgressMonitor monitor) throws CoreException {
+		
+		if (!workspaceBuildBeforeLaunch) {
+			// buildForLaunch was not called which means that the workspace pref is disabled.  see if the user enabled the
+			// launch specific setting in the main tab.  if so, we do call buildBeforeLaunch here.
+			if (ICDTLaunchConfigurationConstants.BUILD_BEFORE_LAUNCH_ENABLED == configuration.getAttribute(ICDTLaunchConfigurationConstants.ATTR_BUILD_BEFORE_LAUNCH,
+					ICDTLaunchConfigurationConstants.BUILD_BEFORE_LAUNCH_USE_WORKSPACE_SETTING)) {
+				
+				IProgressMonitor buildMonitor = new SubProgressMonitor(monitor, 10, SubProgressMonitor.PREPEND_MAIN_LABEL_TO_SUBTASK);
+				buildMonitor.beginTask(LaunchMessages.getString("AbstractCLaunchDelegate.BuildBeforeLaunch"), 10); //$NON-NLS-1$	
+				buildMonitor.subTask(LaunchMessages.getString("AbstractCLaunchDelegate.PerformingBuild")); //$NON-NLS-1$
+				if (buildForLaunch(configuration, mode, new SubProgressMonitor(buildMonitor, 7))) {
+					buildMonitor.subTask(LaunchMessages.getString("AbstractCLaunchDelegate.PerformingIncrementalBuild")); //$NON-NLS-1$
+					ResourcesPlugin.getWorkspace().build(IncrementalProjectBuilder.INCREMENTAL_BUILD, new SubProgressMonitor(buildMonitor, 3));				
+				}
+				else {
+					buildMonitor.worked(3); /* No incremental build required */
+				}
+			}
+		}
+
 		boolean continueLaunch = true;
 		if(orderedProjects == null) {
 			return continueLaunch;
@@ -685,7 +696,7 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
 			//check prerequisite projects for compile errors.
 			for (Iterator i = orderedProjects.iterator(); i.hasNext();) {
 				IProject proj = (IProject)i.next();
-				monitor.subTask(LaunchMessages.getString("AbstractCLaunchDelegate.searching_for_errors_in" + proj.getName())); //$NON-NLS-1$
+				monitor.subTask(LaunchMessages.getString("AbstractCLaunchDelegate.searching_for_errors_in") + proj.getName()); //$NON-NLS-1$
 				monitor.worked(scale);
 				compileErrorsInProjs = existsErrors(proj);
 				if (compileErrorsInProjs) {
@@ -695,7 +706,7 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
 			
 			//check current project, if prerequite projects were ok
 			if (!compileErrorsInProjs) {
-				monitor.subTask(LaunchMessages.getString("AbstractCLaunchDelegate.searching_for_errors_in" + project.getName())); //$NON-NLS-1$
+				monitor.subTask(LaunchMessages.getString("AbstractCLaunchDelegate.searching_for_errors_in") + project.getName()); //$NON-NLS-1$
 				monitor.worked(scale);
 				compileErrorsInProjs = existsErrors(project);
 			}
@@ -769,6 +780,12 @@ abstract public class AbstractCLaunchDelegate extends LaunchConfigurationDelegat
 		if(monitor == null) {
 			monitor = new NullProgressMonitor();
 		}
+		
+		if(!mode.equals(ILaunchManager.RUN_MODE))
+			org.eclipse.cdt.launch.LaunchUtils.enableActivity("org.eclipse.cdt.debug.cdigdbActivity", true); //$NON-NLS-1$
+
+
+		workspaceBuildBeforeLaunch = false;
 
 		int scale = 1000;
 		int totalWork = 2 * scale;

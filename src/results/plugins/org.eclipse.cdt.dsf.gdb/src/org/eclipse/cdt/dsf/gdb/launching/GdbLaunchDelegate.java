@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2009  QNX Software Systems and others.
+ * Copyright (c) 2008, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -9,14 +9,14 @@
  * QNX Software Systems   - Initial API and implementation
  * Windriver and Ericsson - Updated for DSF
  * IBM Corporation 
+ * Ericsson               - Added support for Mac OS
+ * Ericsson               - Added support for post-mortem trace files
  *******************************************************************************/
 package org.eclipse.cdt.dsf.gdb.launching; 
 
-import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 
-import org.eclipse.cdt.core.model.ICModelMarker;
 import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.DsfExecutor;
@@ -30,11 +30,9 @@ import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
 import org.eclipse.cdt.dsf.gdb.service.GdbDebugServicesFactory;
 import org.eclipse.cdt.dsf.gdb.service.GdbDebugServicesFactoryNS;
 import org.eclipse.cdt.dsf.gdb.service.SessionType;
+import org.eclipse.cdt.dsf.gdb.service.macos.MacOSGdbDebugServicesFactory;
 import org.eclipse.cdt.dsf.service.DsfSession;
-import org.eclipse.core.resources.IMarker;
-import org.eclipse.core.resources.IProject;
-import org.eclipse.core.resources.IResource;
-import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.cdt.launch.AbstractCLaunchDelegate2;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -47,24 +45,26 @@ import org.eclipse.debug.core.DebugException;
 import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.ILaunchConfiguration;
 import org.eclipse.debug.core.ILaunchManager;
-import org.eclipse.debug.core.model.ILaunchConfigurationDelegate2;
 import org.eclipse.debug.core.model.ISourceLocator;
-import org.eclipse.debug.core.model.LaunchConfigurationDelegate;
  
 /**
  * The shared launch configuration delegate for the DSF/GDB debugger.
  * This delegate supports all configuration types (local, remote, attach, etc)
  */
 @ThreadSafe
-public class GdbLaunchDelegate extends LaunchConfigurationDelegate 
-    implements ILaunchConfigurationDelegate2
+public class GdbLaunchDelegate extends AbstractCLaunchDelegate2
 {
     public final static String GDB_DEBUG_MODEL_ID = "org.eclipse.cdt.dsf.gdb"; //$NON-NLS-1$
 
     private final static String NON_STOP_FIRST_VERSION = "6.8.50"; //$NON-NLS-1$
 	private boolean isNonStopSession = false;
-
+	
+    private final static String TRACING_FIRST_VERSION = "7.1.50"; //$NON-NLS-1$
+	private boolean fIsPostMortemTracingSession;
+	
+	@Override
 	public void launch( ILaunchConfiguration config, String mode, ILaunch launch, IProgressMonitor monitor ) throws CoreException {
+		org.eclipse.cdt.launch.LaunchUtils.enableActivity("org.eclipse.cdt.debug.dsfgdbActivity", true); //$NON-NLS-1$
 		if ( monitor == null ) {
 			monitor = new NullProgressMonitor();
 		}
@@ -102,6 +102,7 @@ public class GdbLaunchDelegate extends LaunchConfigurationDelegate
         } else if (sessionType == SessionType.CORE) {
             monitor.subTask( LaunchMessages.getString("GdbLaunchDelegate.2") );  //$NON-NLS-1$
         } else {
+        	assert sessionType == SessionType.LOCAL : "Unexpected session type: " + sessionType.toString(); //$NON-NLS-1$
             monitor.subTask( LaunchMessages.getString("GdbLaunchDelegate.3") );  //$NON-NLS-1$
         }
         
@@ -120,12 +121,7 @@ public class GdbLaunchDelegate extends LaunchConfigurationDelegate
         // code that is outside the workspace.
         // See bug 244567
         if (!attach) {
-        	// First verify we are dealing with a proper project.
-        	ICProject project = LaunchUtils.verifyCProject(config);
-        	// Now verify we know the program to debug.
-        	exePath = LaunchUtils.verifyProgramPath(config, project);
-        	// Finally, make sure the program is a proper binary.
-        	LaunchUtils.verifyBinary(config, exePath);
+        	exePath = checkBinaryDetails(config);
         }
     	
         monitor.worked( 1 );
@@ -135,6 +131,10 @@ public class GdbLaunchDelegate extends LaunchConfigurationDelegate
         // First make sure non-stop is supported, if the user want to use this mode
         if (isNonStopSession && !isNonStopSupported(gdbVersion)) {
             throw new DebugException(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, DebugException.REQUEST_FAILED, "Non-stop mode is only supported starting with GDB " + NON_STOP_FIRST_VERSION, null)); //$NON-NLS-1$        	
+        }
+
+        if (fIsPostMortemTracingSession && !isPostMortemTracingSupported(gdbVersion)) {
+            throw new DebugException(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, DebugException.REQUEST_FAILED, "Post-mortem tracing is only supported starting with GDB " + TRACING_FIRST_VERSION, null)); //$NON-NLS-1$        	
         }
 
         launch.setServiceFactory(newServiceFactory(gdbVersion));
@@ -151,13 +151,16 @@ public class GdbLaunchDelegate extends LaunchConfigurationDelegate
             throw new DebugException(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, DebugException.INTERNAL_ERROR, "Interrupted Exception in dispatch thread", e1)); //$NON-NLS-1$
         } catch (ExecutionException e1) {
             throw new DebugException(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, DebugException.REQUEST_FAILED, "Error in services launch sequence", e1.getCause())); //$NON-NLS-1$
+        } catch (CancellationException e1) {
+        	// Launch aborted, so exit cleanly
+        	return;
         }
         
         if (monitor.isCanceled())
         	return;
         
         // The initializeControl method should be called after the ICommandControlService
-        // be initialized in the ServicesLaunchSequence above.  This is because it is that
+        // is initialized in the ServicesLaunchSequence above.  This is because it is that
         // service that will trigger the launch cleanup (if we need it during this launch)
         // through an ICommandControlShutdownDMEvent
         launch.initializeControl();
@@ -184,6 +187,9 @@ public class GdbLaunchDelegate extends LaunchConfigurationDelegate
             throw new DebugException(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, DebugException.INTERNAL_ERROR, "Interrupted Exception in dispatch thread", e1)); //$NON-NLS-1$
         } catch (ExecutionException e1) {
             throw new DebugException(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, DebugException.REQUEST_FAILED, "Error in final launch sequence", e1.getCause())); //$NON-NLS-1$
+        } catch (CancellationException e1) {
+        	// Launch aborted, so exit cleanly
+        	return;
         } finally {
             if (!succeed) {
                 // finalLaunchSequence failed. Shutdown the session so that all started
@@ -210,6 +216,21 @@ public class GdbLaunchDelegate extends LaunchConfigurationDelegate
                 }
             }        
         }
+	}
+
+	/**
+	 * Method used to check that the project, program and binary are correct.
+	 * Can be overridden to avoid checking certain things.
+	 * @since 3.0
+	 */
+	protected IPath checkBinaryDetails(final ILaunchConfiguration config) throws CoreException {
+		// First verify we are dealing with a proper project.
+		ICProject project = verifyCProject(config);
+		// Now verify we know the program to debug.
+		IPath exePath = LaunchUtils.verifyProgramPath(config, project);
+		// Finally, make sure the program is a proper binary.
+		LaunchUtils.verifyBinary(config, exePath);
+		return exePath;
 	}
 
 	/**
@@ -241,6 +262,18 @@ public class GdbLaunchDelegate extends LaunchConfigurationDelegate
     	return false;
     }
 
+	private boolean isPostMortemTracingSession(ILaunchConfiguration config) {
+		SessionType sessionType = LaunchUtils.getSessionType(config);
+		if (sessionType == SessionType.CORE) {
+			try {
+				String coreType = config.getAttribute(IGDBLaunchConfigurationConstants.ATTR_DEBUGGER_POST_MORTEM_TYPE,
+						                              IGDBLaunchConfigurationConstants.DEBUGGER_POST_MORTEM_TYPE_DEFAULT);
+				return coreType.equals(IGDBLaunchConfigurationConstants.DEBUGGER_POST_MORTEM_TRACE_FILE);
+			} catch (CoreException e) {    		
+			}
+		}
+    	return false;
+    }
 
 	@Override
     public boolean preLaunchCheck(ILaunchConfiguration config, String mode, IProgressMonitor monitor) throws CoreException {
@@ -258,6 +291,7 @@ public class GdbLaunchDelegate extends LaunchConfigurationDelegate
         // the source lookup adapter.
         
 		isNonStopSession = isNonStopSession(configuration);
+		fIsPostMortemTracingSession = isPostMortemTracingSession(configuration);
 
         GdbLaunch launch = new GdbLaunch(configuration, mode, null);
         launch.initialize();
@@ -275,121 +309,55 @@ public class GdbLaunchDelegate extends LaunchConfigurationDelegate
         }
         return locator;
     }
-    
-	/**
-	 * Recursively creates a set of projects referenced by the current project
-	 * 
-	 * @param proj
-	 *            The current project
-	 * @param referencedProjSet
-	 *            A set of referenced projects
-	 * @throws CoreException
-	 *             if an error occurs while getting referenced projects from the
-	 *             current project
-	 */
-	private HashSet<IProject> getReferencedProjectSet(IProject proj, HashSet<IProject> referencedProjSet) throws CoreException {
-		// The top project is a reference too and it must be added at the top to avoid cycles
-		referencedProjSet.add(proj);
-
-		IProject[] projects = proj.getReferencedProjects();
-		for (IProject refProject : projects) {
-			if (refProject.exists() && !referencedProjSet.contains(refProject)) {
-				getReferencedProjectSet(refProject, referencedProjSet);
-			}
-		}
-		return referencedProjSet;
-	}
-	
-	/**
-	 * Returns the order list of projects to build before launching.
-	 *  Used in buildForLaunch() 
-	 */
-	@Override
-	protected IProject[] getBuildOrder(ILaunchConfiguration configuration, String mode) throws CoreException {
-		IProject[] orderedProjects = null;
-		ArrayList<IProject> orderedProjList = null;
-
-		ICProject cProject = LaunchUtils.verifyCProject(configuration);
-		if (cProject != null) {
-			HashSet<IProject> projectSet = getReferencedProjectSet(cProject.getProject(), new HashSet<IProject>());
-
-			String[] orderedNames = ResourcesPlugin.getWorkspace().getDescription().getBuildOrder();
-			if (orderedNames != null) {
-				//Projects may not be in the build order but should still be built if selected
-				ArrayList<IProject> unorderedProjects = new ArrayList<IProject>(projectSet.size());
-				unorderedProjects.addAll(projectSet);
-				orderedProjList = new ArrayList<IProject>(projectSet.size());
-
-				for (String projectName : orderedNames) {
-					for (IProject proj : unorderedProjects) {
-						if (proj.getName().equals(projectName)) {
-							orderedProjList.add(proj);
-							unorderedProjects.remove(proj);
-							break;
-						}
-					}
-				}
-
-				// Add any remaining projects to the end of the list
-				orderedProjList.addAll(unorderedProjects);
-
-				orderedProjects = orderedProjList.toArray(new IProject[orderedProjList.size()]);
-			} else {
-				// Try the project prerequisite order then
-				IProject[] projects = projectSet.toArray(new IProject[projectSet.size()]);
-				orderedProjects = ResourcesPlugin.getWorkspace().computeProjectOrder(projects).projects;
-			}
-		}
-		return orderedProjects;
-	}
-
-	/* Used in finalLaunchCheck() */
-	@Override
-	protected IProject[] getProjectsForProblemSearch(ILaunchConfiguration configuration, String mode) throws CoreException {
-		return getBuildOrder(configuration, mode);
-	}
-
-	/**
-	 * Searches for compile errors in the specified project
-	 * Used in finalLaunchCheck() 
-	 * @param proj
-	 *            The project to search
-	 * @return true if compile errors exist, otherwise false
-	 */
-	@Override
-	protected boolean existsProblems(IProject proj) throws CoreException {
-		IMarker[] markers = proj.findMarkers(ICModelMarker.C_MODEL_PROBLEM_MARKER, true, IResource.DEPTH_INFINITE);
-		if (markers.length > 0) {
-			for (IMarker marker : markers) {
-				Integer severity = (Integer)marker.getAttribute(IMarker.SEVERITY);
-				if (severity != null) {
-					return severity.intValue() >= IMarker.SEVERITY_ERROR;
-				}
-			}
-		}
-		return false;
-	}
 	
 	private boolean isNonStopSupported(String version) {
+		if (version.contains(LaunchUtils.MACOS_GDB_MARKER)) {
+			// Mac OS's GDB does not support Non-Stop
+			return false;
+		}
+		
 		if (NON_STOP_FIRST_VERSION.compareTo(version) <= 0) {
 			return true;
 		}
 		return false;
 	}
-	
+
+	private boolean isPostMortemTracingSupported(String version) {
+		if (version.contains(LaunchUtils.MACOS_GDB_MARKER)) {
+			// Mac OS's GDB does not support post-mortem tracing
+			return false;
+		}
+		
+		if (TRACING_FIRST_VERSION.compareTo(version) <= 0
+			// This feature will be available for GDB 7.2. But until that GDB is itself available
+			// there is a pre-release that has a version of 6.8.50.20090414
+			|| "6.8.50.20090414".equals(version)) {
+			return true;
+		}
+		return false;
+	}
+
 	// A subclass can override this method and provide its own ServiceFactory.
 	protected IDsfDebugServicesFactory newServiceFactory(String version) {
 
 		if (isNonStopSession && isNonStopSupported(version)) {
 			return new GdbDebugServicesFactoryNS(version);
 		}
-
-		if (version.startsWith("6.6") ||  //$NON-NLS-1$
-			version.startsWith("6.7") ||  //$NON-NLS-1$
-			version.startsWith("6.8")) {  //$NON-NLS-1$
-			return new GdbDebugServicesFactory(version);
+		
+		if (version.contains(LaunchUtils.MACOS_GDB_MARKER)) {
+			// The version string at this point should look like
+			// 6.3.50-20050815APPLE1346, we extract the gdb version and apple version
+			String versions [] = version.split(LaunchUtils.MACOS_GDB_MARKER);
+			if (versions.length == 2) {
+				return new MacOSGdbDebugServicesFactory(versions[0], versions[1]);
+			}
 		}
 
 		return new GdbDebugServicesFactory(version);
+	}
+
+	@Override
+	protected String getPluginID() {
+		return GdbPlugin.PLUGIN_ID;
 	}
 }

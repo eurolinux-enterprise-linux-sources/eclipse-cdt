@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2006 Intel Corporation and others.
+ * Copyright (c) 2004, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,12 +11,13 @@
  *******************************************************************************/
 package org.eclipse.cdt.utils;
 
+import java.io.Serializable;
 import java.math.BigInteger;
 
 import org.eclipse.cdt.core.IAddress;
 import org.eclipse.cdt.internal.core.Messages;
 
-public class Addr64 implements IAddress {
+public class Addr64 implements IAddress, Serializable {
 
 	public static final Addr64 ZERO = new Addr64("0"); //$NON-NLS-1$
 	public static final Addr64 MAX = new Addr64("ffffffffffffffff", 16); //$NON-NLS-1$
@@ -93,10 +94,7 @@ public class Addr64 implements IAddress {
 	}
 
 	public BigInteger distanceTo(IAddress other) {
-		if (! (other instanceof Addr64)) {
-			throw new IllegalArgumentException();
-		}
-		return ((Addr64)other).address.add(address.negate());
+		return other.getValue().subtract(getValue());
 	}
 
 	public boolean isMax() {
@@ -112,16 +110,20 @@ public class Addr64 implements IAddress {
 	}
 
 	public int compareTo(Object other) {
-		return this.address.compareTo(((Addr64)other).address);
+		if (!(other instanceof IAddress)) {
+			throw new IllegalArgumentException();
+		}
+		
+		return getValue().compareTo(((IAddress)other).getValue());
 	}
 
 	@Override
 	public boolean equals(Object x) {
 		if (x == this)
 			return true;
-		if (! (x instanceof Addr64))
+		if (!(x instanceof IAddress))
 			return false;
-		return this.address.equals(((Addr64)x).address);
+		return getValue().equals(((IAddress)x).getValue());
 	}
 
 	@Override

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,13 +12,17 @@
 package org.eclipse.cdt.debug.internal.ui.actions;
 
 import org.eclipse.cdt.debug.core.CDIDebugModel;
+import org.eclipse.cdt.debug.internal.core.ICDebugInternalConstants;
 import org.eclipse.cdt.debug.internal.ui.CDebugModelPresentation;
-import org.eclipse.cdt.debug.internal.ui.preferences.ICDebugPreferenceConstants;
 import org.eclipse.cdt.debug.ui.CDebugUIPlugin;
+import org.eclipse.debug.core.DebugPlugin;
+import org.eclipse.debug.core.ILaunch;
+import org.eclipse.debug.core.ILaunchManager;
+import org.eclipse.debug.internal.ui.views.launch.LaunchView;
 import org.eclipse.debug.ui.IDebugModelPresentation;
 import org.eclipse.debug.ui.IDebugView;
 import org.eclipse.jface.action.IAction;
-import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.StructuredViewer;
 import org.eclipse.jface.viewers.Viewer;
 import org.eclipse.swt.custom.BusyIndicator;
@@ -35,7 +39,7 @@ public class ShowFullPathsAction extends ViewFilterAction {
 	 * @see org.eclipse.cdt.debug.internal.ui.actions.ViewFilterAction#getPreferenceKey()
 	 */
 	protected String getPreferenceKey() {
-		return ICDebugPreferenceConstants.PREF_SHOW_FULL_PATHS; 
+		return ICDebugInternalConstants.SHOW_FULL_PATHS_PREF_KEY;
 	}
 
 	/* (non-Javadoc)
@@ -48,6 +52,7 @@ public class ShowFullPathsAction extends ViewFilterAction {
 	/* (non-Javadoc)
 	 * @see org.eclipse.ui.IActionDelegate#run(org.eclipse.jface.action.IAction)
 	 */
+	@Override
 	public void run( IAction action ) {
 		final StructuredViewer viewer = getStructuredViewer();
 		IDebugView view = (IDebugView)getView().getAdapter( IDebugView.class );
@@ -58,14 +63,43 @@ public class ShowFullPathsAction extends ViewFilterAction {
 				BusyIndicator.showWhile( viewer.getControl().getDisplay(), 
 										new Runnable() {
 											public void run() {
-												viewer.refresh();
-												IPreferenceStore store = getPreferenceStore();
 												String key = getView().getSite().getId() + "." + getPreferenceKey(); //$NON-NLS-1$
-												store.setValue( key, getValue() );
+												getPreferenceStore().setValue( key, getValue() );
 												CDebugUIPlugin.getDefault().savePluginPreferences();						
+
+												// Refresh the viewer after we've set the preference because
+												// DSF-based debuggers trigger off this preference.
+												viewer.refresh();
 											}
 										} );
 			}
 		}		
+	}
+	
+	/*
+	 * Some debugger integrations don`t use debugTargets (e.g., DSF), so we
+	 * verify if the launch has the proper attribute instead.
+	 * If we don`t find any launches that allow us to enable the action, we should
+     * call our parent class to keep any previous debugger integration properly
+     * working with this feature.
+     */
+	 /** @since 7.0 */
+	@Override
+	public void selectionChanged(IAction action, ISelection selection) {
+		IDebugView view = (IDebugView)getView().getAdapter(IDebugView.class);
+		
+		// Debug view
+		if (view instanceof LaunchView) {
+			ILaunchManager launchmgr = DebugPlugin.getDefault().getLaunchManager();
+			ILaunch[] launches = launchmgr.getLaunches();
+			for (ILaunch launch : launches) {
+				if (launch.getAttribute(getPreferenceKey()) != null &&
+						launch.isTerminated() == false) {
+					setEnabled(true);
+					return;
+				}
+			}
+		}
+		super.selectionChanged(action, selection);
 	}
 }

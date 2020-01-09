@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2009 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,7 +17,9 @@ import org.eclipse.cdt.make.core.IMakeTarget;
 import org.eclipse.cdt.make.core.IMakeTargetManager;
 import org.eclipse.cdt.make.core.MakeCorePlugin;
 import org.eclipse.cdt.make.internal.ui.MakeUIPlugin;
+import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.QualifiedName;
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.swt.widgets.Shell;
@@ -27,6 +29,10 @@ import org.eclipse.ui.actions.SelectionListenerAction;
 
 import com.ibm.icu.text.MessageFormat;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class DeleteTargetAction extends SelectionListenerAction {
 	private final Shell shell;
 
@@ -73,7 +79,21 @@ public class DeleteTargetAction extends SelectionListenerAction {
 		try {
 			for (Object target : getSelectedElements()) {
 				if (target instanceof IMakeTarget) {
-						manager.removeTarget((IMakeTarget) target);
+					manager.removeTarget((IMakeTarget) target);
+					// if necessary remove last target property 
+					String lastTargetName = null;
+					IContainer container = ((IMakeTarget) target).getContainer();
+					try {
+						lastTargetName = (String)container.getSessionProperty(new QualifiedName(MakeUIPlugin.getUniqueIdentifier(), "lastTarget")); //$NON-NLS-1$
+					} catch (CoreException e) {
+					}
+					if (lastTargetName != null && lastTargetName.equals(((IMakeTarget) target).getName())) {
+						try {
+							container.setSessionProperty(new QualifiedName(MakeUIPlugin.getUniqueIdentifier(),
+									"lastTarget"), null); //$NON-NLS-1$
+						} catch (CoreException e) {
+						}
+					}
 				}
 			}
 		} catch (CoreException e) {
@@ -87,16 +107,10 @@ public class DeleteTargetAction extends SelectionListenerAction {
 		return super.updateSelection(selection) && canDelete();
 	}
 
-	/**
-	 * @return
-	 */
 	private List<?> getSelectedElements() {
 		return getStructuredSelection().toList();
 	}
 
-	/**
-		 * @return
-		 */
 	private boolean canDelete() {
 		List<?> elements = getSelectedElements();
 		for (Object element : elements) {

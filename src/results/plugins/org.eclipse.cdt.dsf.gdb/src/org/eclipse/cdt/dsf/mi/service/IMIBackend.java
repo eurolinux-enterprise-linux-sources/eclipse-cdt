@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Wind River Systems and others.
+ * Copyright (c) 2008, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -25,9 +25,9 @@ public interface IMIBackend extends IDsfService {
 
     public enum State { NOT_INITIALIZED, STARTED, TERMINATED };
 
-    /**
-     * Event indicating that the back end process has started.
-     */
+	/**
+	 * Event indicating that the back end process has started or terminated.
+	 */
     @Immutable
     public static class BackendStateChangedEvent {
         final private String fSessionId;

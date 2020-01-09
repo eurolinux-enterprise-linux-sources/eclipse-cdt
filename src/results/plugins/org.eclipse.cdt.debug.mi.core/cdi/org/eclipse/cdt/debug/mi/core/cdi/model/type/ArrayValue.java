@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2009 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -45,7 +45,7 @@ public class ArrayValue extends DerivedValue implements ICDIArrayValue, ICDIPoin
 		super(v);
 		if (hexAddress == null || hexAddress.trim().length()==0) {
 			return;
-		} else if (hexAddress.startsWith("0x") || hexAddress.startsWith("0X")) {
+		} else if (hexAddress.startsWith("0x") || hexAddress.startsWith("0X")) {  //$NON-NLS-1$ //$NON-NLS-2$
 			this.hexAddress = hexAddress.substring(2);
 		} else {
 			this.hexAddress = hexAddress;

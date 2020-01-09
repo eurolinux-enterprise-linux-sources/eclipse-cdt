@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,6 +7,7 @@
  *
  * Contributors:
  *    Markus Schorn - initial API and implementation
+ *    Sergey Prigogin (Google)
  *******************************************************************************/ 
 package org.eclipse.cdt.internal.ui.callhierarchy;
 
@@ -33,6 +34,7 @@ import org.eclipse.jface.viewers.Viewer;
 import org.eclipse.jface.viewers.ViewerComparator;
 import org.eclipse.jface.viewers.ViewerFilter;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.dnd.Clipboard;
 import org.eclipse.swt.dnd.DND;
 import org.eclipse.swt.dnd.DropTarget;
 import org.eclipse.swt.dnd.Transfer;
@@ -55,6 +57,7 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
+import org.eclipse.ui.navigator.ICommonMenuConstants;
 import org.eclipse.ui.part.PageBook;
 import org.eclipse.ui.part.ViewPart;
 
@@ -72,6 +75,7 @@ import org.eclipse.cdt.ui.refactoring.actions.CRefactoringActionGroup;
 import org.eclipse.cdt.internal.ui.CPluginImages;
 import org.eclipse.cdt.internal.ui.ICHelpContextIds;
 import org.eclipse.cdt.internal.ui.IContextMenuConstants;
+import org.eclipse.cdt.internal.ui.actions.CopyTreeAction;
 import org.eclipse.cdt.internal.ui.editor.ICEditorActionDefinitionIds;
 import org.eclipse.cdt.internal.ui.search.actions.SelectionSearchGroup;
 import org.eclipse.cdt.internal.ui.util.CoreUtility;
@@ -92,7 +96,6 @@ public class CHViewPart extends ViewPart {
     private static final String TRUE = String.valueOf(true);
     private static final String KEY_WORKING_SET_FILTER = "workingSetFilter"; //$NON-NLS-1$
     private static final String KEY_FILTER_VARIABLES = "variableFilter"; //$NON-NLS-1$
-//    private static final String KEY_FILTER_MACROS = "macroFilter"; //$NON-NLS-1$
     private static final String KEY_SHOW_FILES= "showFilesInLabels"; //$NON-NLS-1$
     
     private IMemento fMemento;
@@ -101,6 +104,8 @@ public class CHViewPart extends ViewPart {
     private int fNavigationDetail;
     
 	private ArrayList<ICElement> fHistoryEntries= new ArrayList<ICElement>(MAX_HISTORY_SIZE);
+
+	private Clipboard fClipboard;
 
     // widgets
     private PageBook fPagebook;
@@ -114,7 +119,6 @@ public class CHViewPart extends ViewPart {
 
     // filters, sorter
     private ViewerFilter fVariableFilter;
-//    private ViewerFilter fMacroFilter;
     private ViewerComparator fSorterAlphaNumeric;
     private ViewerComparator fSorterReferencePosition;
 	private WorkingSetFilterUI fWorkingSetFilterUI;
@@ -123,7 +127,6 @@ public class CHViewPart extends ViewPart {
     private Action fReferencedByAction;
     private Action fMakesReferenceToAction;
     private Action fFilterVariablesAction;
-//    private Action fFilterMacrosAction;
     private Action fShowFilesInLabelsAction;
     private Action fNextAction;
     private Action fPreviousAction;
@@ -131,13 +134,13 @@ public class CHViewPart extends ViewPart {
 	private Action fHistoryAction;
 	private Action fShowReference;
 	private Action fOpenElement;
+	private CopyTreeAction fCopyAction;
 	
 	// action groups
 	private OpenViewActionGroup fOpenViewActionGroup;
 	private SelectionSearchGroup fSelectionSearchGroup;
 	private CRefactoringActionGroup fRefactoringActionGroup;
 	private IContextActivation fContextActivation;
-
     
     @Override
 	public void setFocus() {
@@ -205,6 +208,8 @@ public class CHViewPart extends ViewPart {
                 
         getSite().setSelectionProvider(new AdaptingSelectionProvider(ICElement.class, fTreeViewer));
 
+        fClipboard = new Clipboard(parent.getDisplay());
+
         initDragAndDrop();
         createActions();
         createContextMenu();
@@ -252,12 +257,10 @@ public class CHViewPart extends ViewPart {
     private void initializeActionStates() {
         boolean referencedBy= true;
         boolean filterVariables= false;
-//        boolean filterMacros= false;
         boolean showFiles= false;
         
         if (fMemento != null) {
             filterVariables= TRUE.equals(fMemento.getString(KEY_FILTER_VARIABLES));
-//            filterMacros= TRUE.equals(fMemento.getString(KEY_FILTER_MACROS));
             showFiles= TRUE.equals(fMemento.getString(KEY_SHOW_FILES));
         }
         
@@ -268,8 +271,6 @@ public class CHViewPart extends ViewPart {
         fMakesReferenceToAction.setChecked(!referencedBy);
         fContentProvider.setComputeReferencedBy(referencedBy);
         
-//        fFilterMacrosAction.setChecked(filterMacros);
-//        fFilterMacrosAction.run();
         fFilterVariablesAction.setChecked(filterVariables);
         fFilterVariablesAction.run();
         updateSorter();
@@ -287,7 +288,6 @@ public class CHViewPart extends ViewPart {
         if (fWorkingSetFilterUI != null) {
         	fWorkingSetFilterUI.saveState(memento, KEY_WORKING_SET_FILTER);
         }
-//        memento.putString(KEY_FILTER_MACROS, String.valueOf(fFilterMacrosAction.isChecked()));
         memento.putString(KEY_FILTER_VARIABLES, String.valueOf(fFilterVariablesAction.isChecked()));
         memento.putString(KEY_SHOW_FILES, String.valueOf(fShowFilesInLabelsAction.isChecked()));
         super.saveState(memento);
@@ -452,7 +452,7 @@ public class CHViewPart extends ViewPart {
         };
         fOpenElement.setToolTipText(CHMessages.CHViewPart_Open_tooltip);
         fOpenElement.setActionDefinitionId(ICEditorActionDefinitionIds.OPEN_DECL);
-        
+
         fShowFilesInLabelsAction= new Action(CHMessages.CHViewPart_ShowFiles_label, IAction.AS_CHECK_BOX) {
             @Override
 			public void run() {
@@ -489,6 +489,8 @@ public class CHViewPart extends ViewPart {
 
         fHistoryAction = new CHHistoryDropDownAction(this);
 
+        fCopyAction= new CopyCallHierarchyAction(this, fClipboard, fTreeViewer);
+
         // setup action bar
         // global action hooks
         IActionBars actionBars = getViewSite().getActionBars();
@@ -507,7 +509,6 @@ public class CHViewPart extends ViewPart {
         tm.add(fNextAction);
         tm.add(fPreviousAction);
         tm.add(new Separator());
-//        tm.add(fFilterMacrosAction);
         tm.add(fFilterVariablesAction);
         tm.add(new Separator());
         tm.add(fReferencedByAction);
@@ -518,16 +519,12 @@ public class CHViewPart extends ViewPart {
         // local menu
         IMenuManager mm = actionBars.getMenuManager();
 
-//        tm.add(fNext);
-//        tm.add(fPrevious);
-//        tm.add(new Separator());
         fWorkingSetFilterUI.fillActionBars(actionBars);
         mm.add(fReferencedByAction);
         mm.add(fMakesReferenceToAction);
         mm.add(new Separator());
         mm.add(fShowFilesInLabelsAction);
         mm.add(new Separator());
-//        mm.add(fFilterMacrosAction);
         mm.add(fFilterVariablesAction);
     }
     
@@ -724,6 +721,10 @@ public class CHViewPart extends ViewPart {
 			fOpenViewActionGroup.fillContextMenu(menu);
 		}
 
+		if (fCopyAction.canActionBeAdded()) {
+        	menu.appendToGroup(ICommonMenuConstants.GROUP_EDIT, fCopyAction);
+		}
+
 		if (SelectionSearchGroup.canActionBeAdded(selection)){
 			fSelectionSearchGroup.fillContextMenu(menu);
 		}
@@ -807,5 +808,12 @@ public class CHViewPart extends ViewPart {
 
 	public TreeViewer getTreeViewer() {
 		return fTreeViewer;
+	}
+
+	private static class CopyCallHierarchyAction extends CopyTreeAction {
+		public CopyCallHierarchyAction(ViewPart view, Clipboard clipboard, TreeViewer viewer) {
+			super(CHMessages.CHViewPart_CopyCallHierarchy_label, view, clipboard, viewer);
+//			PlatformUI.getWorkbench().getHelpSystem().setHelp(this, ICHelpContextIds.CALL_HIERARCHY_COPY_ACTION);
+		}
 	}
 }

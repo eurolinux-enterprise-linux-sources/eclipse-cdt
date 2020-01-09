@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2007 IBM Corporation and others.
+ * Copyright (c) 2003, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -80,6 +80,7 @@ public class ManagedBuildCoreTests20 extends TestCase {
 	public static Test suite() {
 		TestSuite suite = new TestSuite(ManagedBuildCoreTests20.class.getName());
 		
+		// Note that some of the tests are dependent on others so run the suite as a whole
 		suite.addTest(new ManagedBuildCoreTests20("testExtensions"));
 		suite.addTest(new ManagedBuildCoreTests20("testProjectCreation"));
 		suite.addTest(new ManagedBuildCoreTests20("testConfigurations"));
@@ -201,8 +202,6 @@ public class ManagedBuildCoreTests20 extends TestCase {
 	 * The purpose of this test is to exercise the build path info interface.
 	 * To get to that point, a new project/config has to be created in the test
 	 * project and the default configuration changed.
-	 *  
-	 * @throws CoreException
 	 */
 	public void testScannerInfoInterface(){
 		// Open the test project
@@ -288,14 +287,14 @@ public class ManagedBuildCoreTests20 extends TestCase {
 			public void changeNotification(IResource project, IScannerInfo info) {
 				// Test the symbols: expect "BUILTIN" from the manifest, and "DEBUG" and "GNOME=ME"
 				// from the overidden settings 
-				Map definedSymbols = info.getDefinedSymbols();
+				Map<String, String> definedSymbols = info.getDefinedSymbols();
 				assertTrue(definedSymbols.containsKey("BUILTIN"));
 				assertTrue(definedSymbols.containsKey("DEBUG"));
 				assertTrue(definedSymbols.containsKey("GNOME"));
 				assertTrue(definedSymbols.containsValue("ME"));
-				assertEquals((String)definedSymbols.get("BUILTIN"), "");
-				assertEquals((String)definedSymbols.get("DEBUG"), "");
-				assertEquals((String)definedSymbols.get("GNOME"), "ME");
+				assertEquals(definedSymbols.get("BUILTIN"), "");
+				assertEquals(definedSymbols.get("DEBUG"), "");
+				assertEquals(definedSymbols.get("GNOME"), "ME");
 				// Test the includes path
 				String[] actualPaths = info.getIncludePaths();
 				BuildSystemTestHelper.checkDiff(expectedPaths, actualPaths);
@@ -305,10 +304,10 @@ public class ManagedBuildCoreTests20 extends TestCase {
 		// Check the build information before we change it
 		IScannerInfo currentSettings = provider.getScannerInformation(project);
 		
-		Map currentSymbols = currentSettings.getDefinedSymbols();
+		Map<String, String> currentSymbols = currentSettings.getDefinedSymbols();
 		// It should simply contain the built-in
 		assertTrue(currentSymbols.containsKey("BUILTIN"));
-		assertEquals((String)currentSymbols.get("BUILTIN"), "");
+		assertEquals(currentSymbols.get("BUILTIN"), "");
 		
 		String[] currentPaths = currentSettings.getIncludePaths();
 		BuildSystemTestHelper.checkDiff(expectedPaths, currentPaths);
@@ -492,7 +491,6 @@ public class ManagedBuildCoreTests20 extends TestCase {
 	}
 	
 	/**
-	 * @throws CoreException
 	 * @throws BuildException
 	 */
 	public void testProjectCreation() throws BuildException {
@@ -1743,7 +1741,6 @@ public class ManagedBuildCoreTests20 extends TestCase {
 		}
 	}
 	/**
-	 * @throws CoreException
 	 * @throws BuildException
 	 */
 	public void testErrorParsers() throws BuildException {
@@ -1821,7 +1818,7 @@ public class ManagedBuildCoreTests20 extends TestCase {
 		assertEquals(expectedBinParserId, targetPlatform.getBinaryParserList()[0]);
 		// This target defines errors parsers.  Check that the error parsers
 		// have been assigned.
-		assertEquals("org.eclipse.cdt.core.MakeErrorParser;org.eclipse.cdt.core.GCCErrorParser;org.eclipse.cdt.core.GLDErrorParser", configs[0].getErrorParserIds());
+		assertEquals("org.eclipse.cdt.core.CWDLocator;org.eclipse.cdt.core.GCCErrorParser;org.eclipse.cdt.core.GLDErrorParser;org.eclipse.cdt.core.GmakeErrorParser", configs[0].getErrorParserIds());
 		
 		// Tool
 		ITool[] tools = configs[0].getTools();

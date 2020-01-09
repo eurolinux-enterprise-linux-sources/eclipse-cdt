@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -31,6 +31,7 @@ import org.eclipse.cdt.core.dom.ast.IVariable;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassTemplate;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPConstructor;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPEnumeration;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPField;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunction;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMember;
@@ -48,6 +49,8 @@ import org.eclipse.cdt.core.index.IndexFilter;
 import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.testplugin.CProjectHelper;
 import org.eclipse.cdt.core.testplugin.util.TestSourceReader;
+import org.eclipse.cdt.internal.core.pdom.CModelListener;
+import org.eclipse.cdt.internal.core.pdom.dom.PDOMFile;
 import org.eclipse.cdt.internal.core.pdom.dom.PDOMNode;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
@@ -99,7 +102,7 @@ public class IndexUpdateTests extends IndexTestBase {
 		if (fCProject == null) {
 			fCProject= CProjectHelper.createCProject("indexUpdateTestsC", null, IPDOMManager.ID_FAST_INDEXER);
 		}
-		CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, NPM);
+		CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, npm());
 		fIndex= CCorePlugin.getIndexManager().getIndex(new ICProject[] {fCProject, fCppProject});
 	}
 
@@ -110,7 +113,7 @@ public class IndexUpdateTests extends IndexTestBase {
 		}
 		IProject project= cpp ? fCppProject.getProject() : fCProject.getProject();
 		fHeader= TestSourceReader.createFile(project, "header.h", fContents[++fContentUsed].toString());
-		assertTrue(CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, NPM));
+		assertTrue(CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, npm()));
 	}
 
 	private void setupFile(int totalFileVersions, boolean cpp) throws Exception {
@@ -120,13 +123,15 @@ public class IndexUpdateTests extends IndexTestBase {
 		}
 		IProject project= cpp ? fCppProject.getProject() : fCProject.getProject();
 		fFile= TestSourceReader.createFile(project, "file" + (cpp ? ".cpp" : ".c"), fContents[++fContentUsed].toString());
-		fContentUsed= 0;
 		TestSourceReader.waitUntilFileIsIndexed(fIndex, fFile, INDEXER_WAIT_TIME);
-		assertTrue(CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, NPM));
+		assertTrue(CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, npm()));
 	}
 	
 	private void updateFile() throws Exception {
-		fFile= TestSourceReader.createFile(fFile.getParent(), fFile.getName(), fContents[++fContentUsed].toString());
+		// Append variable comment to the end of the file to change its contents.
+		// Indexer would not reindex the file if its contents remain the same. 
+		fFile= TestSourceReader.createFile(fFile.getParent(), fFile.getName(),
+				fContents[++fContentUsed].toString() + "\n// " + fContentUsed); 
 		TestSourceReader.waitUntilFileIsIndexed(fIndex, fFile, INDEXER_WAIT_TIME);
 	}
 	
@@ -134,12 +139,12 @@ public class IndexUpdateTests extends IndexTestBase {
 	public void tearDown() throws Exception {
 		fIndex= null;
 		if (fFile != null) {
-			fFile.delete(true, NPM);
+			fFile.delete(true, npm());
 		}
 		if (fHeader != null) {
-			fHeader.delete(true, NPM);
+			fHeader.delete(true, npm());
 		}
-		CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, NPM);
+		CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, npm());
 		super.tearDown();
 	}
 		
@@ -224,7 +229,7 @@ public class IndexUpdateTests extends IndexTestBase {
 		for (int i = 0; i < nchars.length; i++) {
 			nchars[i]= names[i].toCharArray();
 		}
-		return fIndex.findBindings(nchars, IndexFilter.ALL_DECLARED, NPM)[0];
+		return fIndex.findBindings(nchars, IndexFilter.ALL_DECLARED, npm())[0];
 	}
 
 	private String msg() {
@@ -236,20 +241,16 @@ public class IndexUpdateTests extends IndexTestBase {
 	}
 
 	// int globalVar;
-	
+
 	// short globalVar;
-	
-	// auto int globalVar;
-	
+
 	// register int globalVar;
-	
+
 	public void testGlobalCppVariable() throws Exception {
-		setupFile(4, true);
+		setupFile(3, true);
 		checkCppVariable("globalVar", INT, new String[]{});
 		updateFile();
 		checkCppVariable("globalVar", SHORT, new String[]{});
-		updateFile();
-		checkCppVariable("globalVar", INT, new String[]{AUTO});
 		updateFile();
 		checkCppVariable("globalVar", INT, new String[]{REGISTER});
 	}
@@ -556,7 +557,7 @@ public class IndexUpdateTests extends IndexTestBase {
 			final char[] nchars = name.toCharArray();
 			final String refType = name + " &";
 			final String constRefType = "const " + refType;
-			IIndexBinding[] ctors= fIndex.findBindings(new char[][]{nchars, nchars}, IndexFilter.ALL_DECLARED_OR_IMPLICIT, NPM);
+			IIndexBinding[] ctors= fIndex.findBindings(new char[][]{nchars, nchars}, IndexFilter.ALL_DECLARED_OR_IMPLICIT, npm());
 
 			int count= 0;
 			for (int i = 0; i < ctors.length; i++) {
@@ -575,7 +576,7 @@ public class IndexUpdateTests extends IndexTestBase {
 			}
 			checkCppConstructor((ICPPConstructor) ctors[0], new String[]{"", constRefType}, m2);
 
-			IIndexBinding[] assignmentOps= fIndex.findBindings(new char[][]{nchars, "operator =".toCharArray()}, IndexFilter.ALL_DECLARED_OR_IMPLICIT, NPM);
+			IIndexBinding[] assignmentOps= fIndex.findBindings(new char[][]{nchars, "operator =".toCharArray()}, IndexFilter.ALL_DECLARED_OR_IMPLICIT, npm());
 			count= 0;
 			for (int i = 0; i < assignmentOps.length; i++) {
 				IIndexBinding assignmentOp= assignmentOps[i];
@@ -908,6 +909,7 @@ public class IndexUpdateTests extends IndexTestBase {
 	//    globalVar= 1;
 	// }
 	public void testChangingSourceBeforeHeader_Bug171834() throws Exception {
+		CModelListener.sSuppressUpdateOfLastRecentlyUsed= false;
 		setupHeader(2, true);
 		setupFile(0, true);
 		IBinding binding;
@@ -935,7 +937,7 @@ public class IndexUpdateTests extends IndexTestBase {
 
 		fHeader= TestSourceReader.createFile(fHeader.getParent(), fHeader.getName(), fContents[0].toString().replaceAll("globalVar", "newVar"));
 		TestSourceReader.waitUntilFileIsIndexed(fIndex, fHeader, INDEXER_WAIT_TIME);
-		assertTrue(CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, NPM));
+		assertTrue(CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, npm()));
 
 		fIndex.acquireReadLock();
 		try {
@@ -1169,5 +1171,125 @@ public class IndexUpdateTests extends IndexTestBase {
 		} finally {
 			fIndex.releaseReadLock();
 		}
+	}
+	
+	
+	// void funcTypeDeletion(int);
+
+	// #include "header.h"
+	// typeof(funcTypeDeletion) storeRef;
+	// char funcTypeDeletion(int);		// delete type
+	// typeof(storeRef) useRef;         // use reference
+	public void testTypedeletion_Bug294306() throws Exception {
+		setupHeader(2, true);
+		setupFile(2, true);
+		checkFunction("useRef", new String[]{"void", "int"}, new String[]{});
+		fContentUsed--;
+		updateFile();
+		checkFunction("useRef", new String[]{"char", "int"}, new String[]{});
+	}
+
+	// void f(int a, int b=0);
+
+	// #include "header.h"
+	// void f(int a, int b) {}
+	// void ref() {
+	//   f(1);
+	// }
+	
+	// #include "header.h"
+	// void f(int a, int b) {}
+	// void ref() {
+	//   f(1);
+	// }
+	public void testDefaultParam_Bug297438() throws Exception {
+		setupHeader(3, true);
+		setupFile(3, true);
+		checkReferenceCount("f", 1);
+		updateFile();
+		checkReferenceCount("f", 1);
+	}
+
+	private void checkReferenceCount(String name, int count) throws InterruptedException, CoreException {
+		fIndex.acquireReadLock();
+		try { 
+			IBinding func = findBinding(name);
+			assertEquals(count, fIndex.findReferences(func).length);
+		} finally {
+			fIndex.releaseReadLock();
+		}
+	}
+	
+	// enum E {e0};
+	
+	// enum class E;
+
+	// enum E : short {e1};
+	
+	// enum class E {e2};
+	
+	// enum class E : short {e1};
+	
+	// enum E : int;
+	public void testEnumCPP() throws Exception {
+		setupFile(6, true);
+		checkEnum(false, null, "e0");
+		updateFile();
+		checkEnum(true, "int", null);
+		updateFile();
+		checkEnum(false, "short int", "e1");
+		updateFile();
+		checkEnum(true, "int", "e2");
+		updateFile();
+		checkEnum(true, "short int", "e1");
+		updateFile();
+		checkEnum(false, "int", null);
+	}
+
+	private void checkEnum(boolean scoped, String fixedType, String enumItem) throws Exception {
+		fIndex.acquireReadLock();
+		try { 
+			ICPPEnumeration enumType = (ICPPEnumeration) findBinding("E");
+			assertEquals(scoped, enumType.isScoped());
+			if (fixedType == null) {
+				assertNull(enumType.getFixedType());
+			} else {
+				assertEquals(fixedType, ASTTypeUtil.getType(enumType.getFixedType()));
+			}
+			final IEnumerator[] enumItems = enumType.getEnumerators();
+			if (enumItem == null) {
+				assertEquals(0, enumItems.length);
+			} else {
+				assertEquals(1, enumItems.length);
+				assertEquals(enumItem, enumItems[0].getName());
+			}
+		} finally {
+			fIndex.releaseReadLock();
+		}
+	}
+	
+	// class X {};
+
+	// class X {};
+	public void testFileLocalBinding() throws Exception {
+		setupFile(2, true);
+		long id1, id2;
+		fIndex.acquireReadLock();
+		try { 
+			final IIndexBinding binding = findBinding("X");
+			id1= ((PDOMFile) binding.getLocalToFile()).getRecord();
+		} finally {
+			fIndex.releaseReadLock();
+		}
+		
+		updateFile();
+		fIndex.acquireReadLock();
+		try { 
+			final IIndexBinding binding = findBinding("X");
+			id2= ((PDOMFile) binding.getLocalToFile()).getRecord();
+		} finally {
+			fIndex.releaseReadLock();
+		}
+		assertEquals(id1, id2);
 	}
 }

@@ -255,6 +255,21 @@ public class CIndenterTest extends BaseUITestCase {
 		assertIndenterResult();
 	}
 
+	//new pair<int, int>(a,
+	//b);
+
+	//new pair<int, int>(a,
+	//                   b);
+	public void testCallOfTemplateFunction() throws Exception {
+		fOptions.put(DefaultCodeFormatterConstants.FORMATTER_TAB_CHAR, CCorePlugin.SPACE);
+		fOptions.put(DefaultCodeFormatterConstants.FORMATTER_TAB_SIZE, "2");
+		fOptions.put(DefaultCodeFormatterConstants.FORMATTER_INDENTATION_SIZE, "2");
+		fOptions.put(DefaultCodeFormatterConstants.FORMATTER_ALIGNMENT_FOR_ARGUMENTS_IN_METHOD_INVOCATION, 
+				DefaultCodeFormatterConstants.createAlignmentValue(false, DefaultCodeFormatterConstants.WRAP_COMPACT,
+						DefaultCodeFormatterConstants.INDENT_ON_COLUMN));
+		assertIndenterResult();
+	}
+
 	//struct x {
 	// int f1 : 1;
 	// int f2 : 1;
@@ -814,9 +829,11 @@ public class CIndenterTest extends BaseUITestCase {
 	//}
 
 	//void t() const
-	//{
-	//}
+	//	{
+	//	}
 	public void testIndentationOfConstMethodBody_Bug298282() throws Exception {
+		fOptions.put(DefaultCodeFormatterConstants.FORMATTER_BRACE_POSITION_FOR_METHOD_DECLARATION, 
+				DefaultCodeFormatterConstants.NEXT_LINE_SHIFTED);
 		assertIndenterResult();
 	}
 	
@@ -848,6 +865,107 @@ public class CIndenterTest extends BaseUITestCase {
 	//	}
 	//};
 	public void testIndentationOfConstructorBodyWithFieldInitializer_Bug298282() throws Exception {
+		assertIndenterResult();
+	}
+
+	//class A {
+	//	enum E1 {
+	//			a=1,
+	//	b=2,
+	//	c=3
+	//	};
+	//	enum E2 {
+	//	x=1,
+	//			y=2,
+	//	z=3
+	//	};
+	//};
+	
+	//class A {
+	//	enum E1 {
+	//		a=1,
+	//		b=2,
+	//		c=3
+	//	};
+	//	enum E2 {
+	//		x=1,
+	//		y=2,
+	//		z=3
+	//	};
+	//};
+	public void testIndentationOfEnumeratorDeclWithInitializer_Bug303175() throws Exception {
+		assertIndenterResult();
+	}
+
+	//void f() {
+	//switch(i) {
+	//case -2:
+	//f();
+	//break;
+	//case -1:
+	//f();
+	//break;
+	//case 0:
+	//f();
+	//break;
+	//case +1:
+	//f();
+	//break;
+	//}
+	//}
+
+	//void f() {
+	//	switch(i) {
+	//	case -2:
+	//		f();
+	//		break;
+	//	case -1:
+	//		f();
+	//		break;
+	//	case 0:
+	//		f();
+	//		break;
+	//	case +1:
+	//		f();
+	//		break;
+	//	}
+	//}
+	public void testIndentationOfCaseWithSignedConstant_Bug304150() throws Exception {
+		assertIndenterResult();
+	}
+
+	//typedef struct
+	//{
+	//int i;
+	//};
+	//typedef enum
+	//{
+	//e;
+	//};
+
+	//typedef struct
+	//{
+	//	int i;
+	//};
+	//typedef enum
+	//{
+	//	e;
+	//};
+	public void testIndentationOfTypedefedCompositeType_Bug324031() throws Exception {
+		fOptions.putAll(DefaultCodeFormatterOptions.getAllmanSettings().getMap());
+		assertIndenterResult();
+	}
+
+	//enum {
+	//a=1,
+	//b
+	//}
+
+	//enum {
+	//	a=1,
+	//	b
+	//}
+	public void testIndentationAfterEnumValueAssignment_Bug324031() throws Exception {
 		assertIndenterResult();
 	}
 }

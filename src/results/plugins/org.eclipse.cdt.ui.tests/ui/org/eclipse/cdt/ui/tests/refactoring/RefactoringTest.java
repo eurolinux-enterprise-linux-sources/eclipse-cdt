@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Institute for Software, HSR Hochschule fuer Technik  
+ * Copyright (c) 2008, 2009 Institute for Software, HSR Hochschule fuer Technik  
  * Rapperswil, University of applied sciences and others
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Eclipse Public License v1.0 
@@ -84,7 +84,7 @@ public abstract class RefactoringTest extends RefactoringBaseTest {
 	}
 
 	protected void assertConditionsOk(RefactoringStatus conditions) {
-		assertTrue(conditions.isOK() ? "OK" : "Error or Warning in initial Conditions: " + conditions.getEntries()[0].getMessage() //$NON-NLS-1$ //$NON-NLS-2$
+		assertTrue(conditions.isOK() ? "OK" : "Error or Warning in Conditions: " + conditions.getEntries()[0].getMessage() //$NON-NLS-1$ //$NON-NLS-2$
 		, conditions.isOK());
 	}
 

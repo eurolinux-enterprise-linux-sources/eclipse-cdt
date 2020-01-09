@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2007 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -27,6 +27,11 @@ public interface IIndexFragmentFile extends IIndexFile {
 	 * Sets the timestamp of the file
 	 */
 	void setTimestamp(long timestamp) throws CoreException;
+
+	/**
+	 * Sets the hash of the file content. 
+	 */
+	void setContentsHash(long hash) throws CoreException;
 
 	/**
 	 * Sets the hash-code of the scanner configuration.

@@ -1,12 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2007 Symbian Software Systems and others.
+ * Copyright (c) 2007, 2010 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * Andrew Ferguson (Symbian) - Initial implementation
+ *    Andrew Ferguson (Symbian) - Initial implementation
+ *    Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.index.composite.c;
 
@@ -25,7 +26,7 @@ class CompositeCEnumeration extends CompositeCBinding implements IEnumeration, I
 
 	public IEnumerator[] getEnumerators() throws DOMException {
 		IEnumerator[] result = ((IEnumeration)rbinding).getEnumerators();
-		for(int i=0; i<result.length; i++)
+		for (int i= 0; i < result.length; i++)
 			result[i] = (IEnumerator) cf.getCompositeBinding((IIndexFragmentBinding) result[i]);
 		return result;
 	}
@@ -35,5 +36,18 @@ class CompositeCEnumeration extends CompositeCBinding implements IEnumeration, I
 	}
 
 	@Override
-	public Object clone() {fail(); return null;}
+	public Object clone() { fail(); return null; }
+
+	@Override
+	public String toString() {
+		return getName();
+	}
+
+	public long getMinValue() {
+		return ((IEnumeration)rbinding).getMinValue();
+	}
+
+	public long getMaxValue() {
+		return ((IEnumeration)rbinding).getMaxValue();
+	}
 }

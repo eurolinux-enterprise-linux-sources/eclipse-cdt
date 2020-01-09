@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,15 +12,21 @@ package org.eclipse.cdt.make.core;
 
 import org.eclipse.core.runtime.CoreException;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noimplement This interface is not intended to be implemented by clients.
+ */
 public interface IMakeBuilderInfo extends IMakeCommonBuildInfo {
 
 	public final static String BUILD_TARGET_INCREMENTAL = ARGS_PREFIX + ".build.target.inc"; //$NON-NLS-1$
 	public final static String BUILD_TARGET_AUTO = ARGS_PREFIX + ".build.target.auto"; //$NON-NLS-1$
 	public final static String BUILD_TARGET_CLEAN = ARGS_PREFIX + ".build.target.clean"; //$NON-NLS-1$
 
-	/** @deprecated */
+	/** @deprecated as of CDT 4.0 */
+	@Deprecated
 	public final static String BUILD_TARGET_INCREAMENTAL = BUILD_TARGET_INCREMENTAL;
-	/** @deprecated */
+	/** @deprecated as of CDT 4.0 */
+	@Deprecated
 	public final static String BUILD_TARGET_FULL = ARGS_PREFIX + ".build.target.full"; //$NON-NLS-1$
 	
 	boolean isAutoBuildEnable();
@@ -29,8 +35,9 @@ public interface IMakeBuilderInfo extends IMakeCommonBuildInfo {
 	String getAutoBuildTarget();
 
 	/**
-	 * @deprecated
+	 * @deprecated as of CDT 3.0
 	 */
+	@Deprecated
 	void setAutoBuildTarget(String target) throws CoreException;
 
 	boolean isIncrementalBuildEnabled();
@@ -39,8 +46,9 @@ public interface IMakeBuilderInfo extends IMakeCommonBuildInfo {
 	String getIncrementalBuildTarget();
 
 	/**
-	 * @deprecated
+	 * @deprecated as of CDT 3.0
 	 */
+	@Deprecated
 	void setIncrementalBuildTarget(String target) throws CoreException;
 
 	boolean isFullBuildEnabled();
@@ -49,15 +57,17 @@ public interface IMakeBuilderInfo extends IMakeCommonBuildInfo {
 	String getFullBuildTarget();
 
 	/**
-	 * @deprecated
+	 * @deprecated as of CDT 3.0
 	 */
+	@Deprecated
 	void setFullBuildTarget(String target) throws CoreException;
 
 	String getCleanBuildTarget();
 
 	/**
-	 * @deprecated
+	 * @deprecated as of CDT 3.0
 	 */
+	@Deprecated
 	void setCleanBuildTarget(String target) throws CoreException;
 
 	boolean isCleanBuildEnabled();

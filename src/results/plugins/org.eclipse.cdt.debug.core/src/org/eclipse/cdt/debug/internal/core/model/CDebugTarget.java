@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,9 +13,9 @@
 package org.eclipse.cdt.debug.internal.core.model;
 
 import java.io.File;
-import com.ibm.icu.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.StringTokenizer;
 
@@ -35,6 +35,7 @@ import org.eclipse.cdt.debug.core.cdi.ICDIAddressLocation;
 import org.eclipse.cdt.debug.core.cdi.ICDIBreakpointHit;
 import org.eclipse.cdt.debug.core.cdi.ICDIEndSteppingRange;
 import org.eclipse.cdt.debug.core.cdi.ICDIErrorInfo;
+import org.eclipse.cdt.debug.core.cdi.ICDIEventBreakpointHit;
 import org.eclipse.cdt.debug.core.cdi.ICDIFunctionLocation;
 import org.eclipse.cdt.debug.core.cdi.ICDILineLocation;
 import org.eclipse.cdt.debug.core.cdi.ICDILocation;
@@ -87,10 +88,10 @@ import org.eclipse.cdt.debug.core.model.IRegisterDescriptor;
 import org.eclipse.cdt.debug.core.sourcelookup.ICSourceLocator;
 import org.eclipse.cdt.debug.core.sourcelookup.ISourceLookupChangeListener;
 import org.eclipse.cdt.debug.internal.core.CBreakpointManager;
-import org.eclipse.cdt.debug.internal.core.CSettingsManager;
 import org.eclipse.cdt.debug.internal.core.CGlobalVariableManager;
 import org.eclipse.cdt.debug.internal.core.CMemoryBlockRetrievalExtension;
 import org.eclipse.cdt.debug.internal.core.CRegisterManager;
+import org.eclipse.cdt.debug.internal.core.CSettingsManager;
 import org.eclipse.cdt.debug.internal.core.CSignalManager;
 import org.eclipse.cdt.debug.internal.core.ICDebugInternalConstants;
 import org.eclipse.cdt.debug.internal.core.sourcelookup.CSourceLookupParticipant;
@@ -134,6 +135,8 @@ import org.eclipse.debug.core.sourcelookup.containers.DirectorySourceContainer;
 import org.eclipse.debug.core.sourcelookup.containers.FolderSourceContainer;
 import org.eclipse.debug.core.sourcelookup.containers.ProjectSourceContainer;
 
+import com.ibm.icu.text.MessageFormat;
+
 /**
  * Debug target for C/C++ debug model.
  */
@@ -147,7 +150,7 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 	private ArrayList fThreads;
 
 	/**
-	 * Associated inferrior process, or <code>null</code> if not available.
+	 * Associated inferior process, or <code>null</code> if not available.
 	 */
 	private IProcess fDebuggeeProcess = null;
 
@@ -790,7 +793,8 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 	/* (non-Javadoc)
 	 * @see org.eclipse.debug.core.model.IDebugElement#getLaunch()
 	 */
-	public ILaunch getLaunch() {
+	@Override
+    public ILaunch getLaunch() {
 		return fLaunch;
 	}
 
@@ -829,7 +833,8 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 	/* (non-Javadoc)
 	 * @see org.eclipse.core.runtime.IAdaptable#getAdapter(java.lang.Class)
 	 */
-	public Object getAdapter( Class adapter ) {
+	@Override
+    public Object getAdapter( Class adapter ) {
 		if ( adapter.equals( ICDebugElement.class ) )
 			return this;
 		if ( adapter.equals( CDebugElement.class ) )
@@ -1162,6 +1167,9 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 		else if ( reason instanceof ICDISharedLibraryEvent ) {
 			handleSuspendedBySolibEvent( (ICDISharedLibraryEvent)reason );
 		}
+		else if ( reason instanceof ICDIEventBreakpointHit ) {
+			handleEventBreakpointHit( (ICDIEventBreakpointHit)reason );
+		}
 		else { // reason is not specified
 			fireSuspendEvent( DebugEvent.UNSPECIFIED );
 		}
@@ -1202,6 +1210,10 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 	}
 
 	private void handleBreakpointHit( ICDIBreakpointHit breakpointHit ) {
+		fireSuspendEvent( DebugEvent.BREAKPOINT );
+	}
+
+	private void handleEventBreakpointHit( ICDIEventBreakpointHit breakpointHit ) {
 		fireSuspendEvent( DebugEvent.BREAKPOINT );
 	}
 
@@ -1553,6 +1565,9 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 	}
 
 	public CRegisterManager getRegisterManager() {
+	    // Workaround for bug #309212. gdb 7.0 returns "No registers" error 
+	    // at the beginning of the session.   
+	    fRegisterManager.initialize();
 		return fRegisterManager;
 	}
 
@@ -1609,7 +1624,8 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 	/* (non-Javadoc)
 	 * @see java.lang.Object#toString()
 	 */
-	public String toString() {
+	@Override
+    public String toString() {
 		String result = ""; //$NON-NLS-1$
 		try {
 			result = getName();
@@ -1684,8 +1700,7 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 	 * @see org.eclipse.cdt.debug.core.model.ISteppingModeTarget#isInstructionSteppingEnabled()
 	 */
 	public boolean isInstructionSteppingEnabled() {
-		return fPreferences.getBoolean( PREF_INSTRUCTION_STEPPING_MODE ) ||
-			   CDebugCorePlugin.getDefault().getPluginPreferences().getBoolean( ICDebugConstants.PREF_INSTRUCTION_STEP_MODE_ON );
+		return fPreferences.getBoolean( PREF_INSTRUCTION_STEPPING_MODE );
 	}
 
 	/* (non-Javadoc)
@@ -1697,10 +1712,15 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 
 	private void initializePreferences() {
 		fPreferences = new Preferences();
-		fPreferences.setDefault( PREF_INSTRUCTION_STEPPING_MODE, false );
+		fPreferences.setDefault( PREF_INSTRUCTION_STEPPING_MODE, CDebugCorePlugin.getDefault().getPluginPreferences().getBoolean( ICDebugConstants.PREF_INSTRUCTION_STEP_MODE_ON ));
 	}
 
 	private void disposePreferences() {
+	    if (fPreferences != null) {
+	        // persist current instruction stepping mode
+	        CDebugCorePlugin.getDefault().getPluginPreferences().setValue( ICDebugConstants.PREF_INSTRUCTION_STEP_MODE_ON, fPreferences.getBoolean( PREF_INSTRUCTION_STEPPING_MODE ) );
+            CDebugCorePlugin.getDefault().savePluginPreferences();
+	    }
 		fPreferences = null;
 	}
 
@@ -1811,12 +1831,15 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 	}
 
 	private void setSourceLookupPath( ISourceContainer[] containers ) {
-		ArrayList list = new ArrayList( containers.length );
+		// LinkedHashSet allows quick lookup and deterministic ordering. We need
+		// the former to efficiently prevent infinite recursion
+		LinkedHashSet<String> list = new LinkedHashSet<String>( containers.length );
+		
 		getSourceLookupPath( list, containers );
 		try {
 			final ICDITarget cdiTarget = getCDITarget();
 			if (cdiTarget != null) {
-				cdiTarget.setSourcePaths( (String[])list.toArray( new String[list.size()] ) );
+				cdiTarget.setSourcePaths( list.toArray( new String[list.size()] ) );
 			}
 		}
 		catch( CDIException e ) {
@@ -1824,28 +1847,41 @@ public class CDebugTarget extends CDebugElement implements ICDebugTarget, ICDIEv
 		}
 	}
 
-	private void getSourceLookupPath( List list, ISourceContainer[] containers ) {
-		for ( int i = 0; i < containers.length; ++i ) {
-			if ( containers[i] instanceof ProjectSourceContainer ) {
-				IProject project = ((ProjectSourceContainer)containers[i]).getProject();
+	private void getSourceLookupPath( LinkedHashSet<String> list, ISourceContainer[] containers) {
+		for ( ISourceContainer container : containers ) {
+			String pathToAdd = null;
+			
+			if ( container instanceof ProjectSourceContainer ) {
+				IProject project = ((ProjectSourceContainer)container).getProject();
 				if ( project != null && project.exists() )
-					list.add( project.getLocation().toPortableString() );
+					pathToAdd = project.getLocation().toPortableString();
 			}
-			if ( containers[i] instanceof FolderSourceContainer ) {
-				IContainer container = ((FolderSourceContainer)containers[i]).getContainer();
-				if ( container != null && container.exists() )
-					list.add( container.getLocation().toPortableString() );
-			}
-			if ( containers[i] instanceof DirectorySourceContainer ) {
-				File dir = ((DirectorySourceContainer)containers[i]).getDirectory();
-				if ( dir != null && dir.exists() ) {
-					IPath path = new Path( dir.getAbsolutePath() );
-					list.add( path.toPortableString() );
+			if ( container instanceof FolderSourceContainer ) {
+				IContainer folderContainer = ((FolderSourceContainer)container).getContainer();
+				if ( folderContainer != null && folderContainer.exists() ) {
+					pathToAdd = folderContainer.getLocation().toPortableString();
 				}
 			}
-			if ( containers[i].isComposite() ) {
+			if ( container instanceof DirectorySourceContainer ) {
+				File dir = ((DirectorySourceContainer)container).getDirectory();
+				if ( dir != null && dir.exists() ) {
+					IPath path = new Path( dir.getAbsolutePath() );
+					pathToAdd = path.toPortableString();
+				}
+			}
+
+			if ( pathToAdd != null ) {
+				// 291912. Avoid infinite recursion
+				if ( list.contains(pathToAdd) ) {
+					continue;	
+				}
+				
+				list.add( pathToAdd );
+			}
+			
+			if ( container.isComposite() ) {
 				try {
-					getSourceLookupPath( list, containers[i].getSourceContainers() );
+					getSourceLookupPath( list, container.getSourceContainers() );
 				}
 				catch( CoreException e ) {
 					CDebugCorePlugin.log( e.getStatus() );

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Ericsson and others.
+ * Copyright (c) 2008, 2009 Ericsson and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -25,5 +25,10 @@ public class ExprMetaGetAttributesInfo implements ICommandResult {
 	
 	public <V extends ICommandResult> V getSubsetResult(ICommand<V> command) {
 		return null;
+	}
+
+	@Override
+	public String toString() {
+		return getClass().getSimpleName() + " (" + getEditable() + ")"; //$NON-NLS-1$ //$NON-NLS-2$
 	}
 }

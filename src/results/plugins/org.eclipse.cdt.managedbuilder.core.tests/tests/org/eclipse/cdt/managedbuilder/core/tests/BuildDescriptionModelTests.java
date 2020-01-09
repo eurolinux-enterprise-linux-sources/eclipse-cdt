@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2007 Intel Corporation and others.
+ * Copyright (c) 2006, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,6 +17,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Map.Entry;
 
 import junit.framework.Test;
 import junit.framework.TestCase;
@@ -52,6 +53,8 @@ import org.eclipse.cdt.managedbuilder.internal.buildmodel.BuildResource;
 import org.eclipse.cdt.managedbuilder.internal.buildmodel.BuildStep;
 import org.eclipse.cdt.managedbuilder.internal.buildmodel.DbgUtil;
 import org.eclipse.cdt.managedbuilder.internal.core.Configuration;
+import org.eclipse.cdt.managedbuilder.macros.BuildMacroException;
+import org.eclipse.cdt.managedbuilder.macros.IBuildMacroProvider;
 import org.eclipse.cdt.managedbuilder.testplugin.ManagedBuildTestHelper;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
@@ -60,7 +63,6 @@ import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Path;
 
-@SuppressWarnings("restriction")
 public class BuildDescriptionModelTests extends TestCase {
 	private static final String PREFIX = "BuildDescription_";
 	private static final String PROJ_PATH = "testBuildDescriptionProjects";
@@ -87,13 +89,6 @@ public class BuildDescriptionModelTests extends TestCase {
 	private class ProjectCleaner implements Runnable{
 		List<String> fProjList = new ArrayList<String>();
 		
-		public ProjectCleaner(){
-		}
-
-		public ProjectCleaner(String name){
-			addProject(name);
-		}
-
 		public ProjectCleaner(IProject project){
 			addProject(project);
 		}
@@ -131,8 +126,6 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
 		cfg.setArtifactExtension("tmp");
-		String cName = cfg.getName();
-
 		BuildDescription des = new BuildDescription(cfg);
 		
 		BuildResource aAsmRc = des.createResource("a.asm");
@@ -240,8 +233,6 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
 		cfg.setArtifactExtension("tmp");
-		String cName = cfg.getName();
-
 		BuildDescription tDes = new BuildDescription(cfg);
 		
 		IBuildDescription des = null;
@@ -264,8 +255,6 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
 		cfg.setArtifactExtension("tmp");
-		String cName = cfg.getName();
-
 		BuildDescription tDes = new BuildDescription(cfg);
 		IBuildDescription des = null;
 		try {
@@ -287,8 +276,15 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		cfg.setArtifactExtension("tmp");
 		String cName = cfg.getName();
+
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
+		cfg.setArtifactExtension("tmp");
 
 		BuildDescription tDes = new BuildDescription(cfg);
 		BuildStep step;
@@ -327,13 +323,13 @@ public class BuildDescriptionModelTests extends TestCase {
 			type.addResource(tDes.createResource(cName + "/new.log"));
 				
 			type = step.createIOType(false, true, null);
-			type.addResource(tDes.createResource(cName + "/" + cfg.getArtifactName() + ".tmp"));
+			type.addResource(tDes.createResource(cName + "/" + artifactName + ".tmp"));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + cfg.getArtifactName() + ".tmp"));
+			type.addResource(tDes.createResource(cName + "/" + artifactName + ".tmp"));
 		//
 
 		IBuildDescription des = null;
@@ -477,8 +473,15 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		cfg.setArtifactExtension("tmp");
 		String cName = cfg.getName();
+
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
+		cfg.setArtifactExtension("tmp");
 
 		BuildDescription tDes = new BuildDescription(cfg);
 		BuildStep step;
@@ -525,13 +528,13 @@ public class BuildDescriptionModelTests extends TestCase {
 			type.addResource(tDes.createResource(cName + "/new.log"));
 				
 			type = step.createIOType(false, true, null);
-			type.addResource(tDes.createResource(cName + "/" + cfg.getArtifactName() + ".tmp"));
+			type.addResource(tDes.createResource(cName + "/" + artifactName + ".tmp"));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + cfg.getArtifactName() + ".tmp"));
+			type.addResource(tDes.createResource(cName + "/" + artifactName + ".tmp"));
 		//
 
 		IBuildDescription des = null;
@@ -567,9 +570,8 @@ public class BuildDescriptionModelTests extends TestCase {
 		
 		Map<IBuildIOType, IBuildIOType> map = up ? outMap : inMap;
 		
-		for(Iterator<?> iter = map.entrySet().iterator();iter.hasNext();){
-			Map.Entry entry = (Map.Entry)iter.next();
-			doTestType((IBuildIOType)entry.getKey(), (IBuildIOType)entry.getValue());
+		for (Entry<IBuildIOType, IBuildIOType> entry : map.entrySet()) {
+			doTestType(entry.getKey(), entry.getValue());
 		}
 	}
 	
@@ -578,9 +580,8 @@ public class BuildDescriptionModelTests extends TestCase {
 		
 		typesMatch(type, oType, map, true);
 		
-		for(Iterator iter = map.entrySet().iterator();iter.hasNext();){
-			Map.Entry entry = (Map.Entry)iter.next();
-			doTestResource((IBuildResource)entry.getKey(), (IBuildResource)entry.getValue(), !type.isInput());
+		for (Entry<IBuildResource, IBuildResource> entry : map.entrySet()) {
+			doTestResource(entry.getKey(), entry.getValue(), !type.isInput());
 		}
 	}
 	
@@ -595,13 +596,12 @@ public class BuildDescriptionModelTests extends TestCase {
 		} else {
 			Set<IBuildStep> stepSet = new HashSet<IBuildStep>();
 			
-			for(Iterator iter = outMap.entrySet().iterator(); iter.hasNext();){
-				Map.Entry entry = (Map.Entry)iter.next();
-				IBuildIOType type = (IBuildIOType)entry.getKey();
+			for (Entry<IBuildIOType, IBuildIOType> entry : outMap.entrySet()) {
+				IBuildIOType type = entry.getKey();
 				
 				IBuildStep step = type.getStep();
 				if(stepSet.add(step)){
-					IBuildIOType oType = (IBuildIOType)entry.getValue();
+					IBuildIOType oType = entry.getValue();
 					typesMatch(type, oType, null, true);
 					doTestStep(step, oType.getStep(), up);
 				}
@@ -802,20 +802,20 @@ public class BuildDescriptionModelTests extends TestCase {
 	}
 
 	private void doFail(String dump, IBuildIOType type, IBuildIOType oType){
-		doFail(dump + "\nType:\n" + DbgUtil.dumpType(type) + "\noType:\n" + DbgUtil.dumpType(oType));
+		doFail(dump, "\nType:\n" + DbgUtil.dumpType(type) + "\noType:\n" + DbgUtil.dumpType(oType));
 	}
 
 	private void doFail(String dump, IBuildResource rc, IBuildResource oRc){
-		doFail(dump + "\nRc:\n" + DbgUtil.dumpResource(rc) + "\noRc:\n" + DbgUtil.dumpResource(oRc));
+		doFail(dump, "\nRc:\n" + DbgUtil.dumpResource(rc) + "\noRc:\n" + DbgUtil.dumpResource(oRc));
 	}
 
 	private void doFail(String dump, IBuildStep step, IBuildStep oStep){
-		doFail(dump + "\nStep:\n" + DbgUtil.dumpStep(step) + "\noStep:\n" + DbgUtil.dumpStep(oStep));
+		doFail(dump, "\nStep:\n" + DbgUtil.dumpStep(step) + "\noStep:\n" + DbgUtil.dumpStep(oStep));
 	}
 
-	private void doFail(String dump){
-		doTrace(dump);
-		fail(dump);
+	private void doFail(String message, String dump){
+		DbgUtil.trace(getClass().getSimpleName()+'.'+getName()+ ": "+ message+dump);
+		fail(message+" (see console output)");
 	}
 	
 	private void doTrace(String str){
@@ -828,16 +828,14 @@ public class BuildDescriptionModelTests extends TestCase {
 		
 		assertNotNull(des.getConfiguration());
 		
-		IProject project = des.getConfiguration().getOwner().getProject();
-		
 		IBuildStep inStep = des.getInputStep();
 		IBuildStep outStep = des.getOutputStep();
 		
 		if(inStep.getInputIOTypes().length !=  0){
-			doFail("input step contains inputs, " + DbgUtil.dumpStep(inStep));
+			doFail("input step contains unexpected inputs", DbgUtil.dumpStep(inStep));
 		}
 		if(outStep.getOutputIOTypes().length !=  0){
-			doFail("output step contains outputs, " + DbgUtil.dumpStep(outStep)); 
+			doFail("output step contains unexpected outputs", DbgUtil.dumpStep(outStep)); 
 		}
 
 		IBuildStep tInStep = tDes.getInputStep();
@@ -852,6 +850,7 @@ public class BuildDescriptionModelTests extends TestCase {
 		doTrace("*****up to down passed");
 	}
 	
+	@Override
 	protected void tearDown() throws Exception {
 		fCleaner.run();
 		if(DbgUtil.DEBUG)
@@ -891,10 +890,16 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		String art = cfg.getArtifactName();
+		
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
 		String ext = cfg.getArtifactExtension();
 		if(ext != null && ext.length() > 0)
-			art = art + "." + ext;
+			artifactName = artifactName + "." + ext;
 		
 		String cName = cfg.getName();
 
@@ -960,13 +965,13 @@ public class BuildDescriptionModelTests extends TestCase {
 			type.addResource(tDes.createResource(cName + "/d.o"));
 			
 			type = step.createIOType(false, false, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 
 		IBuildDescription des = null;
@@ -1003,10 +1008,16 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		String art = cfg.getArtifactName();
+
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
 		String ext = cfg.getArtifactExtension();
 		if(ext != null && ext.length() > 0)
-			art = art + "." + ext;
+			artifactName = artifactName + "." + ext;
 		
 		String cName = cfg.getName();
 
@@ -1089,13 +1100,13 @@ public class BuildDescriptionModelTests extends TestCase {
 			type.addResource(tDes.createResource(cName + "/d.o"));
 			
 			type = step.createIOType(false, false, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 
 		// TODO: more testing needed, may still need a sleep here because:
@@ -1141,10 +1152,15 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		String art = cfg.getArtifactName();
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
 		String ext = cfg.getArtifactExtension();
 		if(ext != null && ext.length() > 0)
-			art = art + "." + ext;
+			artifactName = artifactName + "." + ext;
 		
 		String cName = cfg.getName();
 
@@ -1210,13 +1226,13 @@ public class BuildDescriptionModelTests extends TestCase {
 			type.addResource(tDes.createResource(cName + "/d.o"));
 			
 			type = step.createIOType(false, false, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 
 		IBuildDescription des = null;
@@ -1238,17 +1254,23 @@ public class BuildDescriptionModelTests extends TestCase {
 		}
 		
 		IFile ac = ManagedBuildTestHelper.createFile(project, "a.c");
-		IFile bc = ManagedBuildTestHelper.createFile(project, "b.c");
+		ManagedBuildTestHelper.createFile(project, "b.c");
 		IFile ccpp = ManagedBuildTestHelper.createFile(project, "c.cpp");
-		IFile dcpp = ManagedBuildTestHelper.createFile(project, "d.cpp");
+		ManagedBuildTestHelper.createFile(project, "d.cpp");
 	
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		String art = cfg.getArtifactName();
+
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
 		String ext = cfg.getArtifactExtension();
 		if(ext != null && ext.length() > 0)
-			art = art + "." + ext;
+			artifactName = artifactName + "." + ext;
 		
 		String cName = cfg.getName();
 		IResourceConfiguration rcCfg = cfg.createResourceConfiguration(ac);
@@ -1318,13 +1340,13 @@ public class BuildDescriptionModelTests extends TestCase {
 			type.addResource(tDes.createResource(cName + "/d.o"));
 			
 			type = step.createIOType(false, false, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 
 		IBuildDescription des = null;
@@ -1346,24 +1368,30 @@ public class BuildDescriptionModelTests extends TestCase {
 			fail("fail to add CC nature");
 		}
 		
-		IFile ac = ManagedBuildTestHelper.createFile(project, "a.c");
-		IFile bc = ManagedBuildTestHelper.createFile(project, "b.c");
+		ManagedBuildTestHelper.createFile(project, "a.c");
+		ManagedBuildTestHelper.createFile(project, "b.c");
 		IFile ccpp = ManagedBuildTestHelper.createFile(project, "c.cpp");
-		IFile dcpp = ManagedBuildTestHelper.createFile(project, "d.cpp");
+		ManagedBuildTestHelper.createFile(project, "d.cpp");
 		IFile er = ManagedBuildTestHelper.createFile(project, "e.r");
-		IFile fr = ManagedBuildTestHelper.createFile(project, "f.r");
-		IFile gr = ManagedBuildTestHelper.createFile(project, "dir1/g.r");
-		IFile hr = ManagedBuildTestHelper.createFile(project, "dir2/h.r");
-		IFile ir = ManagedBuildTestHelper.createFile(project, "dir2/i.r");
+		ManagedBuildTestHelper.createFile(project, "f.r");
+		ManagedBuildTestHelper.createFile(project, "dir1/g.r");
+		ManagedBuildTestHelper.createFile(project, "dir2/h.r");
+		ManagedBuildTestHelper.createFile(project, "dir2/i.r");
 		
 		
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		String art = cfg.getArtifactName();
+		
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
 		String ext = cfg.getArtifactExtension();
 		if(ext != null && ext.length() > 0)
-			art = art + "." + ext;
+			artifactName = artifactName + "." + ext;
 		
 		String cName = cfg.getName();
 		String out = cName + "/";
@@ -1496,13 +1524,13 @@ public class BuildDescriptionModelTests extends TestCase {
 //			type.addResource(tDes.createResource(cName + "/y.o"));
 			
 			type = step.createIOType(false, false, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 
 		IBuildDescription des = null;
@@ -1524,26 +1552,32 @@ public class BuildDescriptionModelTests extends TestCase {
 			fail("fail to add CC nature");
 		}
 		
-		IFile ac = ManagedBuildTestHelper.createFile(project, "a.c");
-		IFile bc = ManagedBuildTestHelper.createFile(project, "b.c");
+		ManagedBuildTestHelper.createFile(project, "a.c");
+		ManagedBuildTestHelper.createFile(project, "b.c");
 		IFile ccpp = ManagedBuildTestHelper.createFile(project, "c.cpp");
-		IFile dcpp = ManagedBuildTestHelper.createFile(project, "d.cpp");
+		ManagedBuildTestHelper.createFile(project, "d.cpp");
 		IFile er = ManagedBuildTestHelper.createFile(project, "e.r");
-		IFile fr = ManagedBuildTestHelper.createFile(project, "f.r");
-		IFile gr = ManagedBuildTestHelper.createFile(project, "dir1/g.r");
-		IFile hr = ManagedBuildTestHelper.createFile(project, "dir2/h.r");
-		IFile ir = ManagedBuildTestHelper.createFile(project, "dir2/i.r");
-		IFile o1 = ManagedBuildTestHelper.createFile(project, "o1.o");
-		IFile o2 = ManagedBuildTestHelper.createFile(project, "dir3/o2.o");
+		ManagedBuildTestHelper.createFile(project, "f.r");
+		ManagedBuildTestHelper.createFile(project, "dir1/g.r");
+		ManagedBuildTestHelper.createFile(project, "dir2/h.r");
+		ManagedBuildTestHelper.createFile(project, "dir2/i.r");
+		ManagedBuildTestHelper.createFile(project, "o1.o");
+		ManagedBuildTestHelper.createFile(project, "dir3/o2.o");
 		
 		
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		String art = cfg.getArtifactName();
+
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
 		String ext = cfg.getArtifactExtension();
 		if(ext != null && ext.length() > 0)
-			art = art + "." + ext;
+			artifactName = artifactName + "." + ext;
 		
 		String cName = cfg.getName();
 		String out = cName + "/";
@@ -1689,13 +1723,13 @@ public class BuildDescriptionModelTests extends TestCase {
 			type.addResource(tDes.createResource("dir4/d/o3.o"));
 
 			type = step.createIOType(false, false, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 
 		IBuildDescription des = null;
@@ -1729,10 +1763,16 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		String art = cfg.getArtifactName();
+		
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
 		String ext = cfg.getArtifactExtension();
 		if(ext != null && ext.length() > 0)
-			art = art + "." + ext;
+			artifactName = artifactName + "." + ext;
 		
 		String cName = cfg.getName();
 		String out = cName + "/";
@@ -1852,13 +1892,13 @@ public class BuildDescriptionModelTests extends TestCase {
 			type.addResource(tDes.createResource(out + "dir/h.o"));
 			
 			type = step.createIOType(false, false, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 
 		IBuildDescription des = null;
@@ -1889,10 +1929,16 @@ public class BuildDescriptionModelTests extends TestCase {
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IManagedProject mProj = info.getManagedProject();
 		IConfiguration cfg = mProj.getConfigurations()[0];
-		String art = cfg.getArtifactName();
+		
+		String artifactName=null;
+		try {
+			artifactName = ManagedBuildManager.getBuildMacroProvider().resolveValue(cfg.getArtifactName(), "", " ", IBuildMacroProvider.CONTEXT_CONFIGURATION, cfg);
+		} catch (BuildMacroException e1) {
+			fail("Cannot expand artifact name=["+cfg.getArtifactName()+"]");
+		}
 		String ext = cfg.getArtifactExtension();
 		if(ext != null && ext.length() > 0)
-			art = art + "." + ext;
+			artifactName = artifactName + "." + ext;
 		
 		String cName = cfg.getName();
 
@@ -1958,13 +2004,13 @@ public class BuildDescriptionModelTests extends TestCase {
 			type.addResource(tDes.createResource(cName + "/d.o"));
 			
 			type = step.createIOType(false, false, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 		//
 		step = (BuildStep)tDes.getOutputStep();
 			
 			type = step.createIOType(true, true, null);
-			type.addResource(tDes.createResource(cName + "/" + art));
+			type.addResource(tDes.createResource(cName + "/" + artifactName));
 		//
 
 		IBuildDescription des = null;
@@ -2510,12 +2556,12 @@ public class BuildDescriptionModelTests extends TestCase {
 			fail("fail to add CC nature");
 		}
 		
-		IFile ac = ManagedBuildTestHelper.createFile(project, "a.c");
-		IFile bc = ManagedBuildTestHelper.createFile(project, "b.c");
-		IFile ccpp = ManagedBuildTestHelper.createFile(project, "c.cpp");
-		IFile dcpp = ManagedBuildTestHelper.createFile(project, "d/d.cpp");
-		IFile es2 = ManagedBuildTestHelper.createFile(project, "d2/e.s2");
-		IFile fs2 = ManagedBuildTestHelper.createFile(project, "f.s2");
+		ManagedBuildTestHelper.createFile(project, "a.c");
+		ManagedBuildTestHelper.createFile(project, "b.c");
+		ManagedBuildTestHelper.createFile(project, "c.cpp");
+		ManagedBuildTestHelper.createFile(project, "d/d.cpp");
+		ManagedBuildTestHelper.createFile(project, "d2/e.s2");
+		ManagedBuildTestHelper.createFile(project, "f.s2");
 		
 		ManagedBuildTestHelper.createFile(project, "e.o");
 		ManagedBuildTestHelper.createFile(project, "dir/f.o");

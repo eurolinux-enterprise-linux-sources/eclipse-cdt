@@ -11,15 +11,10 @@
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
 
-import org.eclipse.cdt.core.dom.ast.IASTName;
-import org.eclipse.cdt.core.dom.ast.IASTParameterDeclaration;
 import org.eclipse.cdt.core.dom.ast.IBinding;
-import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IScope;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTFunctionDeclarator;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
-import org.eclipse.cdt.internal.core.dom.parser.ASTInternal;
-import org.eclipse.cdt.internal.core.dom.parser.ASTQueries;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameter;
 
 /**
  * The CPPImplicitFunction is used to represent implicit functions that exist on the translation
@@ -29,13 +24,13 @@ import org.eclipse.cdt.internal.core.dom.parser.ASTQueries;
  */
 public class CPPImplicitFunction extends CPPFunction {
 
-	private IParameter[] parms=null;
+	private ICPPParameter[] parms=null;
 	private IScope scope=null;
     private ICPPFunctionType functionType=null;
 	private boolean takesVarArgs=false;
 	private char[] name=null;
 	
-	public CPPImplicitFunction(char[] name, IScope scope, ICPPFunctionType type, IParameter[] parms, boolean takesVarArgs) {
+	public CPPImplicitFunction(char[] name, IScope scope, ICPPFunctionType type, ICPPParameter[] parms, boolean takesVarArgs) {
         super( null );
         this.name=name;
 		this.scope=scope;
@@ -45,7 +40,7 @@ public class CPPImplicitFunction extends CPPFunction {
 	}
 
     @Override
-	public IParameter [] getParameters() {
+	public ICPPParameter [] getParameters() {
         return parms;
     }
     
@@ -82,58 +77,6 @@ public class CPPImplicitFunction extends CPPFunction {
         return null;
     }
     
-    @Override
-	public IBinding resolveParameter(IASTParameterDeclaration param) {
-		IASTName aName = ASTQueries.findInnermostDeclarator(param.getDeclarator()).getName();
-		IParameter binding = (IParameter) aName.getBinding();
-		if (binding != null)
-			return binding;
-
-		// get the index in the parameter list
-		ICPPASTFunctionDeclarator fdtor = (ICPPASTFunctionDeclarator) param.getParent();
-		IASTParameterDeclaration[] ps = fdtor.getParameters();
-		int i = 0;
-		for (; i < ps.length; i++) {
-			if (param == ps[i])
-				break;
-		}
-
-		// set the binding for the corresponding parameter in all known defns and decls
-		binding = parms[i];
-		IASTParameterDeclaration temp = null;
-		if (definition != null) {
-			temp = definition.getParameters()[i];
-			IASTName n = ASTQueries.findInnermostDeclarator(temp.getDeclarator()).getName();
-			n.setBinding(binding);
-			ASTInternal.addDeclaration(binding, n);
-		}
-		if (declarations != null) {
-			for (int j = 0; j < declarations.length && declarations[j] != null; j++) {
-				temp = declarations[j].getParameters()[i];
-				IASTName n = ASTQueries.findInnermostDeclarator(temp.getDeclarator()).getName();
-				n.setBinding(binding);
-				ASTInternal.addDeclaration(binding, n);
-			}
-		}
-		return binding;
-    }
-   
-    @Override
-	protected void updateParameterBindings(ICPPASTFunctionDeclarator fdtor) {
-		if (parms != null) {
-			IASTParameterDeclaration[] nps = fdtor.getParameters();
-			if (nps.length != parms.length)
-				return;
-
-			for (int i = 0; i < nps.length; i++) {
-				IASTName aName = ASTQueries.findInnermostDeclarator(nps[i].getDeclarator()).getName();
-				final IParameter param = parms[i];
-				aName.setBinding(param);
-				ASTInternal.addDeclaration(param, aName);
-			}
-		}
-	}
-
     @Override
 	public boolean takesVarArgs() {
         return takesVarArgs;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -72,35 +72,37 @@ public class IndexUpdatePolicy {
 		return fIndexer;
 	}
 
+	public boolean isAutomatic() {
+		return fKind != MANUAL;
+	}
+	
 	public IPDOMIndexerTask handleDelta(ITranslationUnit[] force, ITranslationUnit[] changed, ITranslationUnit[] removed) {
 		if (isNullIndexer()) {
 			return null;
 		}
 
 		switch(fKind) {
-		case IndexUpdatePolicy.MANUAL:
+		case MANUAL:
 			return null;
-		case IndexUpdatePolicy.POST_CHANGE:
+		case POST_CHANGE:
 			if (fIndexer != null) {
 				return fIndexer.createTask(force, changed, removed);
 			}
 			break;
 		}
 		
-		for (int i = 0; i < removed.length; i++) {
-			ITranslationUnit tu = removed[i];
+		for (ITranslationUnit tu : removed) {
 			fForce.remove(tu);
 			fTimestamp.remove(tu);
 			fRemoved.add(tu);
 		}
-		for (int i = 0; i < force.length; i++) {
-			ITranslationUnit tu = force[i];
+		for (ITranslationUnit tu : force) {
 			fForce.add(tu);
 			fTimestamp.remove(tu);
 			fRemoved.remove(tu);
 		}
-		for (int i = 0; i < changed.length; i++) {
-			ITranslationUnit tu = changed[i];
+		for (ITranslationUnit element : changed) {
+			ITranslationUnit tu = element;
 			if (!fForce.contains(tu)) {
 				fTimestamp.add(tu);
 			}
@@ -138,7 +140,8 @@ public class IndexUpdatePolicy {
 		}
 		else if (fIndexer != null) {
 			if (oldPolicy == MANUAL) {
-				task= new PDOMUpdateTask(fIndexer, IIndexManager.UPDATE_CHECK_TIMESTAMPS);
+				task= new PDOMUpdateTask(fIndexer,
+						IIndexManager.UPDATE_CHECK_TIMESTAMPS | IIndexManager.UPDATE_CHECK_CONTENTS_HASH);
 				clearTUs();
 			}
 			else if (fKind == POST_CHANGE) {

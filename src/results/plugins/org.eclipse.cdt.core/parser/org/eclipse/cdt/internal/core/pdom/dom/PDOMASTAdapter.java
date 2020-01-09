@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -34,8 +34,10 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPBase;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPBinding;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPConstructor;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPEnumeration;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPField;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPScope;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateParameter;
 import org.eclipse.cdt.core.index.IIndexBinding;
 import org.eclipse.cdt.core.parser.IToken;
@@ -270,6 +272,14 @@ public class PDOMASTAdapter {
 		public IBinding getOwner() throws DOMException {
 			return fDelegate.getOwner();
 		}
+		
+		public long getMinValue() {
+			return fDelegate.getMinValue();
+		}
+
+		public long getMaxValue() {
+			return fDelegate.getMaxValue();
+		}
 	}
 
 	private static class AnonymousCompositeType implements ICompositeType {
@@ -398,7 +408,7 @@ public class PDOMASTAdapter {
 		}
 	}
 
-	private static class AnonymousCPPEnumeration extends AnonymousCPPBinding implements IEnumeration {
+	private static class AnonymousCPPEnumeration extends AnonymousCPPBinding implements ICPPEnumeration {
 		public AnonymousCPPEnumeration(char[] name, IEnumeration delegate) {
 			super(name, (ICPPBinding) delegate);
 		}
@@ -409,6 +419,26 @@ public class PDOMASTAdapter {
 
 		public boolean isSameType(IType type) {
 			return ((IEnumeration) fDelegate).isSameType(type);
+		}
+		
+		public long getMinValue() {
+			return ((IEnumeration)fDelegate).getMinValue();
+		}
+
+		public long getMaxValue() {
+			return ((IEnumeration)fDelegate).getMaxValue();
+		}
+
+		public boolean isScoped() {
+			return ((ICPPEnumeration)fDelegate).isScoped();
+		}
+
+		public IType getFixedType() {
+			return ((ICPPEnumeration)fDelegate).getFixedType();
+		}
+
+		public ICPPScope asScope() {
+			return ((ICPPEnumeration)fDelegate).asScope();
 		}
 	}
 
@@ -483,7 +513,7 @@ public class PDOMASTAdapter {
 	 */
 	public static IBinding getAdapterForAnonymousASTBinding(IBinding binding) {
 		if (binding != null && !(binding instanceof IIndexBinding)) {
-			char[] name = binding.getNameCharArray();
+			char[] name= binding.getNameCharArray();
 			if (name.length == 0) {
 				if (binding instanceof IEnumeration) {
 					name = ASTTypeUtil.createNameForAnonymous(binding);
@@ -504,6 +534,8 @@ public class PDOMASTAdapter {
 						return new AnonymousCompositeType(name, (ICompositeType) binding);
 					}
 				} else if (binding instanceof ICPPTemplateParameter) {
+					return binding;
+				} else if (binding instanceof ICPPConstructor) {
 					return binding;
 				}
 				return null;

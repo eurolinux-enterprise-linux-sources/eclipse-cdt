@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,6 +7,7 @@
  *
  * Contributors:
  *    Markus Schorn - initial API and implementation
+ *    Sergey Prigogin (Google)
  *******************************************************************************/ 
 package org.eclipse.cdt.internal.core.pdom;
 
@@ -51,9 +52,9 @@ public class PDOMProxy implements IPDOM {
 		}
 	}
 	public synchronized void acquireReadLock() throws InterruptedException {
-		if (fDelegate != null)
+		if (fDelegate != null) {
 			fDelegate.acquireReadLock();
-		else {
+		} else {
 			fReadLockCount++;
 			if (PDOM.sDEBUG_LOCKS) {
 				PDOM.incReadLock(fLockDebugging);
@@ -187,12 +188,16 @@ public class PDOMProxy implements IPDOM {
 		}
 	}
 
+	public boolean hasWaitingReaders() {
+		return fDelegate != null && fDelegate.hasWaitingReaders();
+	}
+
 	public synchronized void resetCacheCounters() {
 		if (fDelegate != null)
 			fDelegate.resetCacheCounters();
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public synchronized Object getAdapter(Class adapter) {
 		if (adapter.isAssignableFrom(PDOMProxy.class)) {
 			return this;
@@ -201,9 +206,9 @@ public class PDOMProxy implements IPDOM {
 	}
 
 	public synchronized void addListener(IListener listener) {
-		if (fDelegate != null)
+		if (fDelegate != null) {
 			fDelegate.addListener(listener);
-		else {
+		} else {
 			fListeners.add(listener);
 		}
 	}
@@ -216,9 +221,9 @@ public class PDOMProxy implements IPDOM {
 	}
 
 	public synchronized void removeListener(IListener listener) {
-		if (fDelegate != null)
+		if (fDelegate != null) {
 			fDelegate.removeListener(listener);
-		else {
+		} else {
 			fListeners.remove(listener);
 		}
 	}

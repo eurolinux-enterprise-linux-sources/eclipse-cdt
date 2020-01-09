@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2008 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -56,6 +56,9 @@ import org.osgi.framework.BundleContext;
 
 /**
  * The main plugin class to be used in the desktop.
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
  */
 public class MakeCorePlugin extends Plugin {
 	public static final String PLUGIN_ID = "org.eclipse.cdt.make.core"; //$NON-NLS-1$
@@ -126,7 +129,7 @@ public class MakeCorePlugin extends Plugin {
 		return BuildInfoFactory.create(project, builderID);
 	}
 
-	public static IMakeBuilderInfo createBuildInfo(Map args, String builderID) {
+	public static IMakeBuilderInfo createBuildInfo(Map<String, String> args, String builderID) {
 		return BuildInfoFactory.create(args, builderID);
 	}
 
@@ -146,29 +149,26 @@ public class MakeCorePlugin extends Plugin {
 	public String[] getMakefileDirs() {
 		String stringList = getPluginPreferences().getString(MAKEFILE_DIRS);
 		StringTokenizer st = new StringTokenizer(stringList, File.pathSeparator + "\n\r");//$NON-NLS-1$
-		ArrayList v = new ArrayList();
+		ArrayList<String> v = new ArrayList<String>();
 		while (st.hasMoreElements()) {
-			v.add(st.nextElement());
+			v.add(st.nextToken());
 		}
-		return (String[])v.toArray(new String[v.size()]);		
+		return v.toArray(new String[v.size()]);		
 	}
 
 	/**
-	 * @deprecated
-	 * @param file
-	 * @param isGnuStyle
-	 * @param makefileDirs
-	 * @return
+	 * @deprecated as of CDT 5.0
 	 */
+	@Deprecated
 	static public IMakefile createMakefile(File file, boolean isGnuStyle, String[] makefileDirs) {
 		IMakefile makefile;
 		if (isGnuStyle) {
 			GNUMakefile gnu = new GNUMakefile();
-			ArrayList includeList = new ArrayList();
+			ArrayList<String> includeList = new ArrayList<String>();
 			includeList.add(new Path(file.getAbsolutePath()).removeLastSegments(1).toOSString());
 			includeList.addAll(Arrays.asList(gnu.getIncludeDirectories()));
 			includeList.addAll(Arrays.asList(makefileDirs));
-			String[] includes = (String[]) includeList.toArray(new String[includeList.size()]);
+			String[] includes = includeList.toArray(new String[includeList.size()]);
 			gnu.setIncludeDirectories(includes);
 			try {
 				gnu.parse(file.getAbsolutePath(), new FileReader(file));
@@ -193,23 +193,20 @@ public class MakeCorePlugin extends Plugin {
 	/**
 	 * Create an IMakefile using the given IMakefileReaderProvider to fetch
 	 * contents by name. 
-	 * @param name URI of main file
-	 * @param isGnuStyle
-	 * @param makefileDirs
+	 * 
+	 * @param fileURI URI of main file
 	 * @param makefileReaderProvider may be <code>null</code> for EFS IFileStore reading
-	 * @return IMakefile
-	 * @throws CoreException
 	 */
 	public static IMakefile createMakefile(URI fileURI,
 			boolean isGnuStyle, String[] makefileDirs, IMakefileReaderProvider makefileReaderProvider) {
 		IMakefile makefile;
 		if (isGnuStyle) {
 			GNUMakefile gnu = new GNUMakefile();
-			ArrayList includeList = new ArrayList();
+			ArrayList<String> includeList = new ArrayList<String>();
 			includeList.add(new Path(fileURI.getPath()).removeLastSegments(1).toString());
 			includeList.addAll(Arrays.asList(gnu.getIncludeDirectories()));
 			includeList.addAll(Arrays.asList(makefileDirs));
-			String[] includes = (String[]) includeList.toArray(new String[includeList.size()]);
+			String[] includes = includeList.toArray(new String[includeList.size()]);
 			gnu.setIncludeDirectories(includes);
 			try {
 				gnu.parse(fileURI, makefileReaderProvider);
@@ -229,11 +226,8 @@ public class MakeCorePlugin extends Plugin {
 
 	/**
 	 * Create an IMakefile using EFS to fetch contents.
-	 * @param name URI of main file
-	 * @param isGnuStyle
-	 * @param makefileDirs
-	 * @return IMakefile
-	 * @throws CoreException
+	 * 
+	 * @param fileURI URI of main file
 	 */
 	public static IMakefile createMakefile(URI fileURI,
 			boolean isGnuStyle, String[] makefileDirs) {
@@ -244,6 +238,7 @@ public class MakeCorePlugin extends Plugin {
 		return createMakefile(EFS.getStore(file.getLocationURI()), isMakefileGNUStyle(), getMakefileDirs());
 	}
 	
+	@Override
 	public void stop(BundleContext context) throws Exception {
 		try {
 			if ( fTargetManager != null) {
@@ -275,7 +270,7 @@ public class MakeCorePlugin extends Plugin {
 	}
 
 	public static IScannerConfigBuilderInfo createScannerConfigBuildInfo(
-			Map args, String builderID) {
+			Map<String, String> args, String builderID) {
 		return ScannerConfigInfoFactory.create(args, builderID);
 	}
 	
@@ -322,7 +317,6 @@ public class MakeCorePlugin extends Plugin {
 	}
 
 	/**
-	 * @param commandId
 	 * @return String[] - array of parserIds associated with the commandId or 'all'
 	 */
 	public String[] getScannerInfoConsoleParserIds(String commandId) {
@@ -333,7 +327,7 @@ public class MakeCorePlugin extends Plugin {
         IExtensionPoint extension = Platform.getExtensionRegistry().getExtensionPoint(PLUGIN_ID, SI_CONSOLE_PARSER_SIMPLE_ID);
 		if (extension != null) {
 			IExtension[] extensions = extension.getExtensions();
-			List parserIds = new ArrayList(extensions.length);
+			List<String> parserIds = new ArrayList<String>(extensions.length);
 			for (int i = 0; i < extensions.length; i++) {
 				String parserId = extensions[i].getUniqueIdentifier();
 				if (parserId != null) {
@@ -344,13 +338,12 @@ public class MakeCorePlugin extends Plugin {
 					}
 				}							
 			}
-			return (String[])parserIds.toArray(empty);
+			return parserIds.toArray(empty);
 		}
 		return empty;
 	}
 	
 	/**
-	 * @param parserId
 	 * @return parser - parser object identified by the parserId
 	 */
 	public IScannerInfoConsoleParser getScannerInfoConsoleParser(String parserId) {
@@ -377,6 +370,7 @@ public class MakeCorePlugin extends Plugin {
 	/* (non-Javadoc)
 	 * @see org.eclipse.core.runtime.Plugin#startup()
 	 */
+	@Override
 	public void start(BundleContext context) throws Exception {
 		super.start(context);
 		

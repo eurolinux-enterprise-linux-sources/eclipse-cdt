@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Ericsson and others.
+ * Copyright (c) 2008, 2010 Ericsson and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -64,6 +64,8 @@ public class MIListThreadGroups extends MICommand<MIListThreadGroupsInfo> {
 	// so this constructor is private, and exists to avoid duplicating code.
 	private MIListThreadGroups(ICommandControlDMContext ctx, String groupId, boolean listAll) {
 		super(ctx, "-list-thread-groups"); //$NON-NLS-1$
+		
+		assert !((groupId != null) && listAll); // see comment above
         
 		final ArrayList<String> arguments = new ArrayList<String>();
 		if (listAll) {
@@ -71,6 +73,7 @@ public class MIListThreadGroups extends MICommand<MIListThreadGroupsInfo> {
 		}
 
 		if (groupId != null) {
+			assert groupId.trim().length() > 0;
 			arguments.add(groupId);
 		}
 

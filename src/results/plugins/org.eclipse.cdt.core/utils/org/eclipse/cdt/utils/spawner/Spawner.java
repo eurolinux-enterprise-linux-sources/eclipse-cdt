@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,7 +7,7 @@
  *
  * Contributors:
  *     QNX Software Systems - Initial API and implementation
- *     Anton Leherbauer (Wind River Systems)
+ *     Wind River Systems, Inc. - bug 248071
  *******************************************************************************/
 package org.eclipse.cdt.utils.spawner;
 
@@ -20,15 +20,44 @@ import java.util.StringTokenizer;
 
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.utils.pty.PTY;
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.osgi.util.NLS;
 
 public class Spawner extends Process {
 
 	public int NOOP = 0;
 	public int HUP = 1;
-	public int INT = 2;
 	public int KILL = 9;
 	public int TERM = 15;
+
+	/**
+	 * On Windows, what this does is far from easy to explain. 
+	 * Some of the logic is in the JNI code, some in the spawner.exe code.
+	 * 
+	 * <ul>
+	 * <li>If the process this is being raised against was launched by us (the Spawner)
+	 *    <ul>
+	 *    <li>If the process is a cygwin program (has the cygwin1.dll loaded), then issue a 'kill -SIGINT'. If
+	 *    the 'kill' utility isn't available, send the process a CTRL-C
+	 *    <li>If the process is <i>not</i> a cygwin program, send the process a CTRL-C
+	 *    </ul>
+	 * <li>If the process this is being raised against was <i>not</i> launched by us, use 
+	 * DebugBreakProcess to interrupt it (sending a CTRL-C is easy only if we share a console 
+	 * with the target process) 
+	 * </ul>
+	 * 
+	 * On non-Windows, raising this just raises a POSIX SIGINT  
+	 * 
+	 */
+	public int INT = 2;
+
+	/**
+	 * A fabricated signal number for use on Windows only. Tells the starter program to send a CTRL-C
+	 * regardless of whether the process is a Cygwin one or not.
+	 * 
+	 * @since 5.2
+	 */
+	public int CTRLC = 1000;  // arbitrary high number to avoid collision
 
 	int pid = 0;
 	int status;
@@ -202,10 +231,27 @@ public class Spawner extends Process {
 	}
 
 	/**
-	 * Our extensions.
-	 **/
+	 * On Windows, interrupt the spawned program by using Cygwin's utility 'kill -SIGINT' if it's a Cgywin
+	 * program, otherwise send it a CTRL-C. If Cygwin's 'kill' command is not available, send a CTRL-C. On
+	 * linux, interrupt it by raising a SIGINT.
+	 */
 	public int interrupt() {
 		return raise(pid, INT);
+	}
+
+	/**
+	 * On Windows, interrupt the spawned program by send it a CTRL-C (even if it's a Cygwin program). On
+	 * linux, interrupt it by raising a SIGINT. 
+	 * 
+	 * @since 5.2
+	 */
+	public int interruptCTRLC() {
+        if (Platform.getOS().equals(Platform.OS_WIN32)) {
+        	return raise(pid, CTRLC);
+        }
+        else {
+        	return interrupt();
+        }
 	}
 
 	public int hangup() {
@@ -262,6 +308,7 @@ public class Spawner extends Process {
 
 		final String slaveName = pty.getSlaveName();
 		final int masterFD = pty.getMasterFD().getFD();
+		final boolean console = pty.isConsole();
 		//int fdm = pty.get
 		Reaper reaper = new Reaper(cmdarray, envp, dirpath) {
 			/* (non-Javadoc)
@@ -269,7 +316,7 @@ public class Spawner extends Process {
 			 */
 			@Override
 			int execute(String[] cmd, String[] env, String dir, int[] channels) throws IOException {
-				return exec2(cmd, env, dir, channels, slaveName, masterFD);
+				return exec2(cmd, env, dir, channels, slaveName, masterFD, console);
 			}
 		};
 		reaper.setDaemon(true);
@@ -318,7 +365,7 @@ public class Spawner extends Process {
 	/**
 	 * Native method when executing with a terminal emulation. 
 	 */
-	native int exec2( String[] cmdarray, String[] envp, String dir, int[] chan, String slaveName, int masterFD) throws IOException;
+	native int exec2( String[] cmdarray, String[] envp, String dir, int[] chan, String slaveName, int masterFD, boolean console) throws IOException;
 
 	/**
 	 * Native method to drop a signal on the process with pid.

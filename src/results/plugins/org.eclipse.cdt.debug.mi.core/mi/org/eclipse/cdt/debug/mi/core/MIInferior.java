@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -55,6 +55,10 @@ public class MIInferior extends Process {
 	IMITTY tty;
 
 	int inferiorPID;
+	
+	
+	/** See {@link #isRemoteInferior()} */
+	private boolean fIsRemoteInferior;
 
 	public MIInferior(MISession mi, IMITTY p) {
 		session = mi;
@@ -377,5 +381,34 @@ public class MIInferior extends Process {
 
 	public int getInferiorPID() {
 		return inferiorPID;
+	}
+
+	/**
+	 * Called early on in the debug session to mark the inferior process as being
+	 * under the control of a gdbserver. 
+	 * 
+	 * @since 7.0
+	 */
+	public void setIsRemoteInferior(boolean value) {
+		fIsRemoteInferior = value;
+	}
+
+	/**
+	 * Is the inferior process being debugged remotely through gdbserver?
+	 * 
+	 * @since 7.0
+	 */
+	public boolean isRemoteInferior() {
+		return fIsRemoteInferior; 
+	}
+
+	/**
+	 * Was the inferior process attached to by gdb (as opposed to launched by
+	 * gdb).
+	 * 
+	 * @since 7.0
+	 */
+	public boolean isAttachedInferior() {
+		return session.isAttachSession();
 	}
 }

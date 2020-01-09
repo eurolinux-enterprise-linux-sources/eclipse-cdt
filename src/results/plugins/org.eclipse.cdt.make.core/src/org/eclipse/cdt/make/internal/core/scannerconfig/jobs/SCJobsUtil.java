@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -30,7 +30,7 @@ import org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigProfileMan
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.ISafeRunnable;
-import org.eclipse.core.runtime.Platform;
+import org.eclipse.core.runtime.SafeRunner;
 
 /**
  * Utility class for build and job related functionality
@@ -55,17 +55,14 @@ public class SCJobsUtil {
             this.rc = rc;
         }
         
-        public String toString() {
+        @Override
+		public String toString() {
             return rc ? "true" : "false"; //$NON-NLS-1$ //$NON-NLS-2$
         }
         private boolean rc;
     }
     /**
      * Call ESI providers to get scanner info
-     * 
-     * @param collector 
-     * @param buildInfo
-     * @param monitor
      */
     public static boolean getProviderScannerInfo(final IProject project,
                                                  final IScannerConfigBuilderInfo2 buildInfo,
@@ -84,9 +81,9 @@ public class SCJobsUtil {
                 getSCProfileInstance(project, context, buildInfo.getSelectedProfileId());
         final IScannerInfoCollector collector = profileInstance.getScannerInfoCollector();
 
-        List providerIds = buildInfo.getProviderIdList();
+        List<String> providerIds = buildInfo.getProviderIdList();
         for (int i = 0; i < providerIds.size(); ++i) {
-            final String providerId = (String) providerIds.get(i);
+            final String providerId = providerIds.get(i);
             if (buildInfo.isProviderOutputParserEnabled(providerId)) {
                 final IExternalScannerInfoProvider esiProvider = profileInstance.
                         createExternalScannerInfoProvider(providerId);
@@ -114,7 +111,7 @@ public class SCJobsUtil {
                         }
                         
                     };
-                    Platform.run(runnable);
+                    SafeRunner.run(runnable);
                 }
             }
         }
@@ -123,10 +120,6 @@ public class SCJobsUtil {
 
     /**
      * Update and persist scanner configuration
-     * 
-     * @param project
-     * @param buildInfo
-     * @param monitor
      */
     public static boolean updateScannerConfiguration(IProject project,
                                                      IScannerConfigBuilderInfo2 buildInfo,
@@ -136,10 +129,6 @@ public class SCJobsUtil {
 
     /**
      * Update and persist scanner configuration
-     * 
-     * @param project
-     * @param buildInfo
-     * @param monitor
      */
     public static boolean updateScannerConfiguration(IProject project,
     												 InfoContext context,
@@ -165,30 +154,18 @@ public class SCJobsUtil {
                 }
 
             };
-            Platform.run(runnable);
+            SafeRunner.run(runnable);
         }
         
         return rc.get();
     }
 
-    /**
-     * @param project
-     * @param buildInfo
-     * @param monitor
-     * @return
-     */
     public static boolean readBuildOutputFile(final IProject project,
                                               final IScannerConfigBuilderInfo2 buildInfo,
                                               final IProgressMonitor monitor) {
     	return readBuildOutputFile(project, buildInfo.getContext(), buildInfo, monitor);
     }
 
-    /**
-     * @param project
-     * @param buildInfo
-     * @param monitor
-     * @return
-     */
     public static boolean readBuildOutputFile(final IProject project,
     										  final InfoContext context,
                                               final IScannerConfigBuilderInfo2 buildInfo,
@@ -215,7 +192,7 @@ public class SCJobsUtil {
                 }
                 
             };
-            Platform.run(runnable);
+            SafeRunner.run(runnable);
         }
         
         return rc.get();

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -44,15 +44,21 @@ import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
  * A template template parameter.
  */
 public class CPPTemplateTemplateParameter extends CPPTemplateParameter implements
-		ICPPTemplateTemplateParameter, ICPPClassType, ICPPInternalTemplate, ICPPUnknownBinding,
+		ICPPTemplateTemplateParameter, ICPPInternalTemplate, ICPPUnknownBinding,
 		ICPPUnknownType {
 
 	private ICPPTemplateParameter[] templateParameters;
 	private ObjectMap instances;
 	private ICPPScope unknownScope;
-	
-	public CPPTemplateTemplateParameter(IASTName name) {
+	private final boolean fIsParameterPack;
+
+	public CPPTemplateTemplateParameter(IASTName name, boolean isPack) {
 		super(name);
+		fIsParameterPack= isPack;
+	}
+
+	public final boolean isParameterPack() {
+		return fIsParameterPack;
 	}
 
 	public ICPPScope asScope() {
@@ -72,7 +78,7 @@ public class CPPTemplateTemplateParameter extends CPPTemplateParameter implement
 			ICPPASTTemplateParameter[] params = template.getTemplateParameters();
 			ICPPTemplateParameter[] result = null;
 			for (ICPPASTTemplateParameter param : params) {
-				IBinding binding = CPPTemplates.getTemplateParameterName(param).resolveBinding();
+				IBinding binding = CPPTemplates.getTemplateParameterName(param).resolvePreBinding();
 				if (binding instanceof ICPPTemplateParameter) {
 					result = (ICPPTemplateParameter[]) ArrayUtil.append(ICPPTemplateParameter.class, result, binding);
 				}

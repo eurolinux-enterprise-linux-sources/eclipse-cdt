@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,26 +13,26 @@ package org.eclipse.cdt.make.core.makefile;
 /**
  * A Makefile can contain rules, macro definitons and comments.
  * They are call directives.
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noimplement This interface is not intended to be implemented by clients.
  */
 public interface IDirective {
 
 	/**
-	 * Returns the parent of this directive, null if none.
-	 * @return
+	 * @return the parent of this directive, null if none.
 	 */
 	IDirective getParent();
 
 	/**
-	 * The starting line number of this directive.
+	 * @return the starting line number of this directive.
 	 * The numbering starts at 1 .i.e the first line is not 0
-	 * @return
 	 */
 	int getStartLine();
 
 	/**
-	 * The ending line number of this directive.
+	 * @return the ending line number of this directive.
 	 * The numbering starts at 1 .i.e the first line is not 0
-	 * @return
 	 */
 	int getEndLine();
 

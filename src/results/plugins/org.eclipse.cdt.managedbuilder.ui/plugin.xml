@@ -2,7 +2,7 @@
 <?eclipse version="3.0"?>
 <plugin>
 
-     <extension-point id="newWizardPages" name="Custom MBS New Wizard Pages" schema="schema/newWizardPages.exsd"/>
+     <extension-point id="newWizardPages" name="%extension-point.name" schema="schema/newWizardPages.exsd"/>
 
    <extension
          point="org.eclipse.ui.newWizards">
@@ -23,6 +23,18 @@
             class="org.eclipse.core.resources.IProject">
          </selection>
       </wizard>
+      <wizard
+            category="org.eclipse.cdt.ui.newCWizards"
+            class="org.eclipse.cdt.managedbuilder.ui.wizards.NewMakeProjFromExisting"
+            finalPerspective="org.eclipse.cdt.ui.CPerspective"
+            icon="icons/obj16/convert-normal.gif"
+            id="org.eclipse.cdt.ui.wizards.NewMakeFromExisting"
+            name="%NewMakeFromExisting.name"
+            project="true">
+         <description>
+            %WizardMakeProjFromExisting.description
+         </description>
+      </wizard>
    </extension>
 
    <extension
@@ -38,12 +50,12 @@
             class="org.eclipse.cdt.managedbuilder.ui.preferences.PrefPage_NewCDTWizard"
             id="org.eclipse.cdt.managedbuilder.ui.preferences.PrefPage_NewCDTWizard"/>
       <page
-            category="org.eclipse.cdt.ui.preferences.CPluginPreferencePage"
+            category="org.eclipse.cdt.make.ui.preferences.BuildSettings"
             class="org.eclipse.cdt.managedbuilder.ui.preferences.PrefPage_Env"
             id="org.eclipse.cdt.managedbuilder.ui.preferences.PrefPage_Env"
             name="%envPrefName"/>
       <page
-            category="org.eclipse.cdt.ui.preferences.CPluginPreferencePage"
+            category="org.eclipse.cdt.make.ui.preferences.BuildSettings"
             class="org.eclipse.cdt.managedbuilder.ui.preferences.PrefPage_Vars"
             id="org.eclipse.cdt.managedbuilder.ui.preferences.PrefPage_Vars"
             name="%varsPrefName"/>
@@ -69,11 +81,11 @@
             id="org.eclipse.cdt.managedbuilder.ui.popupMenu.ConvertTargetContribution">
          <action
                label="%ConvertTargetAction.label"
-               class="org.eclipse.cdt.managedbuilder.ui.actions.ConvertTargetAction"
+               class="org.eclipse.cdt.managedbuilder.internal.ui.actions.ConvertTargetAction"
                menubarPath="additions"
                enablesFor="1"
                id="org.eclipse.cdt.managedbuilder.ui.ConvertTargetAction">
-         </action>         
+         </action>
          <filter
                name="projectNature"
                value="org.eclipse.cdt.managedbuilder.core.managedBuildNature">
@@ -84,30 +96,41 @@
             adaptable="true"
             id="org.eclipse.cdt.managedbuilder.ui.popupMenu.BuildAll">
         <action
-              class="org.eclipse.cdt.managedbuilder.ui.actions.BuildAllAction"
+              class="org.eclipse.cdt.managedbuilder.internal.ui.actions.CleanAndBuildAction"
               enablesFor="+"
-              id="org.eclipse.cdt.managedbuilder.ui.buildAllAction1"
-              label="%BuildMenu.label"
-              menubarPath="org.eclipse.cdt.ui.cfgmenu/gm1"
-              style="pulldown"/>
+              id="org.eclipse.cdt.managedbuilder.ui.rebuildConfigurationsAction"
+              label="%RebuildConfigurationsMenu.label"
+              menubarPath="org.eclipse.cdt.ui.cfgmenu/build"/>
+        <action
+              class="org.eclipse.cdt.managedbuilder.internal.ui.actions.CleanAllConfigurationsAction"
+              enablesFor="+"
+              id="org.eclipse.cdt.managedbuilder.ui.cleanAllConfigurationsAction"
+              label="%CleanAllConfigurationsMenu.label"
+              menubarPath="org.eclipse.cdt.ui.cfgmenu/build"/>
+        <action
+              class="org.eclipse.cdt.managedbuilder.internal.ui.actions.BuildAllConfigurationsAction"
+              enablesFor="+"
+              id="org.eclipse.cdt.managedbuilder.ui.buildAllConfigurationsAction"
+              label="%BuildAllConfigurationsMenu.label"
+              menubarPath="org.eclipse.cdt.ui.cfgmenu/build"/>
         <visibility>
            <objectState
               name="projectNature"
               value="org.eclipse.cdt.managedbuilder.core.managedBuildNature"/>
-        </visibility>      
+        </visibility>
       </objectContribution>
       <objectContribution
            adaptable="true"
            id="org.eclipse.cdt.managedbuilder.ui.BuildSelectedFilesContribution"
            objectClass="org.eclipse.core.resources.IResource">
         <action
-              class="org.eclipse.cdt.managedbuilder.ui.actions.BuildFilesAction"
+              class="org.eclipse.cdt.managedbuilder.internal.ui.actions.BuildFilesAction"
               enablesFor="+"
               id="org.eclipse.cdt.managedbuilder.ui.popups.buildFilesAction"
               label="%BuildSelectedFiles.label"
               menubarPath="additions"/>
         <action
-              class="org.eclipse.cdt.managedbuilder.ui.actions.CleanFilesAction"
+              class="org.eclipse.cdt.managedbuilder.internal.ui.actions.CleanFilesAction"
               enablesFor="+"
               id="org.eclipse.cdt.managedbuilder.ui.popups.cleanFilesAction"
               label="%CleanSelectedFiles.label"
@@ -127,36 +150,6 @@
         </visibility>
      </objectContribution>
    </extension>
-  <extension
-        point="org.eclipse.ui.actionSets">
-     <actionSet
-           id="org.eclipse.cdt.managedbuilder.ui.BuildAllActionSet"
-           label="%BuildCfgMenu.label">
-<!-- Note: The menu (re-) definition has to be here due to bug: -->
-<!-- https://bugs.eclipse.org/bugs/show_bug.cgi?id=15670  -->
-        <menu
-              id="org.eclipse.cdt.ui.prjmenu"
-              label="%Configurations.menu"
-              path="project/build">
-           <groupMarker
-                 name="gm1">
-           </groupMarker>
-           <separator
-                 name="s2">
-           </separator>
-           <groupMarker
-                 name="gm2">
-           </groupMarker>
-        </menu>
-        <action
-              class="org.eclipse.cdt.managedbuilder.ui.actions.BuildAllAction"
-              enablesFor="+"
-              id="org.eclipse.cdt.managedbuilder.ui.buildAllAction0"
-              label="%BuildMenu.label"
-              menubarPath="project/org.eclipse.cdt.ui.prjmenu/gm1"
-              style="pulldown"/>
-     </actionSet>
-  </extension>
   <extension
         point="org.eclipse.ui.perspectiveExtensions">
      <perspectiveExtension targetID="org.eclipse.cdt.ui.CPerspective">
@@ -259,6 +252,14 @@
            parent="org.eclipse.cdt.managedbuilder.ui.properties.Page_PathAndSymb"
            tooltip="%Includes.tooltip"/>
      <tab
+           class="org.eclipse.cdt.ui.newui.IncludeFileTab"
+           icon="icons/obj16/h_file_obj.gif"
+           name="%IncludeFiles"
+           weight="015"
+           helpId="cdt_u_prop_pns_inc"
+           parent="org.eclipse.cdt.managedbuilder.ui.properties.Page_PathAndSymb"
+           tooltip="%IncludeFiles.tooltip"/>
+     <tab
            class="org.eclipse.cdt.ui.newui.SymbolTab"
            icon="icons/obj16/define_obj.gif"
            name="%Symbols"
@@ -340,6 +341,14 @@
            helpId="cdt_u_prop_exp"
            parent="org.eclipse.cdt.managedbuilder.ui.properties.Page_ExpPathAndSymb"
            tooltip="%Includes.tooltip"/>
+     <tab
+           class="org.eclipse.cdt.ui.newui.ExpIncludeFileTab"
+           icon="icons/obj16/h_file_obj.gif"
+           name="%IncludeFiles"
+           weight="015"
+           helpId="cdt_u_prop_exp"
+           parent="org.eclipse.cdt.managedbuilder.ui.properties.Page_ExpPathAndSymb"
+           tooltip="%IncludeFiles.tooltip"/>
      <tab
            class="org.eclipse.cdt.ui.newui.ExpSymbolTab"
            icon="icons/obj16/define_obj.gif"
@@ -612,21 +621,9 @@
          </filter>
          <enabledWhen>
             <or>
-		     <instanceof value="org.eclipse.core.resources.IProject"/>
-		     <instanceof value="org.eclipse.cdt.core.model.ICProject"/>
-		     
-		     <instanceof value="org.eclipse.core.resources.IFolder"/>
-		     <instanceof value="org.eclipse.cdt.core.model.ICContainer"/>
-
-		     <and>
-		        <instanceof value="org.eclipse.core.resources.IFile"/>
-    	        <test property="org.eclipse.cdt.ui.isSource" value="" />
-             </and>
-             <and>
-	         	<instanceof value="org.eclipse.cdt.core.model.ITranslationUnit"/>
-    	        <test property="org.eclipse.cdt.ui.isSource" value="" />
-	         </and>	
-		    </or>
+                <instanceof value="org.eclipse.core.resources.IProject"/>
+                <instanceof value="org.eclipse.cdt.core.model.ICProject"/>
+            </or>
          </enabledWhen>
       </page>
       <page
@@ -685,8 +682,19 @@
                  id="org.eclipse.cdt.managedbuilder.core.managedBuildNature">
            </projectNature>
         </projectConfigurationFactory>
-     </extension>  
-   
- 
+     </extension>
+     <extension
+           point="org.eclipse.ui.importWizards">
+        <wizard
+              category="org.eclipse.cdt.ui.importWizardCategory"
+              class="org.eclipse.cdt.managedbuilder.ui.wizards.NewMakeProjFromExisting"
+              icon="icons/obj16/convert-normal.gif"
+              id="org.eclipse.cdt.ui.wizards.MakeProjFromExisting"
+              name="%WizardMakeProjFromExisting.name">
+           <description>
+              %WizardMakeProjFromExisting.description
+           </description>
+        </wizard>
+     </extension>
    
 </plugin>

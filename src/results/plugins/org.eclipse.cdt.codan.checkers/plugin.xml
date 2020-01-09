@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension
+         point="org.eclipse.cdt.codan.core.checkers"
+         id="org.eclipse.cdt.codan.core.internal.checkers">
+
+      <checker
+            class="org.eclipse.cdt.codan.internal.checkers.AssignmentInConditionChecker"
+            id="org.eclipse.cdt.codan.internal.checkers.AssignmentInConditionChecker"
+            name="%checker.name.AssignmentInCondition">
+      <problem
+            defaultSeverity="Warning"
+            description="%problem.description.AssignmentInCondition"
+            id="org.eclipse.cdt.codan.internal.checkers.AssignmentInConditionProblem"
+            messagePattern="%problem.messagePattern.AssignmentInCondition"
+            name="%problem.name.AssignmentInCondition">
+      </problem>
+      
+      
+      </checker>
+            <checker
+            class="org.eclipse.cdt.codan.internal.checkers.StatementHasNoEffectChecker"
+            id="org.eclipse.cdt.codan.internal.checkers.StatementHasNoEffectChecker"
+            name="%checker.name.StatementHasNoEffect">
+      <problem
+            category="org.eclipse.cdt.codan.core.categories.ProgrammingProblems"
+            defaultSeverity="Warning"
+            description="%problem.description.StatementHasNoEffect"
+            id="org.eclipse.cdt.codan.internal.checkers.StatementHasNoEffectProblem"
+            messagePattern="%problem.messagePattern.StatementHasNoEffect"
+            name="%problem.name.StatementHasNoEffect"/>
+      </checker>
+      
+      <checker
+            class="org.eclipse.cdt.codan.internal.checkers.NonVirtualDestructor"
+            id="org.eclipse.cdt.codan.internal.checkers.NonVirtualDescructor"
+            name="%checker.name.NonVirtualDescructor">
+      <problem
+            category="org.eclipse.cdt.codan.core.categories.ProgrammingProblems"
+            defaultSeverity="Warning"
+            description="%problem.description.NonVirtualDescructor"
+            id="org.eclipse.cdt.codan.internal.checkers.NonVirtualDestructorProblem"
+            messagePattern="%problem.messagePattern.NonVirtualDescructor"
+            name="%problem.name.NonVirtualDescructor">
+      </problem>
+      </checker>
+
+      <checker
+            class="org.eclipse.cdt.codan.internal.checkers.CatchByReference"
+            id="org.eclipse.cdt.codan.internal.checkers.CatchByReference"
+            name="%checker.name.CatchByReference">
+      <problem
+            category="org.eclipse.cdt.codan.core.categories.ProgrammingProblems"
+            defaultSeverity="Warning"
+            description="%problem.description.CatchByReference"
+            id="org.eclipse.cdt.codan.internal.checkers.CatchByReference"
+            name="%problem.name.CatchByReference"
+            messagePattern="%problem.messagePattern.CatchByReference">
+      </problem>
+      </checker>
+      <checker
+            class="org.eclipse.cdt.codan.internal.checkers.SuggestedParenthesisChecker"
+            id="org.eclipse.cdt.codan.internal.checkers.SuggestedParenthesisChecker"
+            name="%checker.name.SuggestedParenthesis">
+      <problem
+            category="org.eclipse.cdt.codan.core.categories.ProgrammingProblems"
+            defaultSeverity="Warning"
+            description="%problem.description.SuggestedParenthesis"
+            id="org.eclipse.cdt.codan.internal.checkers.SuggestedParenthesisProblem"
+            messagePattern="%problem.messagePattern.SuggestedParenthesis"
+            name="%problem.name.SuggestedParenthesis">
+      </problem>
+      </checker>
+      
+             <checker
+            class="org.eclipse.cdt.codan.internal.checkers.NamingConventionFunctionChecker"
+            id="org.eclipse.cdt.codan.internal.checkers.NamingConventionFunctionChecker"
+            name="%checker.name.NamingConventionFunction">
+      <problem
+            category="org.eclipse.cdt.codan.core.categories.CodeStyle"
+            defaultEnabled="false"
+            defaultSeverity="Info"
+            description="%problem.description.NamingConventionFunction"
+            id="org.eclipse.cdt.codan.internal.checkers.NamingConventionFunctionChecker"
+            messagePattern="%problem.messagePattern.NamingConventionFunction"
+            name="%problem.name.NamingConventionFunction">
+      </problem>
+      </checker>
+             <checker
+                   class="org.eclipse.cdt.codan.internal.checkers.ReturnChecker"
+                   id="org.eclipse.cdt.codan.internal.checkers.ReturnChecker"
+                   name="%checker.name.ReturnChecker">
+                <problem
+                      category="org.eclipse.cdt.codan.core.categories.ProgrammingProblems"
+                      defaultEnabled="true"
+                      defaultSeverity="Error"
+                      description="%problem.description.NoReturnValue"
+                      id="org.eclipse.cdt.codan.checkers.noreturn"
+                      messagePattern="%problem.messagePattern.NoReturnValue"
+                      name="%problem.name.NoReturnValue">
+                </problem>
+                <problem
+                      category="org.eclipse.cdt.codan.core.categories.ProgrammingProblems"
+                      defaultEnabled="true"
+                      defaultSeverity="Error"
+                      description="%problem.description.UnusedReturnValue"
+                      id="org.eclipse.cdt.codan.checkers.errreturnvalue"
+                      messagePattern="%problem.messagePattern.UnusedReturnValue"
+                      name="%problem.name.UnusedReturnValue">
+                </problem>
+                     <problem
+                      category="org.eclipse.cdt.codan.core.categories.ProgrammingProblems"
+                      defaultEnabled="true"
+                      defaultSeverity="Warning"
+                      description="%problem.description.NoReturn"
+                      id="org.eclipse.cdt.codan.checkers.errnoreturn"
+                      messagePattern="%problem.messagePattern.NoReturn"
+                      name="%problem.name.NoReturn">
+                </problem>
+             </checker>
+       
+
+             
+   </extension>
+</plugin>

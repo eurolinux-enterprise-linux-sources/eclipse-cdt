@@ -9,7 +9,6 @@
  *    Doug Schaefer (QNX) - Initial API and implementation
  *    Markus Schorn (Wind River Systems)
  *******************************************************************************/
-
 package org.eclipse.cdt.core.dom;
 
 import org.eclipse.cdt.core.model.ICProject;
@@ -22,6 +21,10 @@ import org.eclipse.core.runtime.CoreException;
 public interface IPDOMManager {
 	public static final String ID_NO_INDEXER= "org.eclipse.cdt.core.nullindexer"; //$NON-NLS-1$
 	public static final String ID_FAST_INDEXER= "org.eclipse.cdt.core.fastIndexer"; //$NON-NLS-1$
+	/**
+	 * @deprecated The full indexer has been removed.
+	 */
+	@Deprecated
 	public static final String ID_FULL_INDEXER= "org.eclipse.cdt.core.domsourceindexer"; //$NON-NLS-1$
 
 	// Getting and setting indexer Ids

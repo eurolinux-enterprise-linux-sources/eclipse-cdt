@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2009 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -197,5 +197,14 @@ public class CFolderDescription extends CDataProxyContainer implements
 	public boolean canExclude(boolean exclude) {
 		CConfigurationDescription cfg = (CConfigurationDescription)getConfiguration();
 		return cfg.canExclude(getPath(), true, exclude);
+	}
+
+	/**
+	 * For debugging purpose only
+	 */
+	@Override
+	public String toString() {
+		String str = getPath().toString();
+		return str.length()==0 ? "/" : str; //$NON-NLS-1$
 	}
 }

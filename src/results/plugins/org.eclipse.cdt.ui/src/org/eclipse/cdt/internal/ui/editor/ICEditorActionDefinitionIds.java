@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -235,11 +235,17 @@ public interface ICEditorActionDefinitionIds extends ITextEditorActionDefinition
 	 */
 	public static final String TOGGLE_MARK_OCCURRENCES= "org.eclipse.cdt.ui.edit.text.c.toggleMarkOccurrences"; //$NON-NLS-1$
 
-
 	/**
 	 * Action definition ID of the open macro explorer quick view action
 	 * (value <code>"org.eclipse.cdt.ui.edit.open.quick.macro.explorer"</code>).
 	 * @since 5.0
 	 */
 	public static final String OPEN_QUICK_MACRO_EXPLORER = "org.eclipse.cdt.ui.edit.open.quick.macro.explorer"; //$NON-NLS-1$
+
+	/**
+	 * Action definition id of sort lines action.
+	 * (value: <code>"org.eclipse.cdt.ui.edit.text.c.sort.lines"</code>).
+	 * @since 5.2
+	 */
+	public static final String SORT_LINES = "org.eclipse.cdt.ui.edit.text.c.sort.lines"; //$NON-NLS-1$
 }

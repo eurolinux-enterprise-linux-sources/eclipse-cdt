@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2009 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,7 +12,6 @@
 package org.eclipse.cdt.internal.ui.text.c.hover;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Set;
 
 import org.eclipse.core.filebuffers.FileBuffers;
@@ -51,11 +50,8 @@ import org.eclipse.cdt.core.dom.IName;
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTFileLocation;
 import org.eclipse.cdt.core.dom.ast.IASTFunctionDefinition;
-import org.eclipse.cdt.core.dom.ast.IASTFunctionStyleMacroParameter;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
-import org.eclipse.cdt.core.dom.ast.IASTPreprocessorFunctionStyleMacroDefinition;
-import org.eclipse.cdt.core.dom.ast.IASTPreprocessorMacroDefinition;
 import org.eclipse.cdt.core.dom.ast.IASTTranslationUnit;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.ICompositeType;
@@ -100,7 +96,7 @@ public class CSourceHover extends AbstractCEditorTextHover {
 
 	private static final boolean DEBUG = false;
 
-	private static class SingletonRule implements ISchedulingRule {
+	protected static class SingletonRule implements ISchedulingRule {
 		public static final ISchedulingRule INSTANCE = new SingletonRule();
 		public boolean contains(ISchedulingRule rule) {
 			return rule == this;
@@ -113,7 +109,7 @@ public class CSourceHover extends AbstractCEditorTextHover {
 	/**
 	 * Computes the source location for a given identifier.
 	 */
-	private static class ComputeSourceRunnable implements ASTRunnable {
+	protected static class ComputeSourceRunnable implements ASTRunnable {
 
 		private final ITranslationUnit fTU;
 		private final IRegion fTextRegion;
@@ -179,47 +175,13 @@ public class CSourceHover extends AbstractCEditorTextHover {
 		 * @throws CoreException 
 		 */
 		private String computeSourceForMacro(IASTTranslationUnit ast, IASTName name, IBinding binding) throws CoreException {
-			IASTPreprocessorMacroDefinition macroDef= null;
-			final char[] macroName= name.toCharArray();
-
-			// search for macro definition, there should be a more efficient way
-			IASTPreprocessorMacroDefinition[] macroDefs;
-			final IASTPreprocessorMacroDefinition[] localMacroDefs= ast.getMacroDefinitions();
-			for (macroDefs= localMacroDefs; macroDefs != null; macroDefs= (macroDefs == localMacroDefs) ? ast.getBuiltinMacroDefinitions() : null) {
-				for (IASTPreprocessorMacroDefinition macroDef2 : macroDefs) {
-					if (Arrays.equals(macroDef2.getName().toCharArray(), macroName)) {
-						macroDef= macroDef2;
-						break;
-					}
-				}
-			}
-			if (macroDef != null) {
-				String source= computeSourceForName(macroDef.getName(), binding);
+			// Search for the macro definition
+			IName[] defs = ast.getDefinitions(binding);
+			for (IName def : defs) {
+				String source= computeSourceForName(def, binding);
 				if (source != null) {
 					return source;
 				}
-				IASTFunctionStyleMacroParameter[] parameters= null;
-				if (macroDef instanceof IASTPreprocessorFunctionStyleMacroDefinition) {
-					parameters= ((IASTPreprocessorFunctionStyleMacroDefinition)macroDef).getParameters();
-				}
-				StringBuffer buf= new StringBuffer(macroName.length + macroDef.getExpansion().length() + 20);
-				buf.append("#define ").append(macroName); //$NON-NLS-1$
-				if (parameters != null) {
-					buf.append('(');
-					for (int i = 0; i < parameters.length; i++) {
-						if (i > 0) {
-							buf.append(", "); //$NON-NLS-1$
-						}
-						IASTFunctionStyleMacroParameter parameter = parameters[i];
-						buf.append(parameter.getParameter());
-					}
-					buf.append(')');
-				}
-				String expansion= macroDef.getExpansion();
-				if (expansion != null) {
-					buf.append(' ').append(expansion);
-				}
-				return buf.toString();
 			}
 			return null;
 		}
@@ -763,7 +725,7 @@ public class CSourceHover extends AbstractCEditorTextHover {
 		return source.substring(i);
 	}
 
-	private String searchInIndex(final ITranslationUnit tUnit, IRegion textRegion) {
+	protected String searchInIndex(final ITranslationUnit tUnit, IRegion textRegion) {
 		final ComputeSourceRunnable computer= new ComputeSourceRunnable(tUnit, textRegion);
 		Job job= new Job(CHoverMessages.CSourceHover_jobTitle) {
 			@Override
@@ -834,7 +796,7 @@ public class CSourceHover extends AbstractCEditorTextHover {
 				int orientation= SWT.NONE;
 				if (editor instanceof IWorkbenchPartOrientation)
 					orientation= ((IWorkbenchPartOrientation) editor).getOrientation();
-				return new SourceViewerInformationControl(parent, true, orientation, getTooltipAffordanceString());
+				return new SourceViewerInformationControl(parent, true, orientation, null);
 			}
 		};
 	}

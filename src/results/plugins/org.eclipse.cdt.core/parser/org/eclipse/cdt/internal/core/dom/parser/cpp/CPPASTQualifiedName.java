@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,6 +18,8 @@ import java.util.List;
 import org.eclipse.cdt.core.dom.ast.ASTVisitor;
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTCompletionContext;
+import org.eclipse.cdt.core.dom.ast.IASTFieldReference;
+import org.eclipse.cdt.core.dom.ast.IASTIdExpression;
 import org.eclipse.cdt.core.dom.ast.IASTName;
 import org.eclipse.cdt.core.dom.ast.IASTNameOwner;
 import org.eclipse.cdt.core.dom.ast.IASTNode;
@@ -25,19 +27,24 @@ import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IEnumerator;
 import org.eclipse.cdt.core.dom.ast.IField;
+import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTConversionName;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTOperatorName;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTQualifiedName;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateId;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassScope;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPConstructor;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
+import org.eclipse.cdt.core.model.IEnumeration;
 import org.eclipse.cdt.core.parser.Keywords;
 import org.eclipse.cdt.core.parser.util.ArrayUtil;
 import org.eclipse.cdt.core.parser.util.CharArrayUtils;
 import org.eclipse.cdt.internal.core.dom.parser.IASTInternalNameOwner;
 import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPSemantics;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
+import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.SemanticUtil;
 import org.eclipse.core.runtime.Assert;
 
 /**
@@ -248,7 +255,6 @@ public class CPPASTQualifiedName extends CPPASTNameBase
 				ICPPClassType classType = (ICPPClassType) binding;
 				final boolean isDeclaration = getParent().getParent() instanceof IASTSimpleDeclaration;
 				List<IBinding> filtered = filterClassScopeBindings(classType, bindings, isDeclaration);
-			
 				if (isDeclaration && nameMatches(classType.getNameCharArray(),
 						n.getLookupKey(), isPrefix)) {
 					try {
@@ -261,7 +267,6 @@ public class CPPASTQualifiedName extends CPPASTNameBase
 					} catch (DOMException e) {
 					}
 				}
-				
 				return filtered.toArray(new IBinding[filtered.size()]);
 			}
 		}
@@ -269,26 +274,50 @@ public class CPPASTQualifiedName extends CPPASTNameBase
 		return bindings;
 	}
 	
+	private boolean canBeFieldAccess(ICPPClassType baseClass) {
+		IASTNode parent= getParent();
+		if (parent instanceof IASTFieldReference) {
+			return true;
+		}
+		if (parent instanceof IASTIdExpression) {
+			IScope scope= CPPVisitor.getContainingScope(this);
+			try {
+				while(scope != null) {
+					if (scope instanceof ICPPClassScope) {
+						ICPPClassType classType = ((ICPPClassScope) scope).getClassType();
+						if (SemanticUtil.calculateInheritanceDepth(classType, baseClass) >= 0) {
+							return true;
+						}
+					}
+					scope= scope.getParent();
+				}
+			} catch (DOMException e) {
+			}
+		}
+		return false;
+	}
+
 	private List<IBinding> filterClassScopeBindings(ICPPClassType classType,
 			IBinding[] bindings, final boolean isDeclaration) {
 		List<IBinding> filtered = new ArrayList<IBinding>();
-		
+		final boolean canBeFieldAccess= canBeFieldAccess(classType);
+
 		try {
-			for (int i = 0; i < bindings.length; i++) {
-				final IBinding binding = bindings[i];
+			for (final IBinding binding : bindings) {
 				if (binding instanceof IField) {
 					IField field = (IField) binding;
-					if (!field.isStatic()) 
+					if (!canBeFieldAccess && !field.isStatic()) 
 						continue;
 				} else if (binding instanceof ICPPMethod) {
 					ICPPMethod method = (ICPPMethod) binding;
 					if (method.isImplicit()) 
 						continue;
 					if (!isDeclaration) {
-						if (method.isDestructor() || method instanceof ICPPConstructor || !method.isStatic())
+						if (method.isDestructor() || method instanceof ICPPConstructor
+								|| (!canBeFieldAccess && !method.isStatic()))
 							continue;
 					}
-				} else if (binding instanceof IEnumerator || binding instanceof IEnumerator) {
+				} else if (binding instanceof IEnumerator || binding instanceof IEnumeration) {
 					if (isDeclaration)
 						continue;
 				} else if (binding instanceof IType) {

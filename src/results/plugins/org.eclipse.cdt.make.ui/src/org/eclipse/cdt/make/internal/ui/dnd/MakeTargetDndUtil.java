@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2009 Andrew Gvozdev.
+ * Copyright (c) 2008, 2010 Andrew Gvozdev.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,7 +21,6 @@ import org.eclipse.cdt.make.core.IMakeCommonBuildInfo;
 import org.eclipse.cdt.make.core.IMakeTarget;
 import org.eclipse.cdt.make.core.IMakeTargetManager;
 import org.eclipse.cdt.make.core.MakeCorePlugin;
-import org.eclipse.cdt.make.internal.core.MakeTarget;
 import org.eclipse.cdt.make.internal.ui.MakeUIPlugin;
 import org.eclipse.cdt.make.ui.dialogs.MakeTargetDialog;
 import org.eclipse.core.resources.IContainer;
@@ -60,6 +59,7 @@ public class MakeTargetDndUtil {
 	public static final String DEFAULT_BUILD_COMMAND = "make"; //$NON-NLS-1$
 
 	/**
+	 * @param project - project where to get build command from
 	 * @return build command from project settings.
 	 */
 	public static String getProjectBuildCommand(IProject project) {
@@ -396,7 +396,7 @@ public class MakeTargetDndUtil {
 	 * @param destination - destination make target.
 	 * @throws CoreException if there is a problem populating the target.
 	 *
-	 * @see MakeTarget
+	 * See MakeTarget
 	 */
 	private static void copyTargetData(IMakeTarget source, IMakeTarget destination)
 		throws CoreException {
@@ -411,10 +411,12 @@ public class MakeTargetDndUtil {
 		// IMakeCommonBuildInfo attributes
 		// Ignore IMakeCommonBuildInfo.BUILD_LOCATION in order not to pick
 		// location of another project (or another folder)
-		destination.setBuildAttribute(IMakeCommonBuildInfo.BUILD_COMMAND,
-			source.getBuildAttribute(IMakeCommonBuildInfo.BUILD_COMMAND, DEFAULT_BUILD_COMMAND));
-		destination.setBuildAttribute(IMakeCommonBuildInfo.BUILD_ARGUMENTS,
-			source.getBuildAttribute(IMakeCommonBuildInfo.BUILD_ARGUMENTS, "")); //$NON-NLS-1$
+		if (!source.isDefaultBuildCmd()){
+			destination.setBuildAttribute(IMakeCommonBuildInfo.BUILD_COMMAND,
+					source.getBuildAttribute(IMakeCommonBuildInfo.BUILD_COMMAND, DEFAULT_BUILD_COMMAND));
+			destination.setBuildAttribute(IMakeCommonBuildInfo.BUILD_ARGUMENTS,
+					source.getBuildAttribute(IMakeCommonBuildInfo.BUILD_ARGUMENTS, "")); //$NON-NLS-1$
+		}
 		destination.setStopOnError(source.isStopOnError());
 		destination.setUseDefaultBuildCmd(source.isDefaultBuildCmd());
 		destination.setEnvironment(source.getEnvironment());
@@ -423,7 +425,7 @@ public class MakeTargetDndUtil {
 	}
 
 	/**
-	 * Create @{code MakeTarget} from basic data elements available during
+	 * Create {@code MakeTarget} from basic data elements available during
 	 * copy/paste or drag/drop operations. The other data will be set to default.
 	 *
 	 * @param name - name of make target being created.

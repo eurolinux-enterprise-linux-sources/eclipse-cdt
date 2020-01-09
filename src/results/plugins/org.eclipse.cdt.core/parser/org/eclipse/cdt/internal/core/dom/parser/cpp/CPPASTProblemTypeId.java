@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,9 +21,7 @@ import org.eclipse.cdt.core.dom.ast.IASTProblemTypeId;
  * @author jcamelon
  */
 public class CPPASTProblemTypeId extends CPPASTTypeId implements IASTProblemTypeId {
-
 	private IASTProblem problem;
-
     
     public CPPASTProblemTypeId() {
 	}
@@ -60,18 +58,18 @@ public class CPPASTProblemTypeId extends CPPASTTypeId implements IASTProblemType
 		}
     }
 
-    	@Override
-	public final boolean accept( ASTVisitor action ){
-        if( action.shouldVisitProblems ){
-		    switch( action.visit( getProblem() ) ){
-	            case ASTVisitor.PROCESS_ABORT : return false;
-	            case ASTVisitor.PROCESS_SKIP  : return true;
-	            default : break;
+    @Override
+	public final boolean accept (ASTVisitor action) {
+        if (action.shouldVisitProblems) {
+		    switch (action.visit(getProblem())) {
+	            case ASTVisitor.PROCESS_ABORT: return false;
+	            case ASTVisitor.PROCESS_SKIP: return true;
+	            default: break;
 	        }
-		    switch( action.leave( getProblem() ) ){
-	            case ASTVisitor.PROCESS_ABORT : return false;
-	            case ASTVisitor.PROCESS_SKIP  : return true;
-	            default : break;
+		    switch (action.leave(getProblem())) {
+	            case ASTVisitor.PROCESS_ABORT: return false;
+	            case ASTVisitor.PROCESS_SKIP: return true;
+	            default: break;
 	        }
 		}
         return true;

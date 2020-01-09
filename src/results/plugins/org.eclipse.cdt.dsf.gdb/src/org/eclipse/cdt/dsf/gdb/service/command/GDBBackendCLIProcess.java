@@ -1,5 +1,5 @@
 /*******************************************************************************                
- * Copyright (c) 2009 Nokia Corporation.                                                        
+ * Copyright (c) 2009, 2010 Nokia Corporation.                                                        
  * All rights reserved. This program and the accompanying materials                             
  * are made available under the terms of the Eclipse Public License v1.0                        
  * which accompanies this distribution, and is available at                                     
@@ -56,5 +56,17 @@ public class GDBBackendCLIProcess extends MIBackendCLIProcess {
        } catch (RejectedExecutionException e) {
            // Session disposed.
        }                                                                                            
+   }
+   
+   /**
+    * @since 3.0
+    */
+   @Override
+   protected boolean isMissingSecondaryPromptCommand(String operation) {
+	   // The 'actions' command does not get a secondary prompt!
+	   if (operation.startsWith("ac") && "actions".indexOf(operation) != -1) { //$NON-NLS-1$ //$NON-NLS-2$
+		   return true;                                                                                    
+	   }                                                                                                  
+	   return false;                                                                                                                                                                                   
    }
 }

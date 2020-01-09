@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,14 +11,18 @@
 package org.eclipse.cdt.dsf.debug.ui.viewmodel.expression;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.RejectedExecutionException;
 
 import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
+import org.eclipse.cdt.dsf.debug.internal.ui.viewmodel.DsfCastToTypeSupport;
 import org.eclipse.cdt.dsf.debug.service.ICachingService;
 import org.eclipse.cdt.dsf.debug.service.IExpressions;
+import org.eclipse.cdt.dsf.debug.service.IExpressions2;
 import org.eclipse.cdt.dsf.debug.service.IRegisters;
+import org.eclipse.cdt.dsf.debug.service.IExpressions.IExpressionDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.ISuspendedDMEvent;
 import org.eclipse.cdt.dsf.debug.ui.DsfDebugUITools;
 import org.eclipse.cdt.dsf.debug.ui.IDsfDebugUIConstants;
@@ -38,6 +42,7 @@ import org.eclipse.cdt.dsf.ui.viewmodel.IVMModelProxy;
 import org.eclipse.cdt.dsf.ui.viewmodel.IVMNode;
 import org.eclipse.cdt.dsf.ui.viewmodel.VMDelta;
 import org.eclipse.cdt.dsf.ui.viewmodel.datamodel.AbstractDMVMProvider;
+import org.eclipse.cdt.dsf.ui.viewmodel.datamodel.IDMVMContext;
 import org.eclipse.cdt.dsf.ui.viewmodel.datamodel.RootDMVMNode;
 import org.eclipse.cdt.dsf.ui.viewmodel.update.AutomaticUpdatePolicy;
 import org.eclipse.cdt.dsf.ui.viewmodel.update.IVMUpdatePolicy;
@@ -46,6 +51,7 @@ import org.eclipse.debug.core.model.IExpression;
 import org.eclipse.debug.internal.core.IExpressionsListener2;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IColumnPresentation;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IPresentationContext;
+import org.eclipse.debug.internal.ui.viewers.model.provisional.IViewerInputUpdate;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.ModelDelta;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.util.IPropertyChangeListener;
@@ -139,8 +145,10 @@ public class ExpressionVMProvider extends AbstractDMVMProvider
      */
     public int getDeltaFlagsForExpression(IExpression expression, Object event) {
         // Workaround: find the first active proxy and use it.
-        if (!getActiveModelProxies().isEmpty()) {
-            return ((ExpressionVMProviderModelProxyStrategy)getActiveModelProxies().get(0)).getDeltaFlagsForExpression(expression, event);
+        final List<IVMModelProxy> activeModelProxies= getActiveModelProxies();
+        int count = activeModelProxies.size();
+        if (count > 0) {
+            return ((ExpressionVMProviderModelProxyStrategy)activeModelProxies.get(count - 1)).getDeltaFlagsForExpression(expression, event);
         }
         return 0;
     }
@@ -210,8 +218,17 @@ public class ExpressionVMProvider extends AbstractDMVMProvider
         /*
          * Now the Over-arching management node.
          */
-        ExpressionManagerVMNode expressionManagerNode = new ExpressionManagerVMNode(this);
-        addChildNodes(rootNode, new IVMNode[] {expressionManagerNode});
+        if (IDsfDebugUIConstants.ID_EXPRESSION_HOVER.equals(getPresentationContext().getId())) {
+        	SingleExpressionVMNode expressionManagerNode = new SingleExpressionVMNode(this);
+        	addChildNodes(rootNode, new IVMNode[] { expressionManagerNode });
+        } else {
+            ExpressionManagerVMNode expressionManagerNode = new ExpressionManagerVMNode(this);
+            addChildNodes(rootNode, new IVMNode[] {expressionManagerNode});
+        }
+        
+        // Disabled expression node intercepts disabled expressions and prevents them from being
+        // evaluated by other nodes.
+        IExpressionVMNode disabledExpressionNode = new DisabledExpressionVMNode(this);
         
         /*
          *  The expression view wants to support fully all of the components of the register view.
@@ -232,9 +249,14 @@ public class ExpressionVMProvider extends AbstractDMVMProvider
          *  view comes in as a fully qualified expression so we go directly to the SubExpression layout
          *  node.
          */
-        IExpressionVMNode variableNode =  new VariableVMNode(this, getSession(), syncvarDataAccess);
+        VariableVMNode variableNode =  new VariableVMNode(this, getSession(), syncvarDataAccess);
         addChildNodes(variableNode, new IExpressionVMNode[] {variableNode});
         
+        /*
+         * Hook up IExpressions2 if it exists.
+         */
+        hookUpCastingSupport(syncvarDataAccess, variableNode);
+
         /*
          *  Tell the expression node which sub-nodes it will directly support.  It is very important
          *  that the variables node be the last in this chain.  The model assumes that there is some
@@ -246,13 +268,32 @@ public class ExpressionVMProvider extends AbstractDMVMProvider
          *  assume what it was passed was for it and the real node which wants to handle it would be
          *  left out in the cold.
          */
-        setExpressionNodes(new IExpressionVMNode[] {registerGroupNode, variableNode});
+        setExpressionNodes(new IExpressionVMNode[] {disabledExpressionNode, registerGroupNode, variableNode});
         
         /*
          *  Let the work know which is the top level node.
          */
         setRootNode(rootNode);
     }
+
+	private void hookUpCastingSupport(final SyncVariableDataAccess syncvarDataAccess,
+			final VariableVMNode variableNode) {
+		 try {
+            getSession().getExecutor().execute(new DsfRunnable() {
+                public void run() {
+                    DsfServicesTracker tracker = new DsfServicesTracker(DsfUIPlugin.getBundleContext(), getSession().getId());
+                    IExpressions2 expressions2 = tracker.getService(IExpressions2.class);
+                    if (expressions2 != null) {
+                    	variableNode.setCastToTypeSupport(new DsfCastToTypeSupport(
+                    			getSession(), ExpressionVMProvider.this, syncvarDataAccess));
+                    }
+                    tracker.dispose();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            // Session disposed, ignore.
+        }
+	}
     
     /**
      * Finds the expression node which can parse the given expression.  This 
@@ -371,5 +412,26 @@ public class ExpressionVMProvider extends AbstractDMVMProvider
         } catch (RejectedExecutionException e) {
             // Session disposed, ignore.
         }
+    }
+
+    @Override
+    public void update(IViewerInputUpdate update) {
+        if (IDsfDebugUIConstants.ID_EXPRESSION_HOVER.equals(getPresentationContext().getId())) {
+        	Object input = update.getElement();
+        	if (input instanceof IExpressionDMContext) {
+        		IExpressionDMContext dmc = (IExpressionDMContext) input;
+        		SingleExpressionVMNode vmNode = (SingleExpressionVMNode) getChildVMNodes(getRootVMNode())[0];
+        		vmNode.setExpression(dmc);
+				final IDMVMContext viewerInput= vmNode.createVMContext(dmc);
+
+				// provide access to viewer (needed by details pane)
+	            getPresentationContext().setProperty("__viewerInput", viewerInput); //$NON-NLS-1$
+	            
+                update.setInputElement(viewerInput);
+        		update.done();
+        		return;
+        	}
+        }
+        super.update(update);
     }
 }

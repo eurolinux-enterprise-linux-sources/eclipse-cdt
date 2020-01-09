@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2007 Intel Corporation and others.
+ * Copyright (c) 2005, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,7 +18,6 @@ import org.eclipse.cdt.core.cdtvariables.CdtVariableException;
 import org.eclipse.cdt.core.cdtvariables.ICdtVariable;
 import org.eclipse.cdt.core.cdtvariables.ICdtVariableManager;
 import org.eclipse.cdt.core.settings.model.ICConfigurationDescription;
-import org.eclipse.cdt.managedbuilder.core.BuildException;
 import org.eclipse.cdt.managedbuilder.core.IBuildObject;
 import org.eclipse.cdt.managedbuilder.core.IBuilder;
 import org.eclipse.cdt.managedbuilder.core.IConfiguration;
@@ -473,10 +472,7 @@ public class BuildMacroProvider implements IBuildMacroProvider, IMacroContextInf
 		if(tool instanceof Tool){
 			Tool t = (Tool)tool;
 			ExplicitFileMacroCollector collector = new ExplicitFileMacroCollector(null);
-			try {
-				t.getToolCommandFlags(null,null,collector, getDefault());
-			} catch (BuildException e){
-			}
+			t.getToolCommandFlags(null,null,collector, getDefault());
 			return collector.getExplicisFileMacros();
 		}
 		return new IBuildMacro[0];

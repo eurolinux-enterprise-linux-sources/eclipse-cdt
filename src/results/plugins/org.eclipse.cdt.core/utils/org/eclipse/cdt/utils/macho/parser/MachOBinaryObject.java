@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2007 QNX Software Systems and others.
+ * Copyright (c) 2002, 2009 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -36,9 +36,11 @@ import org.eclipse.cdt.utils.macho.MachOHelper;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
 
-/*
- * MachOBinaryObject 
+/**
+ * @deprecated. Deprecated as of CDT 6.1. Use 64 bit version {@link MachOBinaryObject64}.
+ * This class is planned for removal in next major release.
  */
+@Deprecated
 public class MachOBinaryObject extends BinaryObjectAdapter {
 
 	protected AR.ARHeader header;
@@ -395,7 +397,7 @@ public class MachOBinaryObject extends BinaryObjectAdapter {
 	/* (non-Javadoc)
 	 * @see org.eclipse.core.runtime.IAdaptable#getAdapter(java.lang.Class)
 	 */
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	@Override
 	public Object getAdapter(Class adapter) {
 		if (adapter.equals(MachO.class)) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Wind River Systems and others.
+ * Copyright (c) 2007, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -35,7 +35,11 @@ public interface IVMModelProxy extends IModelProxy {
     
     /**
      * Returns whether the given event applies to the root element and the 
-     * nodes in this model proxy.   
+     * nodes in this model proxy. 
+     * <p>
+     * This method is the equivalent of calling 
+     * <code> getEventDeltaFlags(event) != IModelDelta.NO_CHANGE </code>.
+     * </p>
      */
     public boolean isDeltaEvent(Object event);
 
@@ -71,4 +75,15 @@ public interface IVMModelProxy extends IModelProxy {
      * @since 2.0
      */
     public TreePath getRootPath();
+
+    /**
+     * Returns the delta flags associated with this event.  This method is   
+     * 
+     * @param event 
+     * @return
+     * 
+     * @since 2.1
+     */
+    public int getEventDeltaFlags(Object event);
+
 }

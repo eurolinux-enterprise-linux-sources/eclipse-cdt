@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Wind River Systems and others.
+ * Copyright (c) 2008, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,10 +22,12 @@ public class MessagesForVariablesVM extends NLS {
     public static String VariableColumnPresentation_name;
     public static String VariableColumnPresentation_type;
     public static String VariableColumnPresentation_value;
-    public static String VariableColumnPresentation_address;
+    public static String VariableColumnPresentation_location;
 
-    public static String VariableVMNode_Address_column__Error__text_format;
-    public static String VariableVMNode_Address_column__text_format;
+    public static String VariableVMNode_CannotCastVariable;
+
+	public static String VariableVMNode_Location_column__Error__text_format;
+    public static String VariableVMNode_Location_column__text_format;
     public static String VariableVMNode_Description_column__text_format;
     public static String VariableVMNode_Expression_column__text_format;
     public static String VariableVMNode_Name_column__text_format;

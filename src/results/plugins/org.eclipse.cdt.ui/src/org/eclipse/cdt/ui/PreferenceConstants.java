@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -755,6 +755,15 @@ public class PreferenceConstants {
 	 * @since 5.1
 	 */
 	public static final String OUTLINE_GROUP_MEMBERS= "org.eclipse.cdt.ui.outline.groupmembers"; //$NON-NLS-1$
+	
+	/**
+	 * A named preference that controls whether the Outline view should group macro definitions.
+	 * <p>
+	 * Value is of type <code>Boolean</code>.
+	 * </p>
+	 * @since 5.2
+	 */
+	public static final String OUTLINE_GROUP_MACROS= "org.eclipse.cdt.ui.outline.groupmacros"; //$NON-NLS-1$
 
 	/**
 	 * A named preference that controls whether the Outline view
@@ -773,6 +782,16 @@ public class PreferenceConstants {
 	 * </p>
 	 */
 	public static final String CVIEW_GROUP_INCLUDES= "org.eclipse.cdt.ui.cview.groupincludes"; //$NON-NLS-1$
+	
+	/**
+	 * A named preference that controls whether macro defintions should be grouped in the
+	 * C/C++ Projects view and the Project Explorer view.
+	 * <p>
+	 * Value is of type <code>Boolean</code>.
+	 * </p>
+	 * @since 5.2
+	 */
+	public static final String CVIEW_GROUP_MACROS= "org.eclipse.cdt.ui.cview.groupmacros"; //$NON-NLS-1$
 
 	/**
 	 * A named preference that controls whether header and source files should be separated in the
@@ -1414,8 +1433,8 @@ public class PreferenceConstants {
 
 	/**
 	 * The value of <code>CODE_TEMPLATES_INCLUDE_GUARD_GENERATION_SCHEME</code>
-	 * specifying that the include guard symbol is to be derived from the
-	 * include file's name.
+	 * specifying that the include guard symbol is to be derived from
+	 * the include file's name.
 	 * 
 	 * @since 5.1
 	 */
@@ -1428,6 +1447,15 @@ public class PreferenceConstants {
 	 * @since 5.1
 	 */
 	public static final int CODE_TEMPLATES_INCLUDE_GUARD_SCHEME_UUID = 1;
+	
+	/**
+	 * The value of <code>CODE_TEMPLATES_INCLUDE_GUARD_GENERATION_SCHEME</code>
+	 * specifying that the include guard symbol is to be derived from
+	 * the include file's path relative to the source folder.
+	 * 
+	 * @since 5.2
+	 */
+	public static final int CODE_TEMPLATES_INCLUDE_GUARD_SCHEME_FILE_PATH = 2;
 	
 	/**
 	 * Returns the CDT-UI preference store.
@@ -1612,7 +1640,7 @@ public class PreferenceConstants {
 		store.setDefault(PreferenceConstants.EDITOR_MARK_OCCURRENCES, true);
 		store.setDefault(PreferenceConstants.EDITOR_STICKY_OCCURRENCES, true);
 		
-		//Scalability
+		// Scalability
 		store.setDefault(PreferenceConstants.SCALABILITY_ALERT, true);
 		store.setDefault(PreferenceConstants.SCALABILITY_NUMBER_OF_LINES, 5000);
 		store.setDefault(PreferenceConstants.SCALABILITY_ENABLE_ALL, false);
@@ -1622,7 +1650,7 @@ public class PreferenceConstants {
 		store.setDefault(PreferenceConstants.SCALABILITY_PARSER_BASED_CONTENT_ASSIST, false);
 		store.setDefault(PreferenceConstants.SCALABILITY_CONTENT_ASSIST_AUTO_ACTIVATION, false);
 		
-		//Code Templates
+		// Code Templates
 		store.setDefault(PreferenceConstants.CODE_TEMPLATES_INCLUDE_GUARD_SCHEME,
 				CODE_TEMPLATES_INCLUDE_GUARD_SCHEME_FILE_NAME);
     }

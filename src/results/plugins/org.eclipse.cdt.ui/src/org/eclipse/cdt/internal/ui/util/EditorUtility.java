@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2009 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import com.ibm.icu.text.MessageFormat;
 
 import org.eclipse.compare.rangedifferencer.IRangeComparator;
 import org.eclipse.compare.rangedifferencer.RangeDifference;
@@ -73,6 +72,8 @@ import org.eclipse.ui.ide.ResourceUtil;
 import org.eclipse.ui.part.FileEditorInput;
 import org.eclipse.ui.texteditor.ITextEditor;
 
+import com.ibm.icu.text.MessageFormat;
+
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.model.CModelException;
 import org.eclipse.cdt.core.model.CoreModel;
@@ -86,6 +87,7 @@ import org.eclipse.cdt.core.model.ISourceReference;
 import org.eclipse.cdt.core.model.ITranslationUnit;
 import org.eclipse.cdt.core.model.IWorkingCopy;
 import org.eclipse.cdt.core.resources.FileStorage;
+import org.eclipse.cdt.ui.CDTUITools;
 import org.eclipse.cdt.ui.CUIPlugin;
 
 import org.eclipse.cdt.internal.core.resources.ResourceLookup;
@@ -243,7 +245,6 @@ public class EditorUtility {
 		String desc= CUIPlugin.getResourceString("Editorutility.closedproject.description"); //$NON-NLS-1$
 		errorMsg.setMessage(MessageFormat.format(desc, new Object[]{project.getName()}));
 		errorMsg.open();
-
 	}
 
 	private static IEditorPart openInEditor(IEditorInput input, String editorID, boolean activate) throws PartInitException {
@@ -545,7 +546,7 @@ public class EditorUtility {
 		if (cu.isWorkingCopy())
 			return cu;
 
-		return cu.findSharedWorkingCopy(CUIPlugin.getDefault().getBufferFactory());
+		return CDTUITools.getWorkingCopyManager().findSharedWorkingCopy(cu);
 	}
 
 	/**
@@ -732,14 +733,14 @@ public class EditorUtility {
 	public static ICProject getCProject(IEditorInput input) {
 		ICProject cProject= null;
 		if (input instanceof IFileEditorInput) {
-			IProject project= ((IFileEditorInput)input).getFile().getProject();
+			IProject project= ((IFileEditorInput) input).getFile().getProject();
 			if (project != null) {
 				cProject= CoreModel.getDefault().create(project);
 				if (!cProject.exists())
 					cProject= null;
 			}
 		} else if (input instanceof ITranslationUnitEditorInput) {
-			final ITranslationUnit tu= ((ITranslationUnitEditorInput)input).getTranslationUnit();
+			final ITranslationUnit tu= ((ITranslationUnitEditorInput) input).getTranslationUnit();
 			if (tu != null) {
 				cProject= tu.getCProject();
 			} else if (input instanceof ExternalEditorInput) {
@@ -833,8 +834,7 @@ public class EditorUtility {
 
 					List<IRegion> regions= new ArrayList<IRegion>();
 					final int numberOfLines= currentDocument.getNumberOfLines();
-					for (int i= 0; i < differences.length; i++) {
-						RangeDifference curr= differences[i];
+					for (RangeDifference curr : differences) {
 						if (curr.kind() == RangeDifference.CHANGE) {
 							int startLine= Math.min(curr.rightStart(), numberOfLines - 1);
 							int endLine= curr.rightEnd() - 1;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 IBM Corporation and others.
+ * Copyright (c) 2000, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -33,7 +33,7 @@ public class ActionUtil {
 //		if ((resource == null) || (! (resource instanceof IFolder)) || (! resource.isLinked()))
 //			return false;
 //			
-//		MessageDialog.openInformation(shell, ActionMessages.getString("ActionUtil.not_possible"), ActionMessages.getString("ActionUtil.no_linked")); //$NON-NLS-1$ //$NON-NLS-2$
+//		MessageDialog.openInformation(shell, ActionMessages.ActionUtil.not_possible"), ActionMessages.ActionUtil.no_linked")); //$NON-NLS-1$ //$NON-NLS-2$
 //		return true;
 	}
 	
@@ -45,8 +45,8 @@ public class ActionUtil {
 		// then it is for sure not on the build path
 		if (input == null) {
 			MessageDialog.openInformation(shell, 
-				ActionMessages.getString("ActionUtil.notOnBuildPath.title"),  //$NON-NLS-1$
-				ActionMessages.getString("ActionUtil.notOnBuildPath.message")); //$NON-NLS-1$
+					ActionMessages.ActionUtil_notOnBuildPath_title,
+					ActionMessages.ActionUtil_notOnBuildPath_message);
 			return false;
 		}
 		return isProcessable(shell, input);
@@ -59,8 +59,8 @@ public class ActionUtil {
 		if (isOnBuildPath((ICElement)element))
 			return true;
 		MessageDialog.openInformation(shell, 
-			ActionMessages.getString("ActionUtil.notOnBuildPath.title"),  //$NON-NLS-1$
-			ActionMessages.getString("ActionUtil.notOnBuildPath.message")); //$NON-NLS-1$
+				ActionMessages.ActionUtil_notOnBuildPath_title,
+				ActionMessages.ActionUtil_notOnBuildPath_message);
 		return false;
 	}
 

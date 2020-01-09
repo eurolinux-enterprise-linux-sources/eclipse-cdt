@@ -15,35 +15,43 @@
 <h1>Jumping to errors</h1>
 
 <p>The CDT will parse the output from the make and compiler/linker. If the CDT can 
-determine the location of an error, it is added to the Console view.</p>
+determine an error or a warning, the line is highlighted in the Console view and added
+to the Problems view as a <strong>Problem Marker</strong> decorated with
+error <img src="../images/icon_error.gif" alt="Error"> or warning <img src="../images/icon_warning.gif" alt="Warning"> icon.
+Informational messages are marked with Info <img src="../images/icon_info.gif" alt="Info"> icon.
+</p>
 
-<p>To jump to the source of an error:</p>
-
+<p>To jump to the source of an error do one of the following:</p>
 <ul>
-  <li><p>In  the Console view, double-click the <b>Error</b> icon<img border="0" src="../images/error_icon.gif" align="bottom"  alt="Error icon" width="30" height="18">or 
-  the <b>Warning</b> icon<img border="0" src="../images/warning_icon.gif"  alt="Warning icon" width="30" height="18">.</p>
-  <p>The file opens in the C/C++ editor and the cursor moves to the  line with the error.</p>
-  </li>
+  <li><p>In the Console view, double-click the highlighted line.</li>
+  <li><p>In the Problems view, double-click the row of the specific error in the table.</li>
+  <li><p>If in the Problems view the error is identified as <strong>External Location</strong> in Location column, 
+    use mouse right-click on it, then click on <strong>Open external location</strong> item in the context menu.</li>
 </ul>
+<p>If CDT can determine file and error line and the file exists - the file opens in the C/C++ editor and the cursor moves to the line with the error.</p>
 
 <p>To jump to errors sequentially:</p>
-
 <ul>
-  <li>Click <b>Jump to next</b> or <b>Jump to previous</b>. </li>
+  <li>In Editor use Next Annotation <img src="../images/icon_annotation_next.png" alt="Next Annotation">
+    or Previous Annotation <img src="../images/icon_annotation_prev.png" alt="Previous Annotation"> icons on the toolbar. </li>
+  <li>In Console view use Next Error <img src="../images/icon_next_error.png" alt="Next Error">
+    or Previous Error <img src="../images/icon_prev_error.png" alt="Previous Error"> buttons. </li>
 </ul>
 
-
 <p><img border="0" src="../images/ngconcepts.gif" ALT="Related concepts" width="143" height="21">
-<br>
-<a href="../concepts/cdt_c_build_over.htm">Build overview</a></p>
+<br><a href="../concepts/cdt_c_build_over.htm">Build overview</a>
+</p>
+
 <p><img border="0" src="../images/ngtasks.gif" ALT="Related tasks" width="143" height="21">
-<br>
-<a href="cdt_t_proj_build_set.htm">Defining Project Build settings</a><br>
-<a href="cdt_t_filtererror.htm">Filtering the Problems view</a><br>
-<a href="cdt_t_setreminder.htm">Setting reminders</a></p>
+<br><a href="cdt_o_builderrors.htm">Tracking down compilation errors</a>
+<br><a href="../tasks/cdt_t_proj_error_parser.htm">Tuning Error Parsers</a>
+</p>
+
 <p><img border="0" src="../images/ngref.gif" ALT="Related reference" width="143" height="21">
-<br>
-<a href="../reference/cdt_o_run_dbg_pages.htm">Run and Debug dialog box</a></p>
+<br><a href="../reference/cdt_u_console_view.htm">Console View</a>
+<br><a href="../reference/cdt_u_problems_view.htm">Problems View</a>
+</p>
+
 <img src="../images/ng00_04a.gif" ALT="IBM Copyright Statement" >
 </body>
 

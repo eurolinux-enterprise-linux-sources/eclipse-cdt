@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -406,7 +406,7 @@ public class Coff {
 		public short n_scnum; /* short, Section number.  */
 		public int n_type;   /* Unsigned short. Symbolic type.  */
 		public byte n_sclass; /* char, Storage class.  */
-		public byte n_numaux; /* char. Nuymber of auxiliary enties.  */
+		public byte n_numaux; /* char. Number of auxiliary enties.  */
 
 		public Symbol(RandomAccessFile file) throws IOException {
 			this(file, file.getFilePointer());
@@ -430,12 +430,14 @@ public class Coff {
 		}
 
 		public String getName() {
+			// For a long name, _n_name[0] == 0 and this would just return empty string.
 			for (int i = 0; i < _n_name.length; i++) {
 				if (_n_name[i] == 0) {
 					return new String(_n_name, 0, i);
 				}
 			}
-			return ""; //$NON-NLS-1$
+			// all eight bytes are filled
+			return new String(_n_name);
 		}
 
 		public String getName(byte[] table) {

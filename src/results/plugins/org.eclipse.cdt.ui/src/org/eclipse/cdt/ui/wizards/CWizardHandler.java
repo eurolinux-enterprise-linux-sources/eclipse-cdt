@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Intel Corporation and others.
+ * Copyright (c) 2007, 2009 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -253,6 +253,10 @@ public class CWizardHandler implements Cloneable {
 		} catch (CloneNotSupportedException e) { return null; }
 	}
 	
+	/**
+	 * @deprecated since CDT 6.1.
+	 */
+	@Deprecated
 	public static String removeSpaces(String s) {
 		char[] cs = s.toCharArray();
 		StringBuffer sb = new StringBuffer();

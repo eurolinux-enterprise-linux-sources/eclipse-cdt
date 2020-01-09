@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2009 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -26,10 +26,12 @@ public class BuildFolderData extends CFolderData {
 		return fFolderInfo;
 	}
 
+	@Override
 	public CLanguageData[] getLanguageDatas() {
 		return fFolderInfo.getCLanguageDatas();
 	}
 
+	@Override
 	public IPath getPath() {
 		return fFolderInfo.getPath();
 	}
@@ -42,14 +44,17 @@ public class BuildFolderData extends CFolderData {
 //		fFolderInfo.setExclude(excluded);
 //	}
 
+	@Override
 	public void setPath(IPath path) {
 		fFolderInfo.setPath(path);
 	}
 
+	@Override
 	public String getId() {
 		return fFolderInfo.getId();
 	}
 
+	@Override
 	public String getName() {
 		return fFolderInfo.getName();
 	}
@@ -58,22 +63,26 @@ public class BuildFolderData extends CFolderData {
 		// TODO Auto-generated method stub
 	}
 
+	@Override
 	public boolean isValid() {
 		return fFolderInfo.isValid();
 	}
 
+	@Override
 	public CLanguageData createLanguageDataForContentTypes(String languageId,
 			String[] typesIds) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
+	@Override
 	public CLanguageData createLanguageDataForExtensions(String languageId,
 			String[] extensions) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
+	@Override
 	public boolean hasCustomSettings() {
 		return fFolderInfo.hasCustomSettings();
 	}

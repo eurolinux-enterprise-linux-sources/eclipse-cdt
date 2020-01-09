@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     Intel Corporation - initial API and implementation
+ *     James Blackburn (Broadcom Corp.)
  *******************************************************************************/
 package org.eclipse.cdt.ui.newui;
 
@@ -17,6 +18,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.content.IContentType;
 import org.eclipse.core.runtime.content.IContentTypeManager;
@@ -47,6 +49,7 @@ import org.eclipse.cdt.core.settings.model.ICExternalSetting;
 import org.eclipse.cdt.core.settings.model.ICLanguageSettingEntry;
 import org.eclipse.cdt.core.settings.model.ICResourceDescription;
 import org.eclipse.cdt.core.settings.model.ICSettingEntry;
+import org.eclipse.cdt.ui.CUIPlugin;
 
 import org.eclipse.cdt.internal.ui.CPluginImages;
 
@@ -168,8 +171,8 @@ public abstract class AbstractExportTab extends AbstractCPropertyTab {
 	public abstract boolean hasValues();
 	
 	/**
-	 * Called when item added/edited/removed.
-	 * Refreshes whole table contwnts
+	 * Called when item added/edited/removed or Tab is changed.
+	 * Refreshes whole table contents
 	 */
 	protected void update() {
 		int x = table.getSelectionIndex();
@@ -262,7 +265,7 @@ public abstract class AbstractExportTab extends AbstractCPropertyTab {
 					getKind(), names_ls, names_ts, null, isWsp); 
 			if (dlg.open()) {
 				ent[0] = doEdit(dlg.text1.trim(), dlg.text2.trim(), dlg.check2);
-				ICSettingEntry[] ls = old.setting.getEntries(getKind());
+				ICSettingEntry[] ls = old.setting.getEntries();
 				ICSettingEntry[] ls2 = new ICLanguageSettingEntry[ls.length];
 				for (int x=0; x<ls.length; x++) 
 					if (ls[x].equals(old.entry)) ls2[x] = ent[0];
@@ -270,7 +273,6 @@ public abstract class AbstractExportTab extends AbstractCPropertyTab {
 				cfg.removeExternalSetting(old.setting);
 				cfg.createExternalSetting(name2id(dlg.sel_langs, names_l), name2id(dlg.sel_types, names_t), null, ls2);
 				update();
-				
 			}
 			break;
 		case 2: // delete
@@ -298,11 +300,16 @@ outer:
 					}
 					lst.add(se);
 				}
+				// Ensure we don't lose external settings we know nothing about
+				for (ICSettingEntry e : old.setting.getEntries())
+					if (e.getKind() != getKind())
+						lst.add(e);
+				// Remove and re-add the particular setting entry
 				cfg.removeExternalSetting(old.setting);
 				cfg.createExternalSetting(old.setting.getCompatibleLanguageIds(), 
 						old.setting.getCompatibleContentTypeIds(),
 						old.setting.getCompatibleExtensions(), 
-						lst.toArray(new ICLanguageSettingEntry[lst.size()])); 
+						lst.toArray(new ICSettingEntry[lst.size()])); 
 			}
 			update();
 			break;
@@ -348,9 +355,15 @@ outer:
 	@Override
 	protected void performDefaults() {
 		cfg.removeExternalSettings();
+		// Bug 295602 Add any resources which are exported by 'default' in this configuration
+		// There's no hook on the Build system to do this, but 
+		//            setSourceEntries -> ... -> Configuration#setSourceEntries(...) -> Configuration#exportArtifactInfo()
+		try {
+			cfg.setSourceEntries(cfg.getSourceEntries());
+		} catch (CoreException e) {CUIPlugin.log(e);}
 		updateData(this.getResDesc());
 	}
-	
+
 	// Extended label provider
 	private class RichLabelProvider extends LabelProvider implements IFontProvider, ITableLabelProvider /*, IColorProvider*/{
 		public RichLabelProvider(){}
@@ -427,6 +440,10 @@ outer:
 		}
 		protected String getTypeStr() {
 			return getLabel(setting.getCompatibleContentTypeIds(), names_t);
+		}
+		@Override
+		public String toString() {
+			return getName();
 		}
 	}
 	

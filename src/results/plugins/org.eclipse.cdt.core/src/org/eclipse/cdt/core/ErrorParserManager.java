@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2005, 2009 IBM Corporation and others.
+ *  Copyright (c) 2005, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -10,22 +10,26 @@
  *     Sergey Prigogin (Google)
  *     James Blackburn (Broadcom) - Bug 247838
  *     Andrew Gvozdev (Quoin Inc)
+ *     Dmitry Kozlov (CodeSourcery) - Build error highlighting and navigation  
  *******************************************************************************/
 package org.eclipse.cdt.core;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 
+import org.eclipse.cdt.core.errorparsers.ErrorParserNamedWrapper;
 import org.eclipse.cdt.core.resources.ACBuilder;
+import org.eclipse.cdt.internal.core.IErrorMarkeredOutputStream;
 import org.eclipse.cdt.internal.core.resources.ResourceLookup;
+import org.eclipse.cdt.internal.errorparsers.ErrorParserExtensionManager;
 import org.eclipse.cdt.utils.CygPath;
+import org.eclipse.cdt.utils.EFSExtensionManager;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
@@ -36,6 +40,7 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.URIUtil;
+import org.osgi.service.prefs.BackingStoreException;
 
 /**
  * The purpose of ErrorParserManager is to delegate the work of error parsing 
@@ -46,10 +51,22 @@ import org.eclipse.core.runtime.URIUtil;
  * @noextend This class is not intended to be subclassed by clients.
  */
 public class ErrorParserManager extends OutputStream {
+	/**
+	 * The list of error parsers stored in .project for 3.X projects
+	 * as key/value pair with key="org.eclipse.cdt.core.errorOutputParser"
+	 * @deprecated since CDT 4.0.
+	 */
+	@Deprecated
+	public final static String PREF_ERROR_PARSER = CCorePlugin.PLUGIN_ID + ".errorOutputParser"; //$NON-NLS-1$
+	
+	/**
+	 * Delimiter for error parsers presented in one string.
+	 * @since 5.2
+	 */
+	public final static char ERROR_PARSER_DELIMITER = ';';
 
 	private int nOpens;
-
-	public final static String PREF_ERROR_PARSER = CCorePlugin.PLUGIN_ID + ".errorOutputParser"; //$NON-NLS-1$
+	private int lineCounter=0;
 
 	private final IProject fProject;
 	private final IMarkerGenerator fMarkerGenerator;
@@ -143,12 +160,14 @@ public class ErrorParserManager extends OutputStream {
 
 	private void enableErrorParsers(String[] parsersIDs) {
 		if (parsersIDs == null) {
-			parsersIDs = CCorePlugin.getDefault().getAllErrorParsersIDs();
+			parsersIDs = ErrorParserExtensionManager.getDefaultErrorParserIds();
 		}
 		fErrorParsers = new LinkedHashMap<String, IErrorParser[]>(parsersIDs.length);
 		for (String parsersID : parsersIDs) {
-			IErrorParser[] parsers = CCorePlugin.getDefault().getErrorParser(parsersID);
-			fErrorParsers.put(parsersID, parsers);
+			IErrorParser errorParser = ErrorParserExtensionManager.getErrorParserCopy(parsersID);
+			if (errorParser!=null) {
+				fErrorParsers.put(parsersID, new IErrorParser[] {errorParser} );
+			}
 		}
 	}
 
@@ -169,7 +188,7 @@ public class ErrorParserManager extends OutputStream {
 	}
 
 	/**
-	 * Return the current URI location where the build is being performed
+	 * @return the current URI location where the build is being performed
 	 * @since 5.1
 	 */
 	public URI getWorkingDirectoryURI() {
@@ -284,17 +303,21 @@ public class ErrorParserManager extends OutputStream {
 	}
 
 	/**
-	 * Parses the input and try to generate error or warning markers
+	 * Parses the input and tries to generate error or warning markers
 	 */
 	private void processLine(String line) {
-		if (fErrorParsers.size() == 0)
-			return;
-
-
 		String lineTrimmed = line.trim();
+		lineCounter++;
 
+		ProblemMarkerInfo marker=null;
+		
+outer:
 		for (IErrorParser[] parsers : fErrorParsers.values()) {
-			for (IErrorParser curr : parsers) {
+			for (IErrorParser parser : parsers) {
+				IErrorParser curr = parser;
+				if (parser instanceof ErrorParserNamedWrapper) {
+					curr = ((ErrorParserNamedWrapper)parser).getErrorParser();
+				}
 				int types = IErrorParser2.NONE;
 				if (curr instanceof IErrorParser2) {
 					types = ((IErrorParser2) curr).getProcessLineBehaviour();
@@ -310,19 +333,61 @@ public class ErrorParserManager extends OutputStream {
 					// untrimmed lines
 					lineToParse = line;
 				}
+
+				boolean consume = false;
 				// Protect against rough parsers who may accidentally
 				// throw an exception on a line they can't handle.
 				// It should not stop parsing of the rest of output.
 				try {
-					if (curr.processLine(lineToParse, this)) {
-						return;
-					}
+					consume = curr.processLine(lineToParse, this);
 				} catch (Exception e){
-					String message = "Error parsing line [" + lineToParse + "]";  //$NON-NLS-1$//$NON-NLS-2$
+					String id = "";  //$NON-NLS-1$
+					if (parser instanceof IErrorParserNamed)
+						id = ((IErrorParserNamed)parser).getId();
+					@SuppressWarnings("nls")
+					String message = "Errorparser " + id + " failed parsing line [" + lineToParse + "]";
 					CCorePlugin.log(message, e);
+				} finally {
+					if (fErrors.size() > 0) {
+						if (marker==null)
+							marker = fErrors.get(0);
+						fErrors.clear();
+					}
 				}
+
+				if (consume)
+					break outer;
 			}
 		}
+		outputLine(line, marker);
+	}
+	
+	/** 
+	 * Conditionally output line to outputStream. If stream 
+	 * supports error markers, use it, otherwise use conventional stream
+	 */
+	private void outputLine(String line, ProblemMarkerInfo marker) {
+		String l = line + "\n";  //$NON-NLS-1$
+		if ( outputStream == null ) return; 
+		try {
+			if ( marker != null && outputStream instanceof IErrorMarkeredOutputStream ) {
+				IErrorMarkeredOutputStream s = (IErrorMarkeredOutputStream) outputStream;
+				s.write(l, marker);
+			} else {		
+				byte[] b = l.getBytes();
+				outputStream.write(b, 0, b.length);			
+			}
+		} catch (IOException e) {
+			CCorePlugin.log(e);
+		}
+	}
+
+	/**
+	 * @return counter counting processed lines of output
+	 * @since 5.2
+	 */
+	public int getLineCounter() {
+		return lineCounter;
 	}
 
 	/**
@@ -388,8 +453,10 @@ public class ErrorParserManager extends OutputStream {
 	 */
 	protected IFile findFileInWorkspace(IPath path) {
 		URI uri;
-		if (!path.isAbsolute())
-			uri = URIUtil.append(getWorkingDirectoryURI(), path.toString());
+		if (!path.isAbsolute()) {
+			URI workingDirectoryURI = getWorkingDirectoryURI();
+			uri = EFSExtensionManager.getDefault().append(workingDirectoryURI, path.toString());
+		}
 		else {
 			uri = toURI(path);
 			if (uri == null) // Shouldn't happen; error logged
@@ -470,7 +537,6 @@ public class ErrorParserManager extends OutputStream {
 
 	/**
 	 * Add marker to the list of error markers.
-	 * Markers are actually added in the end of processing in {@link #reportProblems()}.
 	 * 
 	 * @param file - resource to add the new marker.
 	 * @param lineNumber - line number of the error.
@@ -484,7 +550,6 @@ public class ErrorParserManager extends OutputStream {
 
 	/**
 	 * Add marker to the list of error markers.
-	 * Markers are actually added in the end of processing in {@link #reportProblems()}.
 	 * 
 	 * @param file - resource to add the new marker.
 	 * @param lineNumber - line number of the error.
@@ -500,6 +565,7 @@ public class ErrorParserManager extends OutputStream {
 	public void generateExternalMarker(IResource file, int lineNumber, String desc, int severity, String varName, IPath externalPath) {
 		ProblemMarkerInfo problemMarkerInfo = new ProblemMarkerInfo(file, lineNumber, desc, severity, varName, externalPath);
 		fErrors.add(problemMarkerInfo);
+		fMarkerGenerator.addMarker(problemMarkerInfo);
 		if (severity == IMarkerGenerator.SEVERITY_ERROR_RESOURCE)
 			hasErrors = true;
 	}
@@ -514,6 +580,8 @@ public class ErrorParserManager extends OutputStream {
 
 	/**
 	 * Method setOutputStream.
+	 * Note: you have to close this stream explicitly
+	 * don't rely on ErrorParserManager.close(). 
 	 * @param os - output stream
 	 */
 	public void setOutputStream(OutputStream os) {
@@ -521,8 +589,9 @@ public class ErrorParserManager extends OutputStream {
 	}
 
 	/**
-	 * Method getOutputStream. It has a reference count
-	 * the stream must be close the same number of time this method was call.
+	 * Method getOutputStream. 
+	 * Note: you have to close this stream explicitly
+	 * don't rely on ErrorParserManager.close(). 
 	 * @return OutputStream
 	 */
 	public OutputStream getOutputStream() {
@@ -532,14 +601,14 @@ public class ErrorParserManager extends OutputStream {
 
 	/**
 	 * @see java.io.OutputStream#close()
+	 * Note: don't rely on this method to close underlying OutputStream, 
+	 * close it explicitly 
 	 */
 	@Override
-	public void close() throws IOException {
+	public synchronized void close() throws IOException {
 		if (nOpens > 0 && --nOpens == 0) {
 			checkLine(true);
 			fDirectoryStack.removeAllElements();
-			if (outputStream != null)
-				outputStream.close();
 		}
 	}
 
@@ -559,8 +628,6 @@ public class ErrorParserManager extends OutputStream {
 	public synchronized void write(int b) throws IOException {
 		currentLine.append((char) b);
 		checkLine(false);
-		if (outputStream != null)
-			outputStream.write(b);
 	}
 
 	@Override
@@ -574,10 +641,12 @@ public class ErrorParserManager extends OutputStream {
 		}
 		currentLine.append(new String(b, 0, len));
 		checkLine(false);
-		if (outputStream != null)
-			outputStream.write(b, off, len);
 	}
 
+	// This method examines contents of currentLine buffer
+	// if it contains whole line this line is checked by error
+	// parsers (processLine method). 
+	// If flush is true rest of line is checked by error parsers.
 	private void checkLine(boolean flush) {
 		String buffer = currentLine.toString();
 		int i = 0;
@@ -602,7 +671,8 @@ public class ErrorParserManager extends OutputStream {
 	}
 
 	/**
-	 * Create actual markers from the list of collected problems.
+	 * @deprecated as of 5.2. This method is no longer reporting problems.
+	 *  The problem markers are generated after processing each line.
 	 * 
 	 * @return {@code true} if detected a problem indicating that build failed.
 	 *         The semantics of the return code is inconsistent. As far as build is concerned
@@ -610,18 +680,9 @@ public class ErrorParserManager extends OutputStream {
 	 *         {@link IMarkerGenerator#SEVERITY_ERROR_RESOURCE} and
 	 *         {@link IMarkerGenerator#SEVERITY_ERROR_BUILD}
 	 */
+	@Deprecated
 	public boolean reportProblems() {
-		boolean reset = false;
-		if (nOpens == 0) {
-			for (ProblemMarkerInfo problemMarkerInfo : fErrors) {
-				if (problemMarkerInfo.severity == IMarkerGenerator.SEVERITY_ERROR_BUILD) {
-					reset = true;
-				}
-				fMarkerGenerator.addMarker(problemMarkerInfo);
-			}
-			fErrors.clear();
-		}
-		return reset;
+		return false;
 	}
 
 	/**
@@ -637,22 +698,15 @@ public class ErrorParserManager extends OutputStream {
 	 * @since 5.1
 	 */
 	private URI toURI(IPath path) {
-		try {
+//		try {
 			URI baseURI = getWorkingDirectoryURI();
 			String uriString = path.toString();
 
 			// On Windows "C:/folder/" -> "/C:/folder/"
 			if (path.isAbsolute() && uriString.charAt(0) != IPath.SEPARATOR)
 			    uriString = IPath.SEPARATOR + uriString;
-
-			return new URI(baseURI.getScheme(), baseURI.getUserInfo(),
-					       baseURI.getHost(), baseURI.getPort(),
-					       uriString, null, null);
-		} catch (URISyntaxException e) {
-			String message = "Problem converting path to URI [" + path.toString() + "]";  //$NON-NLS-1$//$NON-NLS-2$
-			CCorePlugin.log(message, e);
-		}
-		return null;
+			
+			return EFSExtensionManager.getDefault().createNewURIFromPath(baseURI, uriString);
 	}
 
 	/**
@@ -692,5 +746,79 @@ public class ErrorParserManager extends OutputStream {
 	@Deprecated
 	public boolean hasErrors() {
 		return hasErrors;
+	}
+
+	/**
+	 * Set and store in workspace area user defined error parsers.
+	 *
+	 * @param errorParsers - array of user defined error parsers
+	 * @throws CoreException in case of problems
+	 * @since 5.2
+	 */
+	public static void setUserDefinedErrorParsers(IErrorParserNamed[] errorParsers) throws CoreException {
+		ErrorParserExtensionManager.setUserDefinedErrorParsers(errorParsers);
+	}
+
+	/**
+	 * @return available error parsers IDs which include contributed through extension + user defined ones
+	 * from workspace
+	 * @since 5.2
+	 */
+	public static String[] getErrorParserAvailableIds() {
+		return ErrorParserExtensionManager.getErrorParserAvailableIds();
+	}
+
+	/**
+	 * @return IDs of error parsers contributed through error parser extension point.
+	 * @since 5.2
+	 */
+	public static String[] getErrorParserExtensionIds() {
+		return ErrorParserExtensionManager.getErrorParserExtensionIds();
+	}
+
+	/**
+	 * Set and store default error parsers IDs to be used if error parser list is empty.
+	 *
+	 * @param ids - default error parsers IDs
+	 * @throws BackingStoreException in case of problem with storing
+	 * @since 5.2
+	 */
+	public static void setDefaultErrorParserIds(String[] ids) throws BackingStoreException {
+		ErrorParserExtensionManager.setDefaultErrorParserIds(ids);
+	}
+
+	/**
+	 * @return default error parsers IDs to be used if error parser list is empty.
+	 * @since 5.2
+	 */
+	public static String[] getDefaultErrorParserIds() {
+		return ErrorParserExtensionManager.getDefaultErrorParserIds();
+	}
+
+	/**
+	 * @param id - ID of error parser
+	 * @return cloned copy of error parser. Note that {@link ErrorParserNamedWrapper} returns
+	 * shallow copy with the same instance of underlying error parser.
+	 * @since 5.2
+	 */
+	public static IErrorParserNamed getErrorParserCopy(String id) {
+		return ErrorParserExtensionManager.getErrorParserCopy(id);
+	}
+
+	/**
+	 * @param ids - array of error parser IDs
+	 * @return error parser IDs delimited with error parser delimiter ";"
+	 * @since 5.2
+	 */
+	public static String toDelimitedString(String[] ids) {
+		String result=""; //$NON-NLS-1$
+		for (String id : ids) {
+			if (result.length()==0) {
+				result = id;
+			} else {
+				result += ERROR_PARSER_DELIMITER + id;
+			}
+		}
+		return result;
 	}
 }

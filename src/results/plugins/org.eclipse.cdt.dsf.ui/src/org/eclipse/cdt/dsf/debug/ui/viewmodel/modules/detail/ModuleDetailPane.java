@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2006, 2009 IBM Corporation and others.
+ *  Copyright (c) 2006, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -175,7 +175,7 @@ public class ModuleDetailPane extends ModulesAbstractDetailPane implements IAdap
         return false;
 	}
 	
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	public Object getAdapter(Class adapter) {
         if (ITextViewer.class.equals(adapter)) {
             return fSourceViewer;
@@ -483,7 +483,8 @@ public class ModuleDetailPane extends ModulesAbstractDetailPane implements IAdap
              */
             final DsfSession session = DsfSession.getSession(fDmc.getSessionId());
             if (session == null) {
-                cancel(false);
+                rm.setStatus(new Status(IStatus.ERROR, DsfUIPlugin.PLUGIN_ID, IDsfStatusConstants.INVALID_STATE, "Debug session already shut down.", null)); //$NON-NLS-1$
+                rm.done();
                 return;
             }
 
@@ -506,7 +507,8 @@ public class ModuleDetailPane extends ModulesAbstractDetailPane implements IAdap
                      * We're in another dispatch, so we must guard against executor shutdown again.
                      */
                     if (!DsfSession.isSessionActive(session.getId())) {
-                    	GetModuleDetailsQuery.this.cancel(false);
+                        rm.setStatus(new Status(IStatus.ERROR, DsfUIPlugin.PLUGIN_ID, IDsfStatusConstants.INVALID_STATE, "Debug session already shut down.", null)); //$NON-NLS-1$
+                        rm.done();
                         return;
                     }
                     super.handleCompleted();

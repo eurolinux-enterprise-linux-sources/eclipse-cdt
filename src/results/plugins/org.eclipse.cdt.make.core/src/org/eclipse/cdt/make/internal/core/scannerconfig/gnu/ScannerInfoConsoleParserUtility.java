@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -15,7 +15,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -67,7 +66,6 @@ public class ScannerInfoConsoleParserUtility extends AbstractGCCBOPConsoleParser
 	
 	/**
 	 * Called by the console line parsers to find a file with a given name.
-	 * @param fileName
 	 * @return IFile or null
 	 */
 	public IFile findFile(String fileName) {
@@ -87,12 +85,19 @@ public class ScannerInfoConsoleParserUtility extends AbstractGCCBOPConsoleParser
 				}
 			}
 		}
+		
+		if (file!=null) {
+			String filePath = new Path(fileName).toString();
+			String foundLocation = file.getLocation().toString();
+			if (!foundLocation.endsWith(filePath)) {
+				file = null;
+			}
+		}
 		return file;
 	}
 	
 	/**
-	 * @param filePath
-	 * @return
+	 * @return file in workspace as {@link IFile} or {@code null} if not found
 	 */
 	protected IFile findFilePath(String filePath) {
 		IPath path = null;
@@ -131,8 +136,7 @@ public class ScannerInfoConsoleParserUtility extends AbstractGCCBOPConsoleParser
 	}
 
 	/**
-	 * @param fileName
-	 * @return
+	 * @return file in workspace as {@link IFile} or {@code null}
 	 */
 	protected IFile findFileName(String fileName) {
 		IPath path = new Path(fileName);
@@ -177,10 +181,24 @@ public class ScannerInfoConsoleParserUtility extends AbstractGCCBOPConsoleParser
 
 	public List<String> translateRelativePaths(IFile file, String fileName, List<String> includes) {
 		List<String> translatedIncludes = new ArrayList<String>(includes.size());
-		for (Iterator<String> i = includes.iterator(); i.hasNext(); ) {
-			String include = i.next();
+		for (String include : includes) {
 			IPath includePath = new Path(include);
-			if (!includePath.isAbsolute() && !includePath.isUNC()) {	// do not translate UNC paths
+			if (includePath.isUNC()) {
+				// do not translate UNC paths
+			} else if (includePath.isAbsolute()) {
+				if (includePath.getDevice()==null) {
+					String device = getWorkingDirectory().getDevice();
+					IPath candidatePath = includePath.setDevice(device);
+					File dir = candidatePath.toFile();
+					if (dir.exists()) {
+						include = candidatePath.toString();
+					} else {
+						final String error = MakeMessages.getString("ConsoleParser.Nonexistent_Include_Path_Error_Message"); //$NON-NLS-1$
+						TraceUtil.outputError(error, include);
+//						generateMarker(file, -1, error+include, IMarkerGenerator.SEVERITY_WARNING, fileName);				
+					}
+				}
+			} else {
 				// First try the current working directory
 				IPath cwd = getWorkingDirectory();
 				if (!cwd.isAbsolute()) {
@@ -188,7 +206,12 @@ public class ScannerInfoConsoleParserUtility extends AbstractGCCBOPConsoleParser
 				}
 				
 				IPath filePath = new Path(fileName);
-				if (!filePath.isAbsolute()) {
+				if (filePath.isAbsolute()) {
+					if (filePath.getDevice()==null) {
+						String device = getWorkingDirectory().getDevice();
+						filePath = filePath.setDevice(device);
+					}
+				} else {
 					// check if the cwd is the right one
 					// appending fileName to cwd should yield file path
 					filePath = cwd.append(fileName);

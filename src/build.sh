@@ -16,25 +16,21 @@
 export DISPLAY=:1
 
 # set up to use the Java 5 JRE
-export PATH=/opt/public/common/ibm-java2-ppc-50/bin:$PATH
+export PATH=/opt/public/common/ibm-java-ppc-605/bin:/usr/local/bin:$PATH
+#export PATH=/opt/public/common/ibm-java2-ppc-50/bin/java:/usr/local/bin:$PATH
 
 # make sure we're in the releng project dir 
 cd `dirname $0`
 
-# make sure the umask doesn't allow for group execute permissions\
-# TODO not sure we really need this any more
-umask 0022
-
 # Checkout basebuilder to run the build
 mkdir -p tools
 cd tools
-cvs -d:pserver:anonymous@dev.eclipse.org:/cvsroot/eclipse \
-	checkout -r R35_RC4 org.eclipse.releng.basebuilder
+cvs -d /cvsroot/eclipse	co -r R36_RC4 org.eclipse.releng.basebuilder
+cp /home/data/httpd/download.eclipse.org/technology/subversive/0.7/pde-update-site/plugins/org.eclipse.team.svn.pde.build_0.7.8.I20090525-1500.jar \
+	org.eclipse.releng.basebuilder/plugins
 cd ..
 
 # Let's go!
 java $CDT_BUILD_VMARGS -jar tools/org.eclipse.releng.basebuilder/plugins/org.eclipse.equinox.launcher.jar \
+	-Djvm1.5=/opt/public/common/ibm-java2-ppc-50/bin/java \
 	-ws gtk -arch ppc -os linux -application org.eclipse.ant.core.antRunner $*
-
-# Copy the build.log to where the latest build is - done in cdtbuild script
-#cp /opt/public/download-staging.priv/tools/cdt/releng/build.log /home/www/tools/cdt/builds/6.0.2/latest

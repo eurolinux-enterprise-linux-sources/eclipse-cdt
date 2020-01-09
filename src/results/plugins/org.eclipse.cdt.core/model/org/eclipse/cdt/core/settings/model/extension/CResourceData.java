@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -26,4 +26,13 @@ public abstract class CResourceData extends CDataObject {
 //	public abstract void setExcluded(boolean excluded);
 	
 	public abstract boolean hasCustomSettings();
+	
+	/**
+	 * Intended for debugging purpose only.
+	 */
+	@Override
+	@SuppressWarnings("nls")
+	public String toString() {
+		return "path="+getPath() + ", " + super.toString();
+	}
 }

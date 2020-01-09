@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2006 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,14 +14,18 @@ import org.eclipse.cdt.debug.core.cdi.ICDISessionObject;
 import org.eclipse.cdt.debug.core.cdi.event.ICDISuspendedEvent;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIObject;
 import org.eclipse.cdt.debug.mi.core.cdi.BreakpointHit;
+import org.eclipse.cdt.debug.mi.core.cdi.BreakpointManager;
 import org.eclipse.cdt.debug.mi.core.cdi.EndSteppingRange;
 import org.eclipse.cdt.debug.mi.core.cdi.ErrorInfo;
+import org.eclipse.cdt.debug.mi.core.cdi.EventBreakpointHit;
 import org.eclipse.cdt.debug.mi.core.cdi.FunctionFinished;
 import org.eclipse.cdt.debug.mi.core.cdi.Session;
 import org.eclipse.cdt.debug.mi.core.cdi.SharedLibraryEvent;
 import org.eclipse.cdt.debug.mi.core.cdi.SignalReceived;
 import org.eclipse.cdt.debug.mi.core.cdi.WatchpointScope;
 import org.eclipse.cdt.debug.mi.core.cdi.WatchpointTrigger;
+import org.eclipse.cdt.debug.mi.core.cdi.model.Breakpoint;
+import org.eclipse.cdt.debug.mi.core.cdi.model.EventBreakpoint;
 import org.eclipse.cdt.debug.mi.core.cdi.model.Target;
 import org.eclipse.cdt.debug.mi.core.event.MIBreakpointHitEvent;
 import org.eclipse.cdt.debug.mi.core.event.MIErrorEvent;
@@ -33,6 +37,7 @@ import org.eclipse.cdt.debug.mi.core.event.MISignalEvent;
 import org.eclipse.cdt.debug.mi.core.event.MISteppingRangeEvent;
 import org.eclipse.cdt.debug.mi.core.event.MIWatchpointScopeEvent;
 import org.eclipse.cdt.debug.mi.core.event.MIWatchpointTriggerEvent;
+import org.eclipse.cdt.gdb.internal.eventbkpts.GdbCatchpoints;
 
 /**
  *
@@ -49,7 +54,17 @@ public class SuspendedEvent implements ICDISuspendedEvent {
 
 	public ICDISessionObject getReason() {
 		if (event instanceof MIBreakpointHitEvent) {
-			return new BreakpointHit(session, (MIBreakpointHitEvent)event);
+			// A Catchpoint hit is reported by gdb as a breakpoint hit. We can
+			// tell it's a catchpoint by looking at why kind of CDT-created
+			// platform breakpoint is associated with it
+			BreakpointManager bkptMgr = session.getBreakpointManager();
+			Breakpoint bkpt = bkptMgr.getBreakpoint(event.getMISession(), ((MIBreakpointHitEvent)event).getNumber());
+			if (bkpt instanceof EventBreakpoint) {
+				return new EventBreakpointHit(session, GdbCatchpoints.eventToGdbCatchpointKeyword(((EventBreakpoint)bkpt).getEventType()));
+			}
+			else {
+				return new BreakpointHit(session, (MIBreakpointHitEvent)event);
+			}
 		} else if (event instanceof MIWatchpointTriggerEvent) {
 			return new WatchpointTrigger(session, (MIWatchpointTriggerEvent)event);
 		} else if (event instanceof MIWatchpointScopeEvent) {

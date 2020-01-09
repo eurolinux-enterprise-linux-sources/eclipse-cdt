@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2008 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,6 +20,11 @@ import org.eclipse.cdt.core.errorparsers.AbstractErrorParser;
 import org.eclipse.cdt.core.errorparsers.ErrorPattern;
 import org.eclipse.core.runtime.Path;
 
+/**
+ * @deprecated replaced with {@link CWDLocator} and {@code GmakeErrorParser}
+ *
+ */
+@Deprecated
 public class MakeErrorParser extends AbstractErrorParser {
 	private static final ErrorPattern[] patterns = {
 		new ErrorPattern("make\\[(.*)\\]: Entering directory `(.*)'", 0, 0) {  //$NON-NLS-1$

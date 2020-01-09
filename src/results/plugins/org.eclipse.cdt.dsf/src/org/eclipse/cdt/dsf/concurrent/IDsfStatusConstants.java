@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Wind River Systems and others.
+ * Copyright (c) 2008, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,7 +14,11 @@ package org.eclipse.cdt.dsf.concurrent;
 /**
  * Interface that hold the codes used when reporting status using the DSF 
  * Request Monitor. 
- * 
+ * <p>
+ * The error codes are ordered by severity so that clients can filter error
+ * reporting using these codes.  E.g. <code>getStatus().getCode() > INVALID_HANDLE</code> 
+ * can be used to filter out errors resulting from expected race conditions. 
+ * </p>
  * @since 1.0
  */
 public interface IDsfStatusConstants {
@@ -29,6 +33,10 @@ public interface IDsfStatusConstants {
      * Error code indicating that client supplied an invalid handle to the service.
      * A handle could become invalid after an object it represents is removed from 
      * the system.
+     * <p>
+     * Note this code should not be used when a handle is of a wrong type.  
+     * That would be an incorrect use of an interface, i.e. an {@link #INTERNAL_ERROR}. 
+     * </p>
      */
     final static int INVALID_HANDLE = 10002;
     

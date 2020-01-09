@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -34,19 +34,23 @@ import org.w3c.dom.NodeList;
 public class XmlStorage implements ICSettingsStorage {
 	public static final String MODULE_ELEMENT_NAME = "storageModule";	//$NON-NLS-1$
 	public static final String MODULE_ID_ATTRIBUTE = "moduleId";	//$NON-NLS-1$
+	// Lock to prevent concurrent access to XML DOM which isn't thread-safe for read (Bug 319245)
+	final Object fLock;
 	public Element fElement;
 	private Map<String, InternalXmlStorageElement> fStorageElementMap = new HashMap<String, InternalXmlStorageElement>();
-	private boolean fChildrenInited;
+	private volatile boolean fChildrenInited;
 	private boolean fIsReadOnly;
 	private boolean fIsDirty;
 
 	public XmlStorage(Element element, boolean isReadOnly){
 		fElement = element;
+		fLock = element.getOwnerDocument();
 		fIsReadOnly = isReadOnly;
 	}
 
 	public XmlStorage(InternalXmlStorageElement element) throws CoreException {
 		fElement = element.fElement;
+		fLock = fElement.getOwnerDocument();
 		fIsReadOnly = element.isReadOnly();
 		element.storageCreated(this);
 		sanityCheck(element);
@@ -61,12 +65,12 @@ public class XmlStorage implements ICSettingsStorage {
 	 */
 	public void sanityCheck(ICStorageElement element) throws CoreException {
 		if (element.getValue() != null && element.getValue().trim().length() > 0)
-			throw ExceptionFactory.createCoreException("XmlStorage '" + element.getName() + "' has unexpected child Value: " + element.getValue());
+			throw ExceptionFactory.createCoreException("XmlStorage '" + element.getName() + "' has unexpected child Value: " + element.getValue()); //$NON-NLS-1$ //$NON-NLS-2$
 		for (ICStorageElement child : element.getChildren()) {
 			if (!MODULE_ELEMENT_NAME.equals(child.getName()))
-				throw ExceptionFactory.createCoreException("XmlStorage '" + element.getName() + "' has unexpected child element: " + child.getName());
+				throw ExceptionFactory.createCoreException("XmlStorage '" + element.getName() + "' has unexpected child element: " + child.getName()); //$NON-NLS-1$ //$NON-NLS-2$
 			if (child.getAttribute(MODULE_ID_ATTRIBUTE) == null)
-				throw ExceptionFactory.createCoreException("XmlStorage '" + element.getName() + "' has storageModule child without moduleId");
+				throw ExceptionFactory.createCoreException("XmlStorage '" + element.getName() + "' has storageModule child without moduleId"); //$NON-NLS-1$ //$NON-NLS-2$
 		}
 	}
 
@@ -75,13 +79,15 @@ public class XmlStorage implements ICSettingsStorage {
 	}
 
 	/**
-	 * Initialise the set of storageModules of this XmlStorage
+	 * Initialize the set of storageModules of this XmlStorage
 	 */
 	private void initChildren(){
 		if(fChildrenInited)
 			return;
-		fChildrenInited = true;
 
+		synchronized (fLock) {
+		if (fChildrenInited)
+			return;
 		NodeList children = fElement.getChildNodes();
 		int size = children.getLength();
 		for(int i = 0; i < size; i++){
@@ -97,6 +103,8 @@ public class XmlStorage implements ICSettingsStorage {
 				continue;
 
 			createAddStorageElement(moduleId, element);
+		}
+		fChildrenInited = true;
 		}
 	}
 
@@ -127,6 +135,7 @@ public class XmlStorage implements ICSettingsStorage {
 		removeStorage(id);
 
 		// Create the storage element for import
+		synchronized (fLock) {
 		Document thisDoc = fElement.getOwnerDocument();
 		Element newEl = thisDoc.createElement(MODULE_ELEMENT_NAME);
 
@@ -135,6 +144,7 @@ public class XmlStorage implements ICSettingsStorage {
 		if (el instanceof XmlStorageElement) {
 			// If we're importing an XmlStorageElement use XML methods
 			XmlStorageElement xmlStEl = (XmlStorageElement)el;
+			synchronized (xmlStEl.fLock) {
 			Element xmlEl = xmlStEl.fElement;
 			Document otherDoc = xmlEl.getOwnerDocument();
 			if(!thisDoc.equals(otherDoc)){
@@ -150,6 +160,7 @@ public class XmlStorage implements ICSettingsStorage {
 			newEl.setAttribute(MODULE_ID_ATTRIBUTE, id);
 
 			return createAddStorageElement(id, newEl);
+			}
 		} else {
 			// Otherwise importing generic ICStorageElement
 			ICStorageElement storageEl = getStorage(id, true);
@@ -158,6 +169,7 @@ public class XmlStorage implements ICSettingsStorage {
 			for (ICStorageElement child: el.getChildren())
 				storageEl.importChild(child);
 			return storageEl;
+		}
 		}
 	}
 
@@ -170,10 +182,12 @@ public class XmlStorage implements ICSettingsStorage {
 //				throw ExceptionFactory.createIsReadOnlyException();
 
 			fIsDirty = true;
+			synchronized (fLock) {
 			Document doc = fElement.getOwnerDocument();
 			Element child = createStorageXmlElement(doc, id);
 			fElement.appendChild(child);
 			se = createAddStorageElement(id, child);
+			}
 		}
 		return se;
 	}
@@ -193,6 +207,8 @@ public class XmlStorage implements ICSettingsStorage {
 			if(fIsReadOnly)
 				throw ExceptionFactory.createIsReadOnlyException();
 
+			synchronized (fLock) {
+			synchronized (se.fLock){ 
 			fIsDirty = true;
 			Node nextSibling = se.fElement.getNextSibling();
 			fElement.removeChild(se.fElement);
@@ -203,6 +219,7 @@ public class XmlStorage implements ICSettingsStorage {
 					fElement.removeChild(nextSibling);
 				}
 			}
+			}}
 		}
 	}
 

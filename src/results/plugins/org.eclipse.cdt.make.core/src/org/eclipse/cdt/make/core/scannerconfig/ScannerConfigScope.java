@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2007 QNX Software Systems and others.
+ * Copyright (c) 2005, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,12 +14,16 @@ package org.eclipse.cdt.make.core.scannerconfig;
  * Profile scope enum
  * 
  * @author vhirsl
+ * 
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
  */
 public class ScannerConfigScope {
     public static final ScannerConfigScope PROJECT_SCOPE = new ScannerConfigScope("project"); //$NON-NLS-1$
     public static final ScannerConfigScope FILE_SCOPE = new ScannerConfigScope("file"); //$NON-NLS-1$
     
-    public String toString() {
+    @Override
+	public String toString() {
         return scope;
     }
     
@@ -30,7 +34,8 @@ public class ScannerConfigScope {
     /* (non-Javadoc)
      * @see java.lang.Object#equals(java.lang.Object)
      */
-    public boolean equals(Object arg0) {
+    @Override
+	public boolean equals(Object arg0) {
         if (arg0 == null) return false;
         if (arg0 == this) return true;
         if (arg0 instanceof ScannerConfigScope) return scope.equals(((ScannerConfigScope)arg0).scope);
@@ -39,7 +44,8 @@ public class ScannerConfigScope {
     /* (non-Javadoc)
      * @see java.lang.Object#hashCode()
      */
-    public int hashCode() {
+    @Override
+	public int hashCode() {
         return scope.hashCode();
     }
 }

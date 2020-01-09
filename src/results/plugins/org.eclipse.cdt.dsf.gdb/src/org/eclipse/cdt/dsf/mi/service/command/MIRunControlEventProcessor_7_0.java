@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,17 +14,18 @@ package org.eclipse.cdt.dsf.mi.service.command;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.eclipse.cdt.dsf.concurrent.ConfinedToDsfExecutor;
 import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.debug.service.IProcesses.IProcessDMContext;
 import org.eclipse.cdt.dsf.debug.service.IProcesses.IThreadDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IContainerDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl.IExecutionDMContext;
 import org.eclipse.cdt.dsf.debug.service.command.ICommand;
+import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService.ICommandControlDMContext;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandListener;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandResult;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandToken;
 import org.eclipse.cdt.dsf.debug.service.command.IEventListener;
-import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService.ICommandControlDMContext;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
 import org.eclipse.cdt.dsf.mi.service.IMIProcesses;
 import org.eclipse.cdt.dsf.mi.service.MIProcesses;
@@ -205,10 +206,14 @@ public class MIRunControlEventProcessor_7_0
     		    		} else if ("thread-exited".equals(miEvent)) { //$NON-NLS-1$
     		    			event = new MIThreadExitEvent(processContainerDmc, exec.getToken(), threadId);
     		    		}
+    		    		else {
+    		    			assert false;	// earlier check should have guaranteed this isn't possible
+    		    		}
 
     		    		fCommandControl.getSession().dispatchEvent(event, fCommandControl.getProperties());
     		    	}
-    			} else if ("thread-group-created".equals(miEvent) || "thread-group-exited".equals(miEvent)) { //$NON-NLS-1$ //$NON-NLS-2$
+    			} else if ("thread-group-created".equals(miEvent) || "thread-group-started".equals(miEvent) || //$NON-NLS-1$ //$NON-NLS-2$
+    					   "thread-group-exited".equals(miEvent)) { //$NON-NLS-1$
     				
     				String groupId = null;
 
@@ -228,7 +233,7 @@ public class MIRunControlEventProcessor_7_0
     					IProcessDMContext procDmc = procService.createProcessContext(fControlDmc, groupId);
 
     					MIEvent<?> event = null;
-    					if ("thread-group-created".equals(miEvent)) { //$NON-NLS-1$
+    					if ("thread-group-created".equals(miEvent) || "thread-group-started".equals(miEvent)) { //$NON-NLS-1$ //$NON-NLS-2$
     						event = new MIThreadGroupCreatedEvent(procDmc, exec.getToken(), groupId);
     					} else if ("thread-group-exited".equals(miEvent)) { //$NON-NLS-1$
     						event = new MIThreadGroupExitedEvent(procDmc, exec.getToken(), groupId);
@@ -240,7 +245,8 @@ public class MIRunControlEventProcessor_7_0
     		}
     	}
     }
-    
+
+    @ConfinedToDsfExecutor("")     
     protected MIEvent<?> createEvent(String reason, MIExecAsyncOutput exec) {
     	MIEvent<?> event = null;
 
@@ -278,10 +284,15 @@ public class MIRunControlEventProcessor_7_0
     		IContainerDMContext containerDmc = null;
     		if (groupId == null) {
     			// MI does not currently provide the group-id in these events
-    			if (threadId != null) {
-    				containerDmc = procService.createContainerContextFromThreadId(fControlDmc, threadId);
-    				procDmc = DMContexts.getAncestorOfType(containerDmc, IProcessDMContext.class);
+    			
+    			// In some cases, gdb sends a bare stopped event. Likely a bug, but 
+    			// we need to react to it all the same. See bug 311118.
+    			if (threadId == null) {
+    				threadId = "all"; //$NON-NLS-1$
     			}
+    			
+   				containerDmc = procService.createContainerContextFromThreadId(fControlDmc, threadId);
+   				procDmc = DMContexts.getAncestorOfType(containerDmc, IProcessDMContext.class);
     		} else {
     			// This code would only trigger if the groupId was provided by MI
     			procDmc = procService.createProcessContext(fControlDmc, groupId);

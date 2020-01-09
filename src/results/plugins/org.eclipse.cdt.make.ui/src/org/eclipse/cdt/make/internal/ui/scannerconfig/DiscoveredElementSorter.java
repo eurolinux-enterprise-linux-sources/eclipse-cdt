@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2005 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -29,6 +29,7 @@ public class DiscoveredElementSorter extends ViewerSorter {
 	/* (non-Javadoc)
 	 * @see org.eclipse.jface.viewers.ViewerSorter#category(java.lang.Object)
 	 */
+	@Override
 	public int category(Object element) {
 		if (element instanceof DiscoveredElement) {
 			DiscoveredElement elem = (DiscoveredElement) element;
@@ -50,6 +51,7 @@ public class DiscoveredElementSorter extends ViewerSorter {
 	/* (non-Javadoc)
 	 * @see org.eclipse.jface.viewers.ViewerSorter#sort(org.eclipse.jface.viewers.Viewer, java.lang.Object[])
 	 */
+	@Override
 	public void sort(Viewer viewer, Object[] elements) {
 		if (elements.length > 0 && elements[0] instanceof DiscoveredElement) {
 			DiscoveredElement firstElem = (DiscoveredElement) elements[0];

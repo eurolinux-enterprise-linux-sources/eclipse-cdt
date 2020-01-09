@@ -10,14 +10,10 @@
  *******************************************************************************/
 package org.eclipse.cdt.make.internal.core.makefile.gnu;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -38,7 +34,6 @@ import org.eclipse.cdt.make.internal.core.makefile.Directive;
 import org.eclipse.cdt.make.internal.core.makefile.EmptyLine;
 import org.eclipse.cdt.make.internal.core.makefile.IgnoreRule;
 import org.eclipse.cdt.make.internal.core.makefile.InferenceRule;
-import org.eclipse.cdt.make.internal.core.makefile.MacroDefinition;
 import org.eclipse.cdt.make.internal.core.makefile.MakeFileConstants;
 import org.eclipse.cdt.make.internal.core.makefile.MakefileReader;
 import org.eclipse.cdt.make.internal.core.makefile.PosixRule;
@@ -57,8 +52,6 @@ import org.eclipse.core.filesystem.IFileInfo;
 import org.eclipse.core.filesystem.IFileStore;
 import org.eclipse.core.filesystem.URIUtil;
 import org.eclipse.core.runtime.CoreException;
-import org.eclipse.core.runtime.FileLocator;
-import org.eclipse.core.runtime.Path;
 
 /**
  * Makefile : ( statement ) *
@@ -82,7 +75,7 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 	public static String FILE_SEPARATOR = System.getProperty("file.separator", "/"); //$NON-NLS-1$ //$NON-NLS-2$
 
 	String[] includeDirectories = new String[0];
-	IDirective[] builtins = null;
+	IDirective[] builtins = new IDirective[0];
 	private IMakefileReaderProvider makefileReaderProvider;
 
 	public GNUMakefile() {
@@ -193,9 +186,9 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 					continue;
 				} else if (rules != null) {
 					// The command is added to the rules
-					for (int i = 0; i < rules.length; i++) {
-						rules[i].addDirective(cmd);
-						rules[i].setEndLine(endLine);
+					for (Rule rule : rules) {
+						rule.addDirective(cmd);
+						rule.setEndLine(endLine);
 					}
 					continue;
 				}
@@ -210,9 +203,9 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 				cmt.setLines(startLine, endLine);
 				if (rules != null) {
 					// The comment is added to the rules.
-					for (int i = 0; i < rules.length; i++) {
-						rules[i].addDirective(cmt);
-						rules[i].setEndLine(endLine);
+					for (Rule rule : rules) {
+						rule.addDirective(cmt);
+						rule.setEndLine(endLine);
 					}
 				} else {
 					addDirective(conditions, cmt);
@@ -232,9 +225,9 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 				empty.setLines(startLine, endLine);
 				if (rules != null) {
 					// The EmptyLine is added to the rules.
-					for (int i = 0; i < rules.length; i++) {
-						rules[i].addDirective(empty);
-						rules[i].setEndLine(endLine);
+					for (Rule rule : rules) {
+						rule.addDirective(empty);
+						rule.setEndLine(endLine);
 					}
 				} else {
 					addDirective(conditions, empty);
@@ -318,9 +311,9 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 			// - GNU Static Target rule ?
 			if (GNUMakefileUtil.isStaticTargetRule(line)) {
 				StaticTargetRule[] srules = parseStaticTargetRule(line);
-				for (int i = 0; i < srules.length; i++) {
-					srules[i].setLines(startLine, endLine);
-					addDirective(conditions, srules[i]);
+				for (StaticTargetRule srule : srules) {
+					srule.setLines(startLine, endLine);
+					addDirective(conditions, srule);
 				}
 				rules = srules;
 				continue;
@@ -329,9 +322,9 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 			// - Target Rule ?
 			if (GNUMakefileUtil.isGNUTargetRule(line)) {
 				TargetRule[] trules = parseGNUTargetRules(line);
-				for (int i = 0; i < trules.length; i++) {
-					trules[i].setLines(startLine, endLine);
-					addDirective(conditions, trules[i]);
+				for (TargetRule trule : trules) {
+					trule.setLines(startLine, endLine);
+					addDirective(conditions, trule);
 				}
 				rules = trules;
 				continue;
@@ -419,10 +412,6 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 		return stmt;
 	}
 
-	/**
-	 * @param line
-	 * @return
-	 */
 	protected SpecialRule parseSpecialRule(String line) {
 		line = line.trim();
 		String keyword =  null;
@@ -476,8 +465,6 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 	 * ifneq CONDITIONAL
 	 * else
 	 *
-	 * @param line
-	 * @return
 	 */
 	protected Conditional parseConditional(String line) {
 		Conditional condition = null;
@@ -575,10 +562,6 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 		return new VPath(this, pattern, directories);
 	}
 
-	/**
-	 * @param line
-	 * @return
-	 */
 	protected UnExport parseUnExport(String line) {
 		// Pass over "unexport"
 		for (int i = 0; i < line.length(); i++) {
@@ -787,10 +770,6 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 		return staticRules;
 	}
 
-	/**
-	 * @param line
-	 * @return
-	 */
 	protected InferenceRule parseInferenceRule(String line) {
 		String tgt;
 		int index = Util.indexOf(line, ':');
@@ -827,30 +806,6 @@ public class GNUMakefile extends AbstractMakefile implements IGNUMakefile {
 	 */
 	@Override
 	public IDirective[] getBuiltins() {
-		if (builtins == null) {
-			String location =  "builtin" + File.separator + "gnu.mk"; //$NON-NLS-1$ //$NON-NLS-2$
-			if (MakeCorePlugin.getDefault() != null) {
-				try {
-					InputStream stream = FileLocator.openStream(MakeCorePlugin.getDefault().getBundle(), new Path(location), false);
-					GNUMakefile gnu = new GNUMakefile();
-					URL url = FileLocator.find(MakeCorePlugin.getDefault().getBundle(), new Path(location), null);
-					gnu.parse(url.toURI(), new InputStreamReader(stream));
-					builtins = gnu.getDirectives();
-					for (int i = 0; i < builtins.length; i++) {
-						if (builtins[i] instanceof MacroDefinition) {
-							((MacroDefinition) builtins[i]).setFromDefault(true);
-						}
-					}
-				} catch (IOException e) {
-					MakeCorePlugin.log(e);
-				} catch (URISyntaxException e) {
-					MakeCorePlugin.log(e);
-	            }
-			}
-			if (builtins == null) {
-				builtins = new IDirective[0];
-			}
-		}
 		return builtins;
 	}
 

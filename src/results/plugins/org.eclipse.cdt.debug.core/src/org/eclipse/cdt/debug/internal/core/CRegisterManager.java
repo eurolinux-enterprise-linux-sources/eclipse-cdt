@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2005 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -15,11 +15,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
+
 import org.eclipse.cdt.debug.core.CDebugCorePlugin;
 import org.eclipse.cdt.debug.core.ICDTLaunchConfigurationConstants;
 import org.eclipse.cdt.debug.core.cdi.CDIException;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIRegisterDescriptor;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIRegisterGroup;
+import org.eclipse.cdt.debug.core.model.ICStackFrame;
 import org.eclipse.cdt.debug.core.model.IPersistableRegisterGroup;
 import org.eclipse.cdt.debug.core.model.IRegisterDescriptor;
 import org.eclipse.cdt.debug.internal.core.model.CDebugTarget;
@@ -66,6 +69,10 @@ public class CRegisterManager {
 	private boolean fUseDefaultRegisterGroups = true;
 
 	private CStackFrame fCurrentFrame;
+	
+	private ReentrantLock fInitializationLock = new ReentrantLock();
+	
+	private boolean fInitialized = false;
 
 	/** 
 	 * Constructor for CRegisterManager. 
@@ -102,39 +109,59 @@ public class CRegisterManager {
 		return fRegisterDescriptors;
 	}
 
-	public IRegisterGroup[] getRegisterGroups( CStackFrame frame ) throws DebugException {
-		IRegisterGroup[] groups = (IRegisterGroup[])fRegisterGroups.toArray( new IRegisterGroup[fRegisterGroups.size()] );
-		if ( getCurrentFrame() != frame ) {
-			for ( int i = 0; i < groups.length; ++i ) {
-				((CRegisterGroup)groups[i]).resetRegisterValues();
-			}
-			setCurrentFrame( frame );
-		}
-		return groups;
-	}
+    public IRegisterGroup[] getRegisterGroups() {
+        return (IRegisterGroup[])fRegisterGroups.toArray( new IRegisterGroup[fRegisterGroups.size()] );
+    }
+
+    public IRegisterGroup[] getRegisterGroups( CStackFrame frame ) throws DebugException {
+        setCurrentFrame( frame );
+        return getRegisterGroups();
+    }
+
+    public void setCurrentFrame( ICStackFrame frame ) throws DebugException {
+        if ( frame != null && !frame.equals( getCurrentFrame() ) ) {
+            for ( IRegisterGroup group : getRegisterGroups() ) {
+                ((CRegisterGroup)group).resetRegisterValues();
+            }
+            setCurrentFrame0( (CStackFrame)frame );
+        }
+    }
 
 	public void initialize() {
-		ICDIRegisterGroup[] groups = new ICDIRegisterGroup[0];
-		try {
-			groups = getDebugTarget().getCDITarget().getRegisterGroups();
-		}
-		catch( CDIException e ) {
-			CDebugCorePlugin.log( e );
-		}
-		List list = new ArrayList();
-		for( int i = 0; i < groups.length; ++i ) {
-			try {
-				ICDIRegisterDescriptor[] cdiDescriptors = groups[i].getRegisterDescriptors();
-				for ( int j = 0; j < cdiDescriptors.length; ++j ) {
-					list.add( new CRegisterDescriptor( groups[i], cdiDescriptors[j] ) );
-				}
-			}
-			catch( CDIException e ) {
-				CDebugCorePlugin.log( e );
-			}
-		}
-		fRegisterDescriptors = (IRegisterDescriptor[])list.toArray( new IRegisterDescriptor[list.size()] );
-		createRegisterGroups();
+	    if ( !fInitialized ) {
+	        synchronized( fInitializationLock ) {
+	            if ( !fInitialized ) {
+	                boolean failed = false;
+    	            ICDIRegisterGroup[] groups = new ICDIRegisterGroup[0];
+    	            try {
+    	                groups = getDebugTarget().getCDITarget().getRegisterGroups();
+    	            }
+    	            catch( CDIException e ) {
+    	                CDebugCorePlugin.log( e );
+    	                failed = true;
+    	            }
+    	            List<CRegisterDescriptor> list = new ArrayList<CRegisterDescriptor>();
+    	            for( int i = 0; i < groups.length; ++i ) {
+    	                try {
+    	                    ICDIRegisterDescriptor[] cdiDescriptors = groups[i].getRegisterDescriptors();
+    	                    for ( int j = 0; j < cdiDescriptors.length; ++j ) {
+    	                        list.add( new CRegisterDescriptor( groups[i], cdiDescriptors[j] ) );
+    	                    }
+    	                }
+    	                catch( CDIException e ) {
+    	                    CDebugCorePlugin.log( e );
+    	                    failed = true;
+    	                }
+    	            }
+    	            fRegisterDescriptors = list.toArray( new IRegisterDescriptor[list.size()] );
+                    fInitialized = !failed;
+                    if ( failed )
+                        fRegisterGroups = Collections.emptyList();
+                    else
+                        createRegisterGroups();
+	            }                
+            }
+	    }
 	}
 
 	public void addRegisterGroup( final String name, final IRegisterDescriptor[] descriptors ) {
@@ -218,7 +245,7 @@ public class CRegisterManager {
 		}
 	}
 
-	protected CDebugTarget getDebugTarget() {
+	public CDebugTarget getDebugTarget() {
 		return fDebugTarget;
 	}
 
@@ -342,7 +369,7 @@ public class CRegisterManager {
 		return fCurrentFrame;
 	}
 	
-	private void setCurrentFrame( CStackFrame currentFrame ) {
+	private void setCurrentFrame0( CStackFrame currentFrame ) {
 		fCurrentFrame = currentFrame;
 	}
 }

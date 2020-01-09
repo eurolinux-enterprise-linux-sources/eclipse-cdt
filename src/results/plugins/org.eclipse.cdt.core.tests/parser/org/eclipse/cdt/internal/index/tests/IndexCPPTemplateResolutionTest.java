@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Symbian Software Systems and others.
+ * Copyright (c) 2007, 2010 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,6 @@
  *    Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.internal.index.tests;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,6 +20,7 @@ import org.eclipse.cdt.core.dom.ast.ASTTypeUtil;
 import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IBasicType;
+import org.eclipse.cdt.core.dom.ast.IBasicType.Kind;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IFunctionType;
 import org.eclipse.cdt.core.dom.ast.IParameter;
@@ -63,6 +63,7 @@ import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.SemanticUtil;
 import org.eclipse.cdt.internal.core.index.IIndexScope;
 import org.eclipse.core.runtime.CoreException;
 
+
 /**
  * Tests for exercising resolution of template bindings against IIndex
  */
@@ -75,6 +76,19 @@ public class IndexCPPTemplateResolutionTest extends IndexBindingResolutionTestBa
 	public static class ProjectWithDepProj extends IndexCPPTemplateResolutionTest {
 		public ProjectWithDepProj() {setStrategy(new ReferencedProject(true));}
 		public static TestSuite suite() {return suite(ProjectWithDepProj.class);}
+		
+		// template <typename T= int> class XT;
+		
+	    // #include "header.h"
+		// template <typename T> class XT {};
+		// void test() {
+		//    XT<> x;
+		// };		
+		@Override
+		public void testDefaultTemplateArgInHeader_264988() throws Exception {
+			// Not supported across projects (the composite index does not merge
+			// default values of template parameters).
+		}
 	}
 	
 	public static void addTests(TestSuite suite) {		
@@ -945,6 +959,28 @@ public class IndexCPPTemplateResolutionTest extends IndexBindingResolutionTestBa
 		assertInstance(b0, ICPPFunction.class);
 	}
 
+	//	template <class U>
+	//	void func(const U& u, const typename U::t& v) {
+	//	}
+	//
+	//	template <class U>
+	//	void func(U& u, const typename U::t& v) {
+	//	}
+	
+	//	template <typename T> class A {
+	//	  typedef T t;
+	//	};
+	//
+	//	void test() {
+	//	  const A<int>& a;
+	//	  int b;
+	//	  func(a, b);
+	//	}
+	public void testFunctionTemplate_319498() throws Exception {
+		ICPPFunction f= getBindingFromASTName("func(a, b)", 4, ICPPFunction.class);
+		assertInstance(f, ICPPTemplateInstance.class);
+	}
+
 	// template<typename T>
 	// class Foo {};
 	//
@@ -1159,7 +1195,7 @@ public class IndexCPPTemplateResolutionTest extends IndexBindingResolutionTestBa
     		public boolean acceptBinding(IBinding binding) throws CoreException {
     			return !(binding instanceof ICPPSpecialization);
     		}
-    	}, NPM)[0];
+    	}, npm())[0];
     	
     	ICPPClassType b4= (ICPPClassType) getIndex().findBindings(new char[][] {"A".toCharArray(), "B".toCharArray()}, new IndexFilter() {
     		@Override
@@ -1171,7 +1207,7 @@ public class IndexCPPTemplateResolutionTest extends IndexBindingResolutionTestBa
     				return false;
     			}
     		}
-    	}, NPM)[0];
+    	}, npm())[0];
     	
     	assertFalse(b0 instanceof ICPPSpecialization);
     	
@@ -1525,11 +1561,11 @@ public class IndexCPPTemplateResolutionTest extends IndexBindingResolutionTestBa
 		
 		ICPPTemplateInstance inst= (ICPPTemplateInstance) t1;
 		final ICPPClassTemplate tmplDef = (ICPPClassTemplate) inst.getTemplateDefinition();
-		IBinding inst2= CPPTemplates.instantiate(tmplDef, inst.getTemplateArguments());
+		IBinding inst2= CPPTemplates.instantiate(tmplDef, inst.getTemplateArguments(), false);
 		assertSame(inst, inst2);
 		
-		IBinding charInst1= CPPTemplates.instantiate(tmplDef, new ICPPTemplateArgument[] {new CPPTemplateArgument(new CPPBasicType(IBasicType.t_char, 0))});
-		IBinding charInst2= CPPTemplates.instantiate(tmplDef, new ICPPTemplateArgument[] {new CPPTemplateArgument(new CPPBasicType(IBasicType.t_char, 0))});
+		IBinding charInst1= CPPTemplates.instantiate(tmplDef, new ICPPTemplateArgument[] {new CPPTemplateArgument(new CPPBasicType(Kind.eChar, 0))}, false);
+		IBinding charInst2= CPPTemplates.instantiate(tmplDef, new ICPPTemplateArgument[] {new CPPTemplateArgument(new CPPBasicType(Kind.eChar, 0))}, false);
 		assertSame(charInst1, charInst2);
 	}
 	
@@ -1597,7 +1633,7 @@ public class IndexCPPTemplateResolutionTest extends IndexBindingResolutionTestBa
 	public void testDefaultTemplateArgInHeader_264988() throws Exception { 
 		ICPPTemplateInstance ti= getBindingFromASTName("XT<>", 4, ICPPTemplateInstance.class);
 	}
-	
+
 	// typedef int TInt;
 	// template <typename T> class XT {
 	//    void m();
@@ -1608,6 +1644,76 @@ public class IndexCPPTemplateResolutionTest extends IndexBindingResolutionTestBa
 	// }
 	public void testParentScopeOfSpecialization_267013() throws Exception { 
 		ITypedef ti= getBindingFromASTName("TInt", 4, ITypedef.class);
+	}
+
+	//	struct __true_type {};
+	//	struct __false_type {};
+	//
+	//	template<typename, typename>
+	//	struct __are_same {
+	//	  enum { __value = 0 };
+	//	  typedef __false_type __type;
+	//	};
+	//
+	//	template<typename _Tp>
+	//	struct __are_same<_Tp, _Tp> {
+	//	  enum { __value = 1 };
+	//	  typedef __true_type __type;
+	//	};
+	//
+	//	template<bool, typename>
+	//	struct __enable_if {};
+	//
+	//	template<typename _Tp>
+	//	struct __enable_if<true, _Tp> {
+	//	  typedef _Tp __type;
+	//	};
+	//
+	//	template<typename _Iterator, typename _Container>
+	//	struct __normal_iterator {
+	//	  template<typename _Iter>
+	//	    __normal_iterator(
+	//	        const __normal_iterator<
+	//	            _Iter,
+	//	            typename __enable_if<
+	//	                __are_same<_Iter, typename _Container::pointer>::__value,
+	//	                _Container
+	//	            >::__type
+	//	        >& __i);
+	//	};
+	//
+	//	template<typename _Tp>
+	//	struct allocator {
+	//	  typedef _Tp* pointer;
+	//	  typedef const _Tp* const_pointer;
+	//
+	//	  template<typename _Tp1>
+	//	  struct rebind
+	//	  { typedef allocator<_Tp1> other; };
+	//	};
+	//
+	//	template<typename _Tp, typename _Alloc = allocator<_Tp> >
+	//	struct vector {
+	//	  typedef vector<_Tp, _Alloc> vector_type;
+	//	  typedef typename _Alloc::template rebind<_Tp>::other _Tp_alloc_type;
+	//
+	//	  typedef typename _Tp_alloc_type::pointer pointer;
+	//	  typedef typename _Tp_alloc_type::const_pointer const_pointer;
+	//	  typedef __normal_iterator<pointer, vector_type> iterator;
+	//	  typedef __normal_iterator<const_pointer, vector_type> const_iterator;
+	//
+	//	  iterator begin();
+	//	  const_iterator begin() const;
+	//	};
+
+	//	void f(vector<int>::const_iterator p);
+	//
+	//	void test() {
+	//	  vector<int> v;
+	//	  f(v.begin());
+	//	}
+	public void testTemplateMetaprogramming_284686() throws Exception { 
+		getBindingFromASTName("f(v.begin())", 1, ICPPFunction.class);
 	}
 	
 	//	template<typename T> class op {
@@ -1650,4 +1756,29 @@ public class IndexCPPTemplateResolutionTest extends IndexBindingResolutionTestBa
 		assertEquals("T", ct.getTemplateParameters()[0].getName());
 	}
 
+	// template<typename T> class X {};
+	// template<typename T> class Y {};
+	// template<> class Y<int> {};
+	// template<typename T> void f(T t) {}
+	// template<typename T> void g(T t) {}
+	// template<> void g(int t) {}
+
+	// void test() {
+	//    X<int> x;
+	//    Y<int> y;
+	//    f(1);
+	//    g(1);
+	// }
+	public void testExplicitSpecializations_296427() throws Exception { 
+		ICPPTemplateInstance inst;
+		inst= getBindingFromASTName("X<int>", 0);
+		assertFalse(inst.isExplicitSpecialization());
+		inst = getBindingFromASTName("Y<int>", 0);
+		assertTrue(inst.isExplicitSpecialization());
+		
+		inst = getBindingFromASTName("f(1)", 1);
+		assertFalse(inst.isExplicitSpecialization());
+		inst = getBindingFromASTName("g(1)", 1);
+		assertTrue(inst.isExplicitSpecialization());
+	}
 }

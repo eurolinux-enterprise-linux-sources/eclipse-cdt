@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2009 Ericsson and others.
+ * Copyright (c) 2008, 2010 Ericsson and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,6 +13,7 @@
 package org.eclipse.cdt.dsf.gdb.launching;
 
 import java.util.List;
+import java.util.Properties;
 
 import org.eclipse.cdt.debug.core.ICDTLaunchConfigurationConstants;
 import org.eclipse.cdt.debug.internal.core.sourcelookup.CSourceLookupDirector;
@@ -20,6 +21,7 @@ import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.DsfExecutor;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.Sequence;
+import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.datamodel.DataModelInitializedEvent;
 import org.eclipse.cdt.dsf.datamodel.IDMContext;
 import org.eclipse.cdt.dsf.debug.service.IBreakpoints.IBreakpointsTargetDMContext;
@@ -28,21 +30,14 @@ import org.eclipse.cdt.dsf.gdb.IGDBLaunchConfigurationConstants;
 import org.eclipse.cdt.dsf.gdb.actions.IConnect;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
 import org.eclipse.cdt.dsf.gdb.service.IGDBBackend;
+import org.eclipse.cdt.dsf.gdb.service.IGDBTraceControl;
+import org.eclipse.cdt.dsf.gdb.service.IGDBTraceControl.ITraceTargetDMContext;
 import org.eclipse.cdt.dsf.gdb.service.SessionType;
 import org.eclipse.cdt.dsf.gdb.service.command.IGDBControl;
 import org.eclipse.cdt.dsf.mi.service.CSourceLookup;
 import org.eclipse.cdt.dsf.mi.service.IMIProcesses;
 import org.eclipse.cdt.dsf.mi.service.MIBreakpointsManager;
-import org.eclipse.cdt.dsf.mi.service.command.commands.CLISource;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIEnvironmentCD;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIFileExecAndSymbols;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIGDBSetArgs;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIGDBSetAutoSolib;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIGDBSetNonStop;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIGDBSetSolibSearchPath;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MITargetSelect;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MITargetSelectCore;
-import org.eclipse.cdt.dsf.mi.service.command.commands.RawCommand;
+import org.eclipse.cdt.dsf.mi.service.command.CommandFactory;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIInfo;
 import org.eclipse.cdt.dsf.service.DsfServicesTracker;
 import org.eclipse.core.runtime.CoreException;
@@ -89,8 +84,12 @@ public class FinalLaunchSequence extends Sequence {
             fCommandControl = fTracker.getService(IGDBControl.class);
             if (fCommandControl == null) {
         		requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot obtain control service", null)); //$NON-NLS-1$
+                requestMonitor.done();
+                return;
             }
 
+            fCommandFactory = fCommandControl.getCommandFactory();
+            
             requestMonitor.done();
         }},
         /*
@@ -106,6 +105,28 @@ public class FinalLaunchSequence extends Sequence {
             requestMonitor.done();
         }},
     	/*
+    	 * Specify GDB's working directory
+    	 */
+        new Step() { @Override
+        public void execute(final RequestMonitor requestMonitor) {
+   			IPath dir = null;
+       		try {
+       			dir = fGDBBackend.getGDBWorkingDirectory();
+       		} catch (CoreException e) {
+       			requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot get working directory", e)); //$NON-NLS-1$
+       			requestMonitor.done();
+       			return;
+      		}
+
+        	if (dir != null) {
+        		fCommandControl.queueCommand(
+        				fCommandFactory.createMIEnvironmentCD(fCommandControl.getContext(), dir.toPortableString()), 
+        				new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
+        	} else {
+        		requestMonitor.done();
+        	}
+        }},
+    	/*
     	 * Source the gdbinit file specified in the launch
     	 */
         new Step() { @Override
@@ -115,7 +136,7 @@ public class FinalLaunchSequence extends Sequence {
         		
         		if (gdbinitFile != null && gdbinitFile.length() > 0) {
         			fCommandControl.queueCommand(
-        					new CLISource(fCommandControl.getContext(), gdbinitFile), 
+        					fCommandFactory.createCLISource(fCommandControl.getContext(), gdbinitFile), 
         					new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor) {
         						@Override
         						protected void handleCompleted() {
@@ -138,6 +159,28 @@ public class FinalLaunchSequence extends Sequence {
         	}
         }},
     	/*
+    	 * Specify environment variables if needed
+    	 */
+        new Step() { @Override
+        public void execute(final RequestMonitor requestMonitor) {
+        	boolean clear = false;
+   			Properties properties = new Properties();
+       		try {
+       			clear = fGDBBackend.getClearEnvironment();
+       			properties = fGDBBackend.getEnvironmentVariables();
+       		} catch (CoreException e) {
+       			requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot get environment information", e)); //$NON-NLS-1$
+       			requestMonitor.done();
+       			return;
+      		}
+
+        	if (clear == true || properties.size() > 0) {
+        		fCommandControl.setEnvironment(properties, clear, requestMonitor);
+        	} else {
+        		requestMonitor.done();
+        	}
+        }},
+    	/*
     	 * Specify the executable file to be debugged and read the symbol table.
     	 */
         new Step() { @Override
@@ -155,7 +198,7 @@ public class FinalLaunchSequence extends Sequence {
         	final IPath execPath = fGDBBackend.getProgramPath();
         	if (!noFileCommand && execPath != null && !execPath.isEmpty()) {
         		fCommandControl.queueCommand(
-       				new MIFileExecAndSymbols(fCommandControl.getContext(), 
+        				fCommandFactory.createMIFileExecAndSymbols(fCommandControl.getContext(), 
        						                 execPath.toPortableString()), 
        				new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
         	} else {
@@ -172,7 +215,7 @@ public class FinalLaunchSequence extends Sequence {
     			
         		if (args != null) {
         			fCommandControl.queueCommand(
-        					new MIGDBSetArgs(fCommandControl.getContext(), args), 
+        					fCommandFactory.createMIGDBSetArgs(fCommandControl.getContext(), args), 
         					new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
         		} else {
         			requestMonitor.done();
@@ -181,28 +224,6 @@ public class FinalLaunchSequence extends Sequence {
     			requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot get inferior arguments", e)); //$NON-NLS-1$
     			requestMonitor.done();
     		}    		
-        }},
-    	/*
-    	 * Specify GDB's working directory
-    	 */
-        new Step() { @Override
-        public void execute(final RequestMonitor requestMonitor) {
-   			IPath dir = null;
-       		try {
-       			dir = fGDBBackend.getGDBWorkingDirectory();
-       		} catch (CoreException e) {
-       			requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot get working directory", e)); //$NON-NLS-1$
-       			requestMonitor.done();
-       			return;
-      		}
-
-        	if (dir != null) {
-        		fCommandControl.queueCommand(
-        				new MIEnvironmentCD(fCommandControl.getContext(), dir.toPortableString()), 
-        				new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
-        	} else {
-        		requestMonitor.done();
-        	}
         }},
     	/*
     	 * Enable non-stop mode if necessary
@@ -222,17 +243,17 @@ public class FinalLaunchSequence extends Sequence {
         	if (isNonStop) {
         		// The raw commands should not be necessary in the official GDB release
         		fCommandControl.queueCommand(
-       				new RawCommand(fCommandControl.getContext(), "set target-async on"), //$NON-NLS-1$
+        			fCommandFactory.createMIGDBSetTargetAsync(fCommandControl.getContext(), true),
        				new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor) {
        					@Override
        					protected void handleSuccess() {
        						fCommandControl.queueCommand(
-   								new RawCommand(fCommandControl.getContext(), "set pagination off"),  //$NON-NLS-1$ 
+       							fCommandFactory.createMIGDBSetPagination(fCommandControl.getContext(), false), 
    								new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor) {
    									@Override
    									protected void handleSuccess() {
    										fCommandControl.queueCommand(
-											new MIGDBSetNonStop(fCommandControl.getContext(), true), 
+   											fCommandFactory.createMIGDBSetNonStop(fCommandControl.getContext(), true), 
 											new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
       									}
       								});
@@ -251,7 +272,7 @@ public class FinalLaunchSequence extends Sequence {
     			boolean autolib = fLaunch.getLaunchConfiguration().getAttribute(IGDBLaunchConfigurationConstants.ATTR_DEBUGGER_AUTO_SOLIB,
     					                                                        IGDBLaunchConfigurationConstants.DEBUGGER_AUTO_SOLIB_DEFAULT);
                 fCommandControl.queueCommand(
-                	new MIGDBSetAutoSolib(fCommandControl.getContext(), autolib), 
+                	fCommandFactory.createMIGDBSetAutoSolib(fCommandControl.getContext(), autolib), 
                 	new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
     		} catch (CoreException e) {
     			requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot set shared library option", e)); //$NON-NLS-1$
@@ -269,7 +290,7 @@ public class FinalLaunchSequence extends Sequence {
    				if (p.size() > 0) {
    					String[] paths = p.toArray(new String[p.size()]);
    	                fCommandControl.queueCommand(
-   	                	new MIGDBSetSolibSearchPath(fCommandControl.getContext(), paths), 
+   	                	fCommandFactory.createMIGDBSetSolibSearchPath(fCommandControl.getContext(), paths), 
    	                	new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor) {
    	                		@Override
    	                		protected void handleSuccess() {
@@ -354,31 +375,60 @@ public class FinalLaunchSequence extends Sequence {
         		if (fSessionType == SessionType.CORE) {
         			try {
         				String coreFile = fLaunch.getLaunchConfiguration().getAttribute(ICDTLaunchConfigurationConstants.ATTR_COREFILE_PATH, ""); //$NON-NLS-1$
-
+        				final String coreType = fLaunch.getLaunchConfiguration().getAttribute(IGDBLaunchConfigurationConstants.ATTR_DEBUGGER_POST_MORTEM_TYPE,
+        						                                                              IGDBLaunchConfigurationConstants.DEBUGGER_POST_MORTEM_TYPE_DEFAULT);
         				if (coreFile.length() == 0) {
         					new PromptForCoreJob(
-        							"Prompt for core file",  //$NON-NLS-1$
+        							"Prompt for post mortem file",  //$NON-NLS-1$
         							new DataRequestMonitor<String>(getExecutor(), requestMonitor) {
         								@Override
         								protected void handleSuccess() {
         									String newCoreFile = getData();
         									if (newCoreFile == null || newCoreFile.length()== 0) {
-        										requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot get core file path", null)); //$NON-NLS-1$
+        										requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot get post mortem file path", null)); //$NON-NLS-1$
         										requestMonitor.done();
         									} else {
-        			        					fCommandControl.queueCommand(
-        			        							new MITargetSelectCore(fCommandControl.getContext(), newCoreFile), 
-        			        							new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
+        			        					if (coreType.equals(IGDBLaunchConfigurationConstants.DEBUGGER_POST_MORTEM_CORE_FILE)) {
+        			        						fCommandControl.queueCommand(
+        			        								fCommandFactory.createMITargetSelectCore(fCommandControl.getContext(), newCoreFile), 
+        			        								new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
+        			        					} else if (coreType.equals(IGDBLaunchConfigurationConstants.DEBUGGER_POST_MORTEM_TRACE_FILE)) {
+        			        						IGDBTraceControl traceControl = fTracker.getService(IGDBTraceControl.class);
+        			        						if (traceControl != null) {
+        			        							ITraceTargetDMContext targetDmc = DMContexts.getAncestorOfType(fCommandControl.getContext(), ITraceTargetDMContext.class);
+        			        							traceControl.loadTraceData(targetDmc, newCoreFile, requestMonitor);
+        			        						} else {
+        			        							requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Tracing not supported", null));
+        			        							requestMonitor.done();                                  
+        			        						}
+        			        					} else {
+        			        						requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Invalid post-mortem type", null));
+    			        							requestMonitor.done();
+        			        					}
         									}
         								}
         							}).schedule();
         				} else {
-        					fCommandControl.queueCommand(
-        							new MITargetSelectCore(fCommandControl.getContext(), coreFile), 
-        							new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
+        					if (coreType.equals(IGDBLaunchConfigurationConstants.DEBUGGER_POST_MORTEM_CORE_FILE)) {
+        						fCommandControl.queueCommand(
+        								fCommandFactory.createMITargetSelectCore(fCommandControl.getContext(), coreFile),
+        								new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
+        					} else if (coreType.equals(IGDBLaunchConfigurationConstants.DEBUGGER_POST_MORTEM_TRACE_FILE)) {
+        						IGDBTraceControl traceControl = fTracker.getService(IGDBTraceControl.class);
+        						if (traceControl != null) {
+        							ITraceTargetDMContext targetDmc = DMContexts.getAncestorOfType(fCommandControl.getContext(), ITraceTargetDMContext.class);
+        							traceControl.loadTraceData(targetDmc, coreFile, requestMonitor);
+        						} else {
+        							requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Tracing not supported", null));
+        							requestMonitor.done();
+        						}
+        					} else {
+        						requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Invalid post-mortem type", null));
+    							requestMonitor.done();
+        					}
         				}
         			} catch (CoreException e) {
-        				requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot get core file path", e)); //$NON-NLS-1$
+        				requestMonitor.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, -1, "Cannot get post mortem file path", e));
         				requestMonitor.done();
         			}
         		} else {
@@ -454,14 +504,14 @@ public class FinalLaunchSequence extends Sequence {
                         if (!getTcpPort(requestMonitor)) return;
                     
                         fCommandControl.queueCommand(
-                        		new MITargetSelect(fCommandControl.getContext(), 
+                        		fCommandFactory.createMITargetSelect(fCommandControl.getContext(), 
                         				           fRemoteTcpHost, fRemoteTcpPort, fAttach), 
                         	    new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
                		} else {
                			if (!getSerialDevice(requestMonitor)) return;
                     
                         fCommandControl.queueCommand(
-                        		new MITargetSelect(fCommandControl.getContext(), 
+                        		fCommandFactory.createMITargetSelect(fCommandControl.getContext(), 
                         				           fSerialDevice, fAttach), 
                         	    new DataRequestMonitor<MIInfo>(getExecutor(), requestMonitor));
                		}
@@ -570,6 +620,7 @@ public class FinalLaunchSequence extends Sequence {
     private IGDBControl fCommandControl;
     private IGDBBackend	fGDBBackend;
     private IMIProcesses fProcService;
+    private CommandFactory fCommandFactory;
 
     DsfServicesTracker fTracker;
         

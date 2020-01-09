@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,6 +8,7 @@
  * Contributors:
  *     QNX Software Systems - Initial API and implementation
  *     James Blackburn (Broadcom Corp.) - Use ICStorageElement
+ *     Red Hat Inc. - Add set method
  *******************************************************************************/
 package org.eclipse.cdt.make.internal.core;
 
@@ -85,14 +86,12 @@ public class ProjectTargets {
 				}
 			}
 
-			if (rootElement != null) {
-				extractMakeTargetsFromDocument(rootElement, manager);
-				// If write targets then we have converted previous make targets
-				if (writeTargets) {
-					saveTargets();
-					if (targetFile != null) {
-						targetFile.delete(); // removed old
-					}
+			extractMakeTargetsFromDocument(rootElement, manager);
+			// If write targets then we have converted previous make targets
+			if (writeTargets) {
+				saveTargets();
+				if (targetFile != null) {
+					targetFile.delete(); // removed old
 				}
 			}
 		} catch (Exception e) {
@@ -108,6 +107,19 @@ public class ProjectTargets {
 		return new IMakeTarget[0];
 	}
 
+	public void set(IContainer container, IMakeTarget[] targets) throws CoreException {
+		List<IMakeTarget> newList = new ArrayList<IMakeTarget>();
+		for (IMakeTarget target : targets) {
+			target.setContainer(container);
+			if (newList.contains(target)) {
+				throw new CoreException(new Status(IStatus.ERROR, MakeCorePlugin.getUniqueIdentifier(), -1,
+						MakeMessages.getString("MakeTargetManager.target_exists"), null)); //$NON-NLS-1$
+			}
+			newList.add(target);
+		}
+		targetMap.put(container, newList);
+	}
+
 	public IMakeTarget findTarget(IContainer container, String name) {
 		List<IMakeTarget> list = targetMap.get(container);
 		if (list != null) {
@@ -120,7 +132,7 @@ public class ProjectTargets {
 		return null;
 	}
 
-	public void add(MakeTarget target) throws CoreException {
+	public void add(IMakeTarget target) throws CoreException {
 		List<IMakeTarget> list = targetMap.get(target.getContainer());
 		if (list != null && list.contains(target)) {
 			throw new CoreException(new Status(IStatus.ERROR, MakeCorePlugin.getUniqueIdentifier(), -1,
@@ -133,7 +145,7 @@ public class ProjectTargets {
 		list.add(target);
 	}
 
-	public boolean contains(MakeTarget target) {
+	public boolean contains(IMakeTarget target) {
 		List<IMakeTarget> list = targetMap.get(target.getContainer());
 		if (list != null && list.contains(target)) {
 			return true;
@@ -141,7 +153,7 @@ public class ProjectTargets {
 		return false;
 	}
 
-	public boolean remove(MakeTarget target) {
+	public boolean remove(IMakeTarget target) {
 		List<IMakeTarget> list = targetMap.get(target.getContainer());
 		if (list == null || !list.contains(target)) {
 			return false;
@@ -159,9 +171,8 @@ public class ProjectTargets {
 
 	/**
 	 * Persist the MakeTarget as a child of parent
-	 * @param parent
-	 * @param target
-	 * @return create ICStorageElement
+	 * 
+	 * @return created ICStorageElement
 	 */
 	private ICStorageElement createTargetElement(ICStorageElement parent, IMakeTarget target) {
 		ICStorageElement targetElem = parent.createChild(TARGET_ELEMENT);
@@ -197,7 +208,6 @@ public class ProjectTargets {
 
 	/**
 	 * Saves the targets to the project description
-	 * @throws CoreException
 	 */
 	public void saveTargets() throws CoreException {
 		ICDescriptor descriptor = CCorePlugin.getDefault().getCProjectDescription(getProject(), true);
@@ -219,7 +229,7 @@ public class ProjectTargets {
 	/**
 	 * This method loads an old style XML document provided in the input stream
 	 * and returns an ICStorageElemnt wrapping it.
-	 * @param input
+	 * 
 	 * @return ICStorageElement or null
 	 */
 	protected ICStorageElement translateInputStreamToDocument(InputStream input) {
@@ -233,9 +243,10 @@ public class ProjectTargets {
 	}
 
 	/**
-	 * Extract the make target information which is contained in the XML Document
+	 * Extract the make target information which is contained in the Storage Element
 	 *
-	 * @param document
+	 * @param root - root element
+	 * @param manager - MakeTargetManager
 	 */
 	protected void extractMakeTargetsFromDocument(ICStorageElement root, MakeTargetManager manager) {
 		for (ICStorageElement node : root.getChildren()) {
@@ -251,7 +262,7 @@ public class ProjectTargets {
 							container = project;
 						}
 						try {
-							MakeTarget target = new MakeTarget(manager, project, node.getAttribute(TARGET_ATTR_ID),
+							IMakeTarget target = new MakeTarget(manager, project, node.getAttribute(TARGET_ATTR_ID),
 									node.getAttribute(TARGET_ATTR_NAME));
 							target.setContainer(container);
 							ICStorageElement[] option = node.getChildrenByName(TARGET_STOP_ON_ERROR);

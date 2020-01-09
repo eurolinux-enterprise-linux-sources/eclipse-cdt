@@ -27,7 +27,7 @@ import org.eclipse.core.runtime.Path;
  * Error Pattern - used by Error Parser to convert build output to problem markers
  * @since 5.1
  * 
- * @noextend This class is not intended to be subclassed by clients.
+ * Clients may extend this class.
  */
 public class ErrorPattern {
 	private final Pattern pattern;
@@ -103,7 +103,7 @@ public class ErrorPattern {
 	
 	/**
 	 * @param matcher - matcher to parse the input line.
-	 * @return parsed file name or {code null}.
+	 * @return parsed file name or {@code null}.
 	 */
 	public String getFileName(Matcher matcher) {
 		return groupFileName != 0 ? matcher.group(groupFileName) : null;
@@ -125,7 +125,7 @@ public class ErrorPattern {
 	
 	/**
 	 * @param matcher - matcher to parse the input line.
-	 * @return parsed description or {code null}.
+	 * @return parsed description or {@code null}.
 	 */
 	public String getDesc(Matcher matcher) {
 		return groupDesc != 0 ? matcher.group(groupDesc) : null;
@@ -133,7 +133,7 @@ public class ErrorPattern {
 	
 	/**
 	 * @param matcher - matcher to parse the input line.
-	 * @return parsed variable name or {code null}.
+	 * @return parsed variable name or {@code null}.
 	 */
 	public String getVarName(Matcher matcher) {
 		return groupVarName != 0 ? matcher.group(groupVarName) : null;

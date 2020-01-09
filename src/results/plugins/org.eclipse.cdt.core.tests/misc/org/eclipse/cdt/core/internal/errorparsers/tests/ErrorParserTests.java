@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2006 QNX Software Systems
+ * Copyright (c) 2005, 2010 QNX Software Systems
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,12 +21,14 @@ public class ErrorParserTests {
 
         // Just add more test cases here as you create them for
         // each class being tested
-		suite.addTest(GCCErrorParserTests.suite());
-		suite.addTest(GLDErrorParserTests.suite());
+        suite.addTest(GCCErrorParserTests.suite());
+        suite.addTest(GLDErrorParserTests.suite());
+        suite.addTest(MakeErrorParserTests.suite());
         suite.addTest(FileBasedErrorParserTests.suite());
         suite.addTest(ErrorParserManagerTest.suite());
         suite.addTest(ErrorParserFileMatchingTest.suite());
         suite.addTest(ErrorParserEfsFileMatchingTest.suite());
+        suite.addTest(RegexErrorParserTests.suite());
         return suite;
 	}
 

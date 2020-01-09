@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -48,7 +48,7 @@ public class MIProcessAdapter implements MIProcess {
 	 * @throws IOException
 	 */
 	protected Process getGDBProcess(String[] args, int launchTimeout, IProgressMonitor monitor) throws IOException {
-		final Process pgdb = ProcessFactory.getFactory().exec(args);
+		final Process pgdb = createGDBProcess(args);
 		Thread syncStartup = new Thread("GDB Start") { //$NON-NLS-1$
 			public void run() {
 				try {
@@ -91,7 +91,7 @@ public class MIProcessAdapter implements MIProcess {
 		if (monitor.isCanceled()) {
 			pgdb.destroy();
 			throw new OperationCanceledException();
-		} else if (timepass > launchTimeout) {
+		} else if (timepass >= launchTimeout) {
 			pgdb.destroy();
 			String message = MIPlugin.getResourceString("src.GDBDebugger.Error_launch_timeout"); //$NON-NLS-1$
 			throw new IOException(message);
@@ -99,6 +99,22 @@ public class MIProcessAdapter implements MIProcess {
 		return pgdb;
 	}
 
+	/**
+	 * Basic process creation hook. Subclasses may override to create the process some other way,
+	 * for example by setting the child process's environment.
+	 * 
+	 * @param args
+	 *            the <tt>gdb</tt> command-line
+	 * @return the <tt>gdb</tt> process
+	 * @throws IOException
+	 *             on failure to create the child process
+	 * 
+	 * @since 7.0
+	 */
+	protected Process createGDBProcess(String[] args) throws IOException {
+		return ProcessFactory.getFactory().exec(args);
+	}
+	
 	public boolean canInterrupt(MIInferior inferior) {
 		return fGDBProcess instanceof Spawner;
 	}
@@ -107,16 +123,18 @@ public class MIProcessAdapter implements MIProcess {
 		if (fGDBProcess instanceof Spawner) {
 			if (inferior.isRunning()) {
 				Spawner gdbSpawner = (Spawner) fGDBProcess;
-				gdbSpawner.interrupt();
+				if (inferior.isAttachedInferior() && !inferior.isRemoteInferior()) {
+					// not all gdb versions forward the interrupt to an attached
+					// local inferior, so interrupt the inferior directly
+					interruptInferior(inferior);
+				}
+				else {
+					// standard case (gdb launches process) and remote case (gdbserver)
+					gdbSpawner.interrupt();
+				}
 				waitForInterrupt(inferior);
 			}
-			// If we are still running try to drop the sig to the PID
-			if (inferior.isRunning() && inferior.getInferiorPID() > 0) {
-				// lets try something else.
-				interruptInferior(inferior);
-			}
 		}
-
 	}
 
 	protected boolean waitForInterrupt(MIInferior inferior) {
@@ -142,7 +160,6 @@ public class MIProcessAdapter implements MIProcess {
 		if (fGDBProcess instanceof Spawner) {
 			Spawner gdbSpawner = (Spawner) fGDBProcess;
 			gdbSpawner.raise(inferior.getInferiorPID(), gdbSpawner.INT);
-			waitForInterrupt(inferior);
 		}
 	}
 	

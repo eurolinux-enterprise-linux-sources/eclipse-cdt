@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Symbian Software Ltd. and others.
+ * Copyright (c) 2007, 2010 Symbian Software Ltd. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,7 +20,10 @@ public class DummyProviderTraces {
 	static DummyProviderTraces instance = new DummyProviderTraces();
 	
 	public static DummyProviderTraces getInstance() { return instance; }
-	
+
+	/** Flag indicates if test is enabled, so we should trace projects and configs */
+	public volatile boolean enabled;
+
 	private DummyProviderTraces() {}
 	
 	Map/*<String, List>*/ id2prjTrace= new HashMap();

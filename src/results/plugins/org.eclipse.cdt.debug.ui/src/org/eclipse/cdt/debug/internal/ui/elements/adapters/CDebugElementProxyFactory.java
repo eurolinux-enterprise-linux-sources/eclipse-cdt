@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -38,6 +38,11 @@ public class CDebugElementProxyFactory extends DefaultModelProxyFactory {
             }
             if ( mr != null ) {
                 return new ModulesViewModelProxy( mr );
+            }
+        }
+        else if ( IDebugUIConstants.ID_REGISTER_VIEW.equals( context.getId() ) ) {
+            if ( element instanceof CRegisterManagerProxy ) {
+                return new CRegisterManagerModelProxy( (CRegisterManagerProxy)element );
             }
         }
         else if ( ICDebugUIConstants.ID_DEFAULT_DISASSEMBLY_EDITOR.equals( context.getId() ) ) {

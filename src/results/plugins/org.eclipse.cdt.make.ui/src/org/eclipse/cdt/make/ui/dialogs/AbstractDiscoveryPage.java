@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -46,6 +46,7 @@ public abstract class AbstractDiscoveryPage extends DialogPage {
     
     protected static final String SI_ENABLE = MakeUIPlugin.getResourceString("ScannerConfigOptionsDialog.siProvider.parser.enabled.button"); //$NON-NLS-1$
     protected static final String SI_COMMAND = MakeUIPlugin.getResourceString("ScannerConfigOptionsDialog.siProvider.command.label"); //$NON-NLS-1$
+    /** @since 7.0 */
     protected static final String SI_ARGS = MakeUIPlugin.getResourceString("ScannerConfigOptionsDialog.siProvider.args.label"); //$NON-NLS-1$
     protected static final String SI_BROWSE = MakeUIPlugin.getResourceString("ScannerConfigOptionsDialog.siProvider.browse.button"); //$NON-NLS-1$
     protected static final String SI_DIALOG = MakeUIPlugin.getResourceString("ScannerConfigOptionsDialog.siProvider.browse.runCommandDialog"); //$NON-NLS-1$
@@ -72,17 +73,10 @@ public abstract class AbstractDiscoveryPage extends DialogPage {
         super();
     }
 
-    /**
-     * @param title
-     */
     public AbstractDiscoveryPage(String title) {
         super(title);
     }
 
-    /**
-     * @param title
-     * @param image
-     */
     public AbstractDiscoveryPage(String title, ImageDescriptor image) {
         super(title, image);
     }

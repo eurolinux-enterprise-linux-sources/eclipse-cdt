@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,10 +17,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import com.ibm.icu.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -34,16 +34,15 @@ import org.eclipse.cdt.dsf.datamodel.IDMContext;
 import org.eclipse.cdt.dsf.debug.service.IRunControl;
 import org.eclipse.cdt.dsf.debug.service.IStack.IFrameDMContext;
 import org.eclipse.cdt.dsf.debug.service.command.ICommand;
-import org.eclipse.cdt.dsf.debug.service.command.ICommandControlService;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandListener;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandResult;
 import org.eclipse.cdt.dsf.debug.service.command.ICommandToken;
 import org.eclipse.cdt.dsf.debug.service.command.IEventListener;
 import org.eclipse.cdt.dsf.gdb.internal.GdbPlugin;
+import org.eclipse.cdt.dsf.mi.service.IMICommandControl;
 import org.eclipse.cdt.dsf.mi.service.IMIExecutionDMContext;
 import org.eclipse.cdt.dsf.mi.service.command.commands.MICommand;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIStackSelectFrame;
-import org.eclipse.cdt.dsf.mi.service.command.commands.MIThreadSelect;
+import org.eclipse.cdt.dsf.mi.service.command.commands.RawCommand;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIConst;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIInfo;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIList;
@@ -52,11 +51,14 @@ import org.eclipse.cdt.dsf.mi.service.command.output.MIOutput;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIParser;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIResult;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIResultRecord;
+import org.eclipse.cdt.dsf.mi.service.command.output.MIStreamRecord;
 import org.eclipse.cdt.dsf.mi.service.command.output.MIValue;
 import org.eclipse.cdt.dsf.service.AbstractDsfService;
 import org.eclipse.cdt.dsf.service.DsfSession;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
+
+import com.ibm.icu.text.MessageFormat;
 
 /**
  * Base implementation of an MI control service.  It provides basic handling 
@@ -65,8 +67,10 @@ import org.eclipse.core.runtime.Status;
  * Extending classes need to implement the initialize() and shutdown() methods.
  */
 public abstract class AbstractMIControl extends AbstractDsfService
-    implements ICommandControlService
+    implements IMICommandControl
 {
+	private static final String MI_TRACE_IDENTIFIER = " [MI]  "; //$NON-NLS-1$
+	
     /*
 	 *  Thread control variables for the transmit and receive threads.
 	 */
@@ -76,7 +80,7 @@ public abstract class AbstractMIControl extends AbstractDsfService
     
     // MI did not always support the --thread/--frame options
     // This boolean is used to know if we should use -thread-select and -stack-select-frame instead
-    private final boolean fUseThreadAndFrameOptions;
+    private boolean fUseThreadAndFrameOptions;
     // currentStackLevel and currentThreadId are only necessary when
     // we must use -thread-select and -stack-select-frame
     private int fCurrentStackLevel  = -1;
@@ -117,18 +121,21 @@ public abstract class AbstractMIControl extends AbstractDsfService
      */
     private OutputStream fTracingStream = null;
 
+    private CommandFactory fCommandFactory;
     
     public AbstractMIControl(DsfSession session) {
         super(session);
         fUseThreadAndFrameOptions = false;
+        fCommandFactory = new CommandFactory();
     }
 
     /**
-     * @since 1.1
+     * @since 3.0
      */
-    public AbstractMIControl(DsfSession session, boolean useThreadAndFrameOptions) {
+    public AbstractMIControl(DsfSession session, boolean useThreadAndFrameOptions, CommandFactory factory) {
         super(session);
         fUseThreadAndFrameOptions = useThreadAndFrameOptions;
+        fCommandFactory = factory;
     }
 
     /**
@@ -148,6 +155,20 @@ public abstract class AbstractMIControl extends AbstractDsfService
      */
     private synchronized OutputStream getMITracingStream() {
     	return fTracingStream;
+    }
+    
+    /**
+	 * @since 3.0
+	 */
+    protected void setUseThreadAndFrameOptions(boolean shouldUse) {
+    	fUseThreadAndFrameOptions = shouldUse;
+    }
+    
+    /**
+     * @since 3.0
+     */
+    public CommandFactory getCommandFactory() {
+    	return fCommandFactory;
     }
     
     /**
@@ -301,7 +322,8 @@ public abstract class AbstractMIControl extends AbstractDsfService
 						if (targetThread != null && !targetThread.equals("0") && !targetThread.equals(fCurrentThreadId)) { //$NON-NLS-1$
 							fCurrentThreadId = targetThread;
 							resetCurrentStackLevel();
-							CommandHandle cmdHandle = new CommandHandle(new MIThreadSelect(targetContext, targetThread), null);
+							CommandHandle cmdHandle = new CommandHandle(
+									(MICommand<MIInfo>)getCommandFactory().createMIThreadSelect(targetContext, targetThread), null);
 							cmdHandle.generateTokenId();
 							fTxCommands.add(cmdHandle);
 						}
@@ -310,14 +332,20 @@ public abstract class AbstractMIControl extends AbstractDsfService
 						// the queue only if the level has been changed. 
 						if (targetFrame >= 0 && targetFrame != fCurrentStackLevel) {
 							fCurrentStackLevel = targetFrame;
-							CommandHandle cmdHandle = new CommandHandle(new MIStackSelectFrame(targetContext, targetFrame), null);
+							CommandHandle cmdHandle = new CommandHandle(
+									(MICommand<MIInfo>)getCommandFactory().createMIStackSelectFrame(targetContext, targetFrame), null);
 							cmdHandle.generateTokenId();
 							fTxCommands.add(cmdHandle);
 						}
 					}
 				}
 
-		    	handle.generateTokenId();
+				if (!(handle.getCommand() instanceof RawCommand)) {
+					// Only generate a token id if the command is not a RawCommand
+					// RawCommands are sent to GDB without an answer expected, so we don't
+					// need a token id.  In fact, GDB will fail if we send one in this case.
+					handle.generateTokenId();
+				}
 		    	fTxCommands.add(handle);
 			}
 		}
@@ -528,7 +556,10 @@ public abstract class AbstractMIControl extends AbstractDsfService
                     /*
                      *  We note that this is an outstanding request at this point.
                      */
-                    fRxCommands.put(commandHandle.getTokenId(), commandHandle);
+                    if (!(commandHandle.getCommand() instanceof RawCommand)) {
+                    	// RawCommands will not get an answer, so we cannot put them in the receive queue.
+                    	fRxCommands.put(commandHandle.getTokenId(), commandHandle);
+                    }
                 }
                 
                 /*
@@ -540,6 +571,9 @@ public abstract class AbstractMIControl extends AbstractDsfService
                 if (fUseThreadAndFrameOptions && commandHandle.getCommand().supportsThreadAndFrameOptions()) {
                 	str = commandHandle.getTokenId() + commandHandle.getCommand().constructCommand(commandHandle.getThreadId(),
                 			                                                                       commandHandle.getStackFrameId());
+                } else if (commandHandle.getCommand() instanceof RawCommand) {
+                	// RawCommands CANNOT have a token id: GDB would read it as part of the RawCommand!
+                	str = commandHandle.getCommand().constructCommand();
                 } else {
                 	str = commandHandle.getTokenId() + commandHandle.getCommand().constructCommand();
                 }
@@ -549,7 +583,7 @@ public abstract class AbstractMIControl extends AbstractDsfService
                         fOutputStream.write(str.getBytes());
                         fOutputStream.flush();
 
-                        GdbPlugin.debug(GdbPlugin.getDebugTime() + " " + str); //$NON-NLS-1$
+                        GdbPlugin.debug(GdbPlugin.getDebugTime() + MI_TRACE_IDENTIFIER + str);
                         if (getMITracingStream() != null) {
                         	try {
                         		String message = GdbPlugin.getDebugTime() + " " + str; //$NON-NLS-1$
@@ -579,12 +613,20 @@ public abstract class AbstractMIControl extends AbstractDsfService
         private final InputStream fInputStream;
         private final MIParser fMiParser = new MIParser();
 
-        /** 
-        * List of out of band records since the last result record.  Out of band records are 
-        * required for processing the results of CLI commands.   
-        */ 
-        private final List<MIOOBRecord> fAccumulatedOOBRecords = new ArrayList<MIOOBRecord>();
-        
+		/**
+		 * List of out of band records since the last result record. Out of band
+		 * records are required for processing the results of CLI commands.
+		 */
+        private final List<MIOOBRecord> fAccumulatedOOBRecords = new LinkedList<MIOOBRecord>();
+
+		/**
+		 * List of stream records since the last result record, not including
+		 * the record currently being processed (if it's a stream one). This is
+		 * a subset of {@link #fAccumulatedOOBRecords}, as a stream record is a
+		 * particular type of OOB record.
+		 */
+        private final List<MIStreamRecord> fAccumulatedStreamRecords = new LinkedList<MIStreamRecord>();
+
         public RxThread(InputStream inputStream) {
             super("MI RX Thread"); //$NON-NLS-1$
             fInputStream = inputStream;
@@ -597,11 +639,12 @@ public abstract class AbstractMIControl extends AbstractDsfService
                 String line;
                 while ((line = reader.readLine()) != null) {
                     if (line.length() != 0) {
-                        GdbPlugin.debug(GdbPlugin.getDebugTime() + " " + line +"\n"); //$NON-NLS-1$ //$NON-NLS-2$
+                        GdbPlugin.debug(GdbPlugin.getDebugTime() + MI_TRACE_IDENTIFIER + line + "\n"); //$NON-NLS-1$
                         
+                        final String finalLine = line;
                         if (getMITracingStream() != null) {
                         	try {
-                        		String message = GdbPlugin.getDebugTime() + " " + line + "\n"; //$NON-NLS-1$ //$NON-NLS-2$
+                        		String message = GdbPlugin.getDebugTime() + " " + finalLine + "\n"; //$NON-NLS-1$ //$NON-NLS-2$
                         		while (message.length() > 100) {
                         			String partial = message.substring(0, 100) + "\\\n"; //$NON-NLS-1$
                         			message = message.substring(100);
@@ -615,8 +658,8 @@ public abstract class AbstractMIControl extends AbstractDsfService
                         		setMITracingStream(null);
                         	}
                         }
-
-                        processMIOutput(line);
+                        
+                    	processMIOutput(line);
                     }
                 }
             } catch (IOException e) {
@@ -689,10 +732,61 @@ public abstract class AbstractMIControl extends AbstractDsfService
         	return clientMsg.toString();
         }
 
+       private String getBackendMessage(MIOutput response) {
+            
+        	// Attempt to extract a message from the result record:
+        	String message = null;
+        	String[] parameters = null;
+        	if (response != null && response.getMIResultRecord() != null) {
+        		MIResult[] results = response.getMIResultRecord().getMIResults();
+
+        		// Extract the parameters
+        		MIResult paramsRes = findResultRecord(results, "parameters"); //$NON-NLS-1$
+        		if (paramsRes != null && paramsRes.getMIValue() instanceof MIList) {
+        			MIValue[] paramValues = ((MIList)paramsRes.getMIValue()).getMIValues();
+        			parameters = new String[paramValues.length];
+        			for (int i = 0; i < paramValues.length; i++) {
+        				if (paramValues[i] instanceof MIConst) {
+        					parameters[i] = ((MIConst)paramValues[i]).getString();
+        				} else {
+        					parameters[i] = ""; //$NON-NLS-1$
+        				}
+        			}
+        		}
+        		MIResult messageRes = findResultRecord(results, "message"); //$NON-NLS-1$
+        		if (messageRes != null && messageRes.getMIValue() instanceof MIConst) {
+        			message = ((MIConst)messageRes.getMIValue()).getString();
+        		}
+        		// FRCH: I believe that the actual string is "msg" ...
+        		// FRCH: (at least for the version of gdb I'm using)
+        		else {
+        			messageRes = findResultRecord(results, "msg"); //$NON-NLS-1$
+        			if (messageRes != null && messageRes.getMIValue() instanceof MIConst) {
+        				message = ((MIConst)messageRes.getMIValue()).getString();
+        			}
+        		}
+        	}
+        	StringBuilder clientMsg = new StringBuilder();
+        	if (message != null) {
+        		if (parameters != null) {
+        			try {
+        				clientMsg.append(MessageFormat.format(message, parameters));
+        			} catch(IllegalArgumentException e2) {
+        				// Message format string invalid.  Fallback to just appending the strings. 
+        				clientMsg.append(message);
+        				clientMsg.append(parameters);
+        			}
+        		} else {
+        			clientMsg.append(message);
+        		}
+        	}
+        	return clientMsg.toString();
+        }
+
         void processMIOutput(String line) {
             MIParser.RecordType recordType = fMiParser.getRecordType(line);
             
-            if (recordType == MIParser.RecordType.ResultRecord) { 
+            if (recordType == MIParser.RecordType.ResultRecord) {
                 final MIResultRecord rr = fMiParser.parseMIResultRecord(line);
            
             	
@@ -707,6 +801,7 @@ public abstract class AbstractMIControl extends AbstractDsfService
                     final MIOutput response = new MIOutput(
                         rr, fAccumulatedOOBRecords.toArray(new MIOOBRecord[fAccumulatedOOBRecords.size()]) );
                     fAccumulatedOOBRecords.clear();
+                    fAccumulatedStreamRecords.clear();
                 	
                 	MIInfo result = commandHandle.getCommand().getResult(response);
 					DataRequestMonitor<MIInfo> rm = commandHandle.getRequestMonitor();
@@ -725,7 +820,9 @@ public abstract class AbstractMIControl extends AbstractDsfService
 						
 						if ( errorResult.equals(MIResultRecord.ERROR) ) {
 							String status = getStatusString(commandHandle.getCommand(),response);
-							rm.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, REQUEST_FAILED, status, null)); 
+							String message = getBackendMessage(response);
+							Exception exception = new Exception(message);
+							rm.setStatus(new Status(IStatus.ERROR, GdbPlugin.PLUGIN_ID, REQUEST_FAILED, status, exception)); 
 						}
 						
 						/*
@@ -791,11 +888,29 @@ public abstract class AbstractMIControl extends AbstractDsfService
         	} else if (recordType == MIParser.RecordType.OOBRecord) {
 				// Process OOBs
         		final MIOOBRecord oob = fMiParser.parseMIOOBRecord(line);
-       	        fAccumulatedOOBRecords.add(oob);
-       	        final MIOutput response = new MIOutput(oob);
 
+        		fAccumulatedOOBRecords.add(oob);
+        		if (fAccumulatedOOBRecords.size() > 20) { // limit growth; see bug 302927
+        			fAccumulatedOOBRecords.remove(0);
+        		}
 
-				
+				// The handling of this OOB record may need the stream records
+				// that preceded it. One such case is a stopped event caused by a
+				// catchpoint in gdb < 7.0. The stopped event provides no
+				// reason, but we can determine it was caused by a catchpoint by
+				// looking at the target stream.
+        		
+       	        final MIOutput response = new MIOutput(oob, fAccumulatedStreamRecords.toArray(new MIStreamRecord[fAccumulatedStreamRecords.size()]));
+
+				// If this is a stream record, add it to the accumulated bucket
+				// for possible use in handling a future OOB (see comment above)
+    			if (oob instanceof MIStreamRecord) {
+    				fAccumulatedStreamRecords.add((MIStreamRecord)oob);
+            		if (fAccumulatedStreamRecords.size() > 20) { // limit growth; see bug 302927
+            			fAccumulatedStreamRecords.remove(0);
+            		}
+    			}
+
             	/*
             	 *   OOBS are events. So we pass them to any event listeners who want to see them. Again this must
             	 *   be done on the DSF thread for integrity.

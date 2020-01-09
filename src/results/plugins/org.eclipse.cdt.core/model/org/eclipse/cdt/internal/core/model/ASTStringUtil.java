@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -19,6 +19,7 @@ import org.eclipse.cdt.core.dom.ast.IASTDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTDeclarator;
 import org.eclipse.cdt.core.dom.ast.IASTElaboratedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTEnumerationSpecifier;
+import org.eclipse.cdt.core.dom.ast.IASTEqualsInitializer;
 import org.eclipse.cdt.core.dom.ast.IASTExpression;
 import org.eclipse.cdt.core.dom.ast.IASTExpressionList;
 import org.eclipse.cdt.core.dom.ast.IASTFieldDeclarator;
@@ -26,7 +27,7 @@ import org.eclipse.cdt.core.dom.ast.IASTFunctionDeclarator;
 import org.eclipse.cdt.core.dom.ast.IASTFunctionDefinition;
 import org.eclipse.cdt.core.dom.ast.IASTIdExpression;
 import org.eclipse.cdt.core.dom.ast.IASTInitializer;
-import org.eclipse.cdt.core.dom.ast.IASTInitializerExpression;
+import org.eclipse.cdt.core.dom.ast.IASTInitializerClause;
 import org.eclipse.cdt.core.dom.ast.IASTInitializerList;
 import org.eclipse.cdt.core.dom.ast.IASTLiteralExpression;
 import org.eclipse.cdt.core.dom.ast.IASTName;
@@ -44,23 +45,23 @@ import org.eclipse.cdt.core.dom.ast.c.ICASTPointer;
 import org.eclipse.cdt.core.dom.ast.c.ICASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTConstructorInitializer;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTDeclarator;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTElaboratedTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTFunctionDeclarator;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTParameterDeclaration;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTPointerToMember;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTQualifiedName;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTReferenceOperator;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTSimpleDeclSpecifier;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTSimpleTypeConstructorExpression;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTSimpleTypeTemplateParameter;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateId;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplateParameter;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTemplatedTypeTemplateParameter;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTypenameExpression;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTTypeId;
 import org.eclipse.cdt.core.dom.ast.gnu.c.ICASTKnRFunctionDeclarator;
 import org.eclipse.cdt.core.dom.ast.gnu.cpp.IGPPASTPointer;
-import org.eclipse.cdt.core.dom.ast.gnu.cpp.IGPPASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.parser.Keywords;
-import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
+import org.eclipse.cdt.internal.core.dom.parser.ASTQueries;
 
 
 /**
@@ -129,7 +130,7 @@ public class ASTStringUtil {
 	 */
 	public static String getReturnTypeString(IASTDeclSpecifier declSpecifier, IASTFunctionDeclarator fdecl) {
 		final StringBuilder buffer= new StringBuilder();
-		final IASTDeclarator declarator= CPPVisitor.findOutermostDeclarator(fdecl);
+		final IASTDeclarator declarator= ASTQueries.findOutermostDeclarator(fdecl);
 		appendDeclarationString(buffer, declSpecifier, declarator, fdecl);
 		return trimRight(buffer).toString();
 	}
@@ -273,6 +274,8 @@ public class ASTStringUtil {
 					|| declarator instanceof IASTFunctionDeclarator
 					|| declarator instanceof IASTFieldDeclarator;
 				appendDeclaratorString(buffer, nestedDeclarator, protectPointers, returnTypeOf);
+			} else if (declarator instanceof ICPPASTDeclarator && ((ICPPASTDeclarator) declarator).declaresParameterPack()) {
+				buffer.append(Keywords.cpELLIPSIS);
 			}
 
 			if (declarator instanceof IASTArrayDeclarator) {
@@ -322,20 +325,20 @@ public class ASTStringUtil {
 	}
 
 	private static StringBuilder appendInitializerString(StringBuilder buffer, IASTInitializer initializer) {
-		if (initializer instanceof IASTInitializerExpression) {
-			final IASTInitializerExpression initializerExpression= (IASTInitializerExpression)initializer;
+		if (initializer instanceof IASTEqualsInitializer) {
+			final IASTEqualsInitializer initializerExpression= (IASTEqualsInitializer)initializer;
 			buffer.append(Keywords.cpASSIGN);
-			appendExpressionString(buffer, initializerExpression.getExpression());
+			appendInitClauseString(buffer, initializerExpression.getInitializerClause());
 		} else if (initializer instanceof IASTInitializerList) {
 			final IASTInitializerList initializerList= (IASTInitializerList)initializer;
-			final IASTInitializer[] initializers= initializerList.getInitializers();
+			final IASTInitializerClause[] initializers= initializerList.getClauses();
 			buffer.append(Keywords.cpASSIGN);
 			buffer.append(Keywords.cpLBRACE);
 			for (int i= 0; i < initializers.length; i++) {
 				if (i > 0) {
 					buffer.append(COMMA_SPACE);
 				}
-				appendInitializerString(buffer, initializers[i]);
+				appendInitClauseString(buffer, initializers[i]);
 			}
 			trimRight(buffer);
 			buffer.append(Keywords.cpRBRACE);
@@ -345,9 +348,14 @@ public class ASTStringUtil {
 //			final ICASTDesignator[] designator= designatedInitializer.getDesignators();
 		} else if (initializer instanceof ICPPASTConstructorInitializer) {
 			final ICPPASTConstructorInitializer constructorInitializer= (ICPPASTConstructorInitializer)initializer;
-			final IASTExpression expression= constructorInitializer.getExpression();
+			final IASTInitializerClause[] clauses= constructorInitializer.getArguments();
 			buffer.append(Keywords.cpLPAREN);
-			appendExpressionString(buffer, expression);
+			for (int i= 0; i < clauses.length; i++) {
+				if (i > 0) {
+					buffer.append(COMMA_SPACE);
+				}
+				appendInitClauseString(buffer, clauses[i]);
+			}
 			trimRight(buffer);
 			buffer.append(Keywords.cpRPAREN);
 		} else if (initializer != null) {
@@ -356,9 +364,19 @@ public class ASTStringUtil {
 		return buffer;
 	}
 
+	private static void appendInitClauseString(StringBuilder buffer, IASTInitializerClause initializerClause) {
+		if (initializerClause instanceof IASTExpression) {
+			appendExpressionString(buffer, (IASTExpression) initializerClause);
+		} else if (initializerClause instanceof IASTInitializer) {
+			appendInitializerString(buffer, (IASTInitializer) initializerClause);
+		}
+	}
+
 	private static StringBuilder appendTypeIdString(StringBuilder buffer, IASTTypeId typeId) {
 		appendDeclSpecifierString(buffer, typeId.getDeclSpecifier());
 		appendDeclaratorString(buffer, typeId.getAbstractDeclarator(), false, null);
+		if (typeId instanceof ICPPASTTypeId && ((ICPPASTTypeId) typeId).isPackExpansion())
+			buffer.append(Keywords.cpELLIPSIS);
 		return buffer;
 	}
 
@@ -573,27 +591,14 @@ public class ASTStringUtil {
 			if (simpleDeclSpec.isLong()) {
 				buffer.append(Keywords.LONG).append(' ');
 			}
-			if (simpleDeclSpec instanceof ICASTSimpleDeclSpecifier) {
-				final ICASTSimpleDeclSpecifier cSimpleDeclSpec= (ICASTSimpleDeclSpecifier)simpleDeclSpec;
-				if (cSimpleDeclSpec.isLongLong()) {
-					buffer.append(Keywords.LONG_LONG).append(' ');
-				}
-				if (cSimpleDeclSpec.isComplex()) {
-					buffer.append(Keywords._COMPLEX).append(' ');
-				}
-				if (cSimpleDeclSpec.isImaginary()) {
-					buffer.append(Keywords._IMAGINARY).append(' ');
-				}
-				switch (simpleDeclSpec.getType()) {
-				case ICASTSimpleDeclSpecifier.t_Bool:
-					buffer.append(Keywords._BOOL).append(' ');
-					break;
-				}
-			} else if (simpleDeclSpec instanceof IGPPASTSimpleDeclSpecifier) {
-				final IGPPASTSimpleDeclSpecifier gppSimpleDeclSpec= (IGPPASTSimpleDeclSpecifier)simpleDeclSpec;
-				if (gppSimpleDeclSpec.isLongLong()) {
-					buffer.append(Keywords.LONG_LONG).append(' ');
-				}
+			if (simpleDeclSpec.isLongLong()) {
+				buffer.append(Keywords.LONG_LONG).append(' ');
+			}
+			if (simpleDeclSpec.isComplex()) {
+				buffer.append(Keywords._COMPLEX).append(' ');
+			}
+			if (simpleDeclSpec.isImaginary()) {
+				buffer.append(Keywords._IMAGINARY).append(' ');
 			}
 			switch (simpleDeclSpec.getType()) {
 			case IASTSimpleDeclSpecifier.t_void:
@@ -611,11 +616,21 @@ public class ASTStringUtil {
 			case IASTSimpleDeclSpecifier.t_double:
 				buffer.append(Keywords.DOUBLE).append(' ');
 				break;
-			case ICPPASTSimpleDeclSpecifier.t_bool:
-				buffer.append(Keywords.BOOL).append(' ');
+			case IASTSimpleDeclSpecifier.t_bool:
+				if (simpleDeclSpec instanceof ICASTSimpleDeclSpecifier) {
+					buffer.append(Keywords.cBOOL).append(' ');
+				} else {
+					buffer.append(Keywords.BOOL).append(' ');
+				}
 				break;
-			case ICPPASTSimpleDeclSpecifier.t_wchar_t:
+			case IASTSimpleDeclSpecifier.t_wchar_t:
 				buffer.append(Keywords.WCHAR_T).append(' ');
+				break;
+			case IASTSimpleDeclSpecifier.t_char16_t:
+				buffer.append(Keywords.CHAR16_T).append(' ');
+				break;
+			case IASTSimpleDeclSpecifier.t_char32_t:
+				buffer.append(Keywords.CHAR32_T).append(' ');
 				break;
 			default:
 			}
@@ -686,14 +701,12 @@ public class ASTStringUtil {
 				}
 				appendExpressionString(buffer, expressions[i]);
 			}
-		} else if (expression instanceof ICPPASTTypenameExpression) {
-			final ICPPASTTypenameExpression typenameExpression= (ICPPASTTypenameExpression)expression;
-			buffer.append(Keywords.TYPENAME).append(' ');
-			appendQualifiedNameString(buffer, typenameExpression.getName());
-			final IASTExpression initialValue= typenameExpression.getInitialValue();
-			if (initialValue != null) {
-				buffer.append(Keywords.cpASSIGN);
-				appendExpressionString(buffer, initialValue);
+		} else if (expression instanceof ICPPASTSimpleTypeConstructorExpression) {
+			final ICPPASTSimpleTypeConstructorExpression typeCast= (ICPPASTSimpleTypeConstructorExpression)expression;
+			appendDeclSpecifierString(buffer, typeCast.getDeclSpecifier());
+			final IASTInitializer init= typeCast.getInitializer();
+			if (init != null) {
+				appendInitializerString(buffer, init);
 			}
 		} else if (expression instanceof IASTLiteralExpression) {
 			buffer.append(ASTSignatureUtil.getExpressionString(expression));

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Broadcom Corporation and others.
+ * Copyright (c) 2008, 2010 Broadcom Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -90,20 +90,22 @@ public class XmlProjectDescriptionStorage2 extends XmlProjectDescriptionStorage 
 		try {
 			project.getFolder(STORAGE_FOLDER_NAME).accept(new IResourceProxyVisitor() {
 				public boolean visit(IResourceProxy proxy) throws CoreException {
-					if (modificationMap.containsKey(proxy.getName()))
-						if (modificationMap.get(proxy.getName()) < proxy.getModificationStamp()) {
+					if (modificationMap.containsKey(proxy.getName())) {
+						long modStamp = getModificationStamp(proxy.requestResource());
+						if (modificationMap.get(proxy.getName()) != modStamp) {
 							// There may be old storages in here, ensure we don't infinite reload...
-							modificationMap.put(proxy.getName(), proxy.getModificationStamp());
+							modificationMap.put(proxy.getName(), modStamp);
 							setCurrentDescription(null, true);
 							needReload[0] = true;
 						}
+					}
 					return true;
 				}
 			}, IResource.NONE);
 		} catch (CoreException e) {
 			// STORAGE_FOLDER_NAME doesn't exist... or something went wrong during reload
 			if (project.getFolder(STORAGE_FOLDER_NAME).exists())
-				CCorePlugin.log("XmlProjectDescriptionStorage2: Problem checking for external modification: " + e.getMessage());
+				CCorePlugin.log("XmlProjectDescriptionStorage2: Problem checking for external modification: " + e.getMessage()); //$NON-NLS-1$
 		}
 		return needReload[0];
 	}
@@ -134,7 +136,8 @@ public class XmlProjectDescriptionStorage2 extends XmlProjectDescriptionStorage 
 																	currEl.getAttribute(EXTERNAL_CELEMENT_KEY),
 																	reCreate, createEmptyIfNotFound, readOnly);
 				// Update the modification stamp
-				modificationMap.put(currEl.getAttribute(EXTERNAL_CELEMENT_KEY), project.getFolder(STORAGE_FOLDER_NAME).getFile(currEl.getAttribute(EXTERNAL_CELEMENT_KEY)).getModificationStamp());
+				modificationMap.put(currEl.getAttribute(EXTERNAL_CELEMENT_KEY), 
+						getModificationStamp(project.getFolder(STORAGE_FOLDER_NAME).getFile(currEl.getAttribute(EXTERNAL_CELEMENT_KEY))));
 
 				ICStorageElement currParent = currEl.getParent();
 				// Get the storageModule element in the new Document

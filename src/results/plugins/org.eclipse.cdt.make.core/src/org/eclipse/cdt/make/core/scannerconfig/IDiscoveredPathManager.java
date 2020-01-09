@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,12 +14,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.cdt.make.internal.core.scannerconfig.util.SymbolEntry;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.w3c.dom.Element;
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noimplement This interface is not intended to be implemented by clients.
+ */
 public interface IDiscoveredPathManager {
 
 	interface IDiscoveredPathInfo {
@@ -33,17 +38,17 @@ public interface IDiscoveredPathManager {
         /**
          * Get defined symbols for the whole project 
          */
-		Map 	getSymbols();
+        Map<String, String> getSymbols();
 		
         IDiscoveredScannerInfoSerializable getSerializable();
 	}
     
     interface IPerProjectDiscoveredPathInfo extends IDiscoveredPathInfo {
-        void setIncludeMap(LinkedHashMap map);
-        void setSymbolMap(LinkedHashMap map);
+        void setIncludeMap(LinkedHashMap<String, Boolean> map);
+        void setSymbolMap(LinkedHashMap<String, SymbolEntry> map);
 
-        LinkedHashMap getIncludeMap();
-        LinkedHashMap getSymbolMap();
+        LinkedHashMap<String, Boolean> getIncludeMap();
+        LinkedHashMap<String, SymbolEntry> getSymbolMap();
     }
 
     interface IPerFileDiscoveredPathInfo extends IDiscoveredPathInfo {
@@ -58,7 +63,7 @@ public interface IDiscoveredPathManager {
         /**
          * Get defined symbols for the specific path (file) 
          */
-        Map     getSymbols(IPath path);
+        Map<String, String> getSymbols(IPath path);
         
         /**
          * Get include files (gcc option -include) for the specific path (file)
@@ -81,22 +86,18 @@ public interface IDiscoveredPathManager {
     	 * 
     	 * @return Map
     	 */
-    	Map getPathInfoMap();
+    	Map<IResource, PathInfo> getPathInfoMap();
     }
 
     
     interface IDiscoveredScannerInfoSerializable {
         /**
          * Serialize discovered scanner info to an XML element
-         * 
-         * @param root
          */
         public void serialize(Element root);
         
         /**
          * Deserialize discovered scanner info from an XML element
-         * 
-         * @param root
          */
         public void deserialize(Element root);
         

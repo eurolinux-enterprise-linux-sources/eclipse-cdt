@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 IBM Corporation and others.
+ * Copyright (c) 2004, 2009 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -27,19 +27,20 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPConstructor;
 public class CPPConstructor extends CPPMethod implements ICPPConstructor {
 
     static public class CPPConstructorProblem extends CPPMethod.CPPMethodProblem implements ICPPConstructor {
-        public CPPConstructorProblem( IASTNode node, int id, char[] arg ) {
-            super( node, id, arg );
+        public CPPConstructorProblem(IASTNode node, int id, char[] arg) {
+            super(node, id, arg);
         }
 
         public boolean isExplicit() throws DOMException{
             throw new DOMException( this );
         }
     }
+
 	/**
 	 * @param declarator
 	 */
 	public CPPConstructor(ICPPASTFunctionDeclarator declarator) {
-		super( declarator );
+		super(declarator);
 	}
 
     /* (non-Javadoc)
@@ -55,5 +56,4 @@ public class CPPConstructor extends CPPMethod implements ICPPConstructor {
     	}
         return false;
     }
-
 }

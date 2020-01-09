@@ -4,12 +4,12 @@ Epoch: 1
 
 %define run_tests               0
 %define ship_tests              0
-%define major                   6
+%define major                   7
 %define minor                   0       
 %define majmin                  %{major}.%{minor}
-%define micro                   2
+%define micro                   1
 %define eclipse_base            %{_libdir}/eclipse
-%define build_id		201002161416
+%define build_id		201009241320
 
 
 # All arches line up except i386 -> x86
@@ -22,7 +22,7 @@ Epoch: 1
 Summary:        Eclipse C/C++ Development Tools (CDT) plugin
 Name:           eclipse-cdt
 Version:        %{majmin}.%{micro}
-Release:        3%{?dist}
+Release:        4%{?dist}
 License:        EPL and CPL
 Group:          Development/Tools
 URL:            http://www.eclipse.org/cdt
@@ -33,13 +33,13 @@ Requires:       eclipse-platform
 # script.  Note that the optional c99 and upc parsers plus the optional
 # xlc support features have been removed.
 
-Source0: %{name}-fetched-src-v%{build_id}.tar.bz2
+Source0: %{name}-fetched-src-CDT_7_0_1.tar.bz2
 Source4: fetch-cdt.sh
 
-Source1: %{name}-fetched-src-autotools-R0_5_1.tar.gz
+Source1: %{name}-fetched-src-autotools-PRE_R0_7.tar.gz
 Source14: make-autotools-tarball.sh
 
-Source2: %{name}-fetched-src-libhover-R0_5_1.tar.gz
+Source2: %{name}-fetched-src-libhover-PRE_R0_7.tar.gz
 Source15: make-libhover-tarball.sh
 
 ## The following tarball was generated thusly:
@@ -68,24 +68,6 @@ Source11: ammacros-1.4-p6.xml
 Source12: ammacros-1.9.5.xml
 Source13: ammacros-1.9.6.xml
 
-## Patch to cppunit code to support double-clicking on file names, classes, and
-## member names in the Hierarchy and Failure views such that the appropriate
-## file will be opened and the appropriate line will be selected.
-#Patch8: %{name}-cppunit-ui.patch
-## Patch to upgrade version number for cppunit feature.
-#Patch9: %{name}-cppunit-feature.patch
-## Patch to fix default paths used by cppunit wizards to find header files and
-## libraries.
-#Patch10: %{name}-cppunit-default-location.patch
-## Patch to cppunit code to remove references to deprecated class which has
-## been removed in CDT 4.0.
-#Patch11: %{name}-cppunit-env-tab.patch
-
-# Remove include of stropts.h in openpty.c as it is no longer included 
-# in glibc-headers package
-# https://bugs.eclipse.org/bugs/show_bug.cgi?id=272373
-Patch12: %{name}-openpty.patch
-
 # Add XML -> HTML generation after running tests
 Patch13: %{name}-testaggregation.patch
 
@@ -93,8 +75,8 @@ Patch13: %{name}-testaggregation.patch
 # plugin and not require html to access them.
 Patch14: %{name}-libhover-local.patch
 
-# Patches for ppc64
-# https://bugs.eclipse.org/bugs/show_bug.cgi?id=272380
+# Fix for Eclipse bug 326176
+Patch15: %{name}-gdbjtag.patch
 
 # Add LDFLAGS to Makefile for .so
 # https://bugs.eclipse.org/bugs/show_bug.cgi?id=272364
@@ -104,20 +86,20 @@ Patch16: %{name}-ppc64-add_ldflags.patch
 # https://bugs.eclipse.org/bugs/show_bug.cgi?id=272370
 Patch17: %{name}-ppc64-add_xopen_source-include.patch
 
+# Fix for BZ 668890 - debug core logs spawner I/O exception
+Patch18: %{name}-debugSpawnerBug.patch
+
 # Following is a patch to autotools to supply macro hover docs locally
 # in the plugin.
 Patch19: %{name}-autotools-local.patch
 
-# Disable mylyn bridge compiling. Should be removed when CDT 7.0 is out.
-Patch20: %{name}-disable-mylyn.patch
+# Following is a patch to the gnutool docs and fixes BZ 622713
+Patch20: %{name}-gnutool-docs.patch
 
-# Add new setTargets interface to MakeTargetManager for use by Autotools.
-# This can be removed for CDT 7.0.
-Patch21: %{name}-maketargets.patch
-
-BuildRequires: eclipse-pde
-BuildRequires: eclipse-rse >= 3.0
+BuildRequires: eclipse-pde >= 3.6.0
+BuildRequires: eclipse-rse >= 3.1.1
 BuildRequires:  java-devel >= 1.4.2
+BuildRequires: objectweb-asm >= 3.2
 BuildRequires: lpg-java-compat
 %if %{run_tests}
 BuildRequires:  vnc-server
@@ -125,8 +107,9 @@ BuildRequires:  w3m
 %endif
 
 Requires:       gdb make gcc-c++ autoconf automake libtool
-Requires:       eclipse-platform >= 1:3.5.0
-Requires:	eclipse-rse >= 3.0
+Requires:       eclipse-platform >= 1:3.6.0
+Requires:	eclipse-rse >= 3.1.1
+Requires:	objectweb-asm >= 3.2
 
 %if 0%{?rhel} >= 6
 ExclusiveArch: i686 x86_64
@@ -171,21 +154,13 @@ Test suite for Eclipse C/C++ Development Tools (CDT).
 
 pushd "org.eclipse.cdt.releng"
 
-# Following patches a C file to remove reference to stropts.h which is
-# not needed and is missing in latest glibc
-pushd results/plugins/org.eclipse.cdt.core.linux/library
-%patch12 -p0
-popd
 pushd results/plugins
 %patch13
 popd
-pushd results/plugins/org.eclipse.cdt.make.core
-%patch21 -p0
+%patch15 -p2
+pushd results/plugins/org.eclipse.cdt.core
+%patch18
 popd
-#pushd results/plugins/org.eclipse.cdt.core.tests
-#rm parser/org/eclipse/cdt/core/parser/tests/scanner/LexerTests.java
-#%patch14
-#popd
 
 # Only build the sdk
 offset=0; 
@@ -220,6 +195,7 @@ mkdir autotools
 pushd autotools
 tar -xzf %{SOURCE1}
 %patch19 -p0
+%patch20 -p0
 pushd org.eclipse.linuxtools.cdt.autotools.core
 mkdir macros
 pushd macros
@@ -250,17 +226,6 @@ popd
 popd
 popd
 
-## Cppunit stuff
-#
-#mkdir cppunit
-#pushd cppunit
-#tar -xzf %{SOURCE2}
-#%patch8 -p0
-#%patch9 -p0
-#%patch10 -p0
-#%patch11 -p0
-#popd
-
 # Upstream CVS includes random .so files.  Let's remove them now.
 # We actually remove the entire "os" directory since otherwise
 # we wind up with some empty directories that we don't want.
@@ -286,16 +251,14 @@ cd ../org.eclipse.cdt.core.linux
 popd
 %endif
 
-#remove mylyn plugins (part of mylyn srpm now)
-rm -fr results/plugins/org.eclipse.cdt.mylyn*
-%patch20
-
 %build
 export JAVA_HOME=%{java_home}
 export PATH=%{java_bin}:/usr/bin:$PATH
 
 # See comments in the script to understand this.
-/bin/sh -x %{eclipse_base}/buildscripts/copy-platform SDK \
+cp %{eclipse_base}/buildscripts/copy-platform .
+sed -i "s/dropins; ls -d \\*\"\$optional\"\\*/dropins; ls -d \"\$optional\"/g" copy-platform
+/bin/sh -x copy-platform SDK \
   %{eclipse_base} xmlrpc codec httpclient lang rse
 ln -s %{_javadir}/lpgjavaruntime-1.1.0.jar SDK/plugins/net.sourceforge.lpg.lpgjavaruntime_1.1.0.jar
 SDK=$(cd SDK >/dev/null && pwd)
@@ -593,6 +556,29 @@ rm -rf ${RPM_BUILD_ROOT}
 %endif
 
 %changelog
+* Fri Feb 25 2011 Jeff Johnston  <jjohnstn@redhat.com> 1:7.0.1-4
+- Resolves: #678364
+- Modify a version of copy-platform so it does not add wild-cards
+  when looking in the dropins folder.
+
+* Thu Feb 24 2011 Jeff Johnston  <jjohnstn@redhat.com> 1:7.0.1-3
+- Resolves: #679543, #678364
+- Fix libhover local patch to change location specifiers in glibc and
+  libstdc++ plug-ins.
+- Fix build so that it still works if eclipse-cdt-parsers is currently
+  installed.
+
+* Tue Jan 11 2011 Jeff Johnston  <jjohnstn@redhat.com> 1:7.0.1-2
+- Resolves: #622713
+- Resolves: #668890
+- Fix problems with applying autotools and libhover local patches
+
+* Fri Jan 07 2011 Jeff Johnston  <jjohnstn@redhat.com> 1:7.0.1-1
+- Resolves: #656333
+- Rebase to 7.0.1 (Helios SR1) including gdb hardware support fix
+- Rebase to Autotools/Libhover 0.7
+- Fix Eclipse bug 286162
+
 * Tue May 18 2010 Jeff Johnston  <jjohnstn@redhat.com> 1:6.0.2-3
 - Resolves: #592386
 - Rebase Autotools/Libhover to Linux tools R0.5.1.

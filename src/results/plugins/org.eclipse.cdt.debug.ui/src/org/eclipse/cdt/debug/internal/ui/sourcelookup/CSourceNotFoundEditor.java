@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2007 Nokia and others.
+ * Copyright (c) 2006, 2010 Nokia and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,7 +12,6 @@
 
 package org.eclipse.cdt.debug.internal.ui.sourcelookup;
 
-import com.ibm.icu.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -22,23 +21,22 @@ import org.eclipse.cdt.debug.core.CDebugCorePlugin;
 import org.eclipse.cdt.debug.core.sourcelookup.MappingSourceContainer;
 import org.eclipse.cdt.debug.internal.core.sourcelookup.CSourceLookupDirector;
 import org.eclipse.cdt.debug.internal.core.sourcelookup.CSourceNotFoundElement;
+import org.eclipse.cdt.debug.internal.core.sourcelookup.ICSourceNotFoundDescription;
 import org.eclipse.cdt.debug.internal.core.sourcelookup.MapEntrySourceContainer;
 import org.eclipse.cdt.debug.internal.ui.ICDebugHelpContextIds;
-import org.eclipse.cdt.debug.ui.ICDebugUIConstants;
 import org.eclipse.cdt.internal.core.model.ExternalTranslationUnit;
 import org.eclipse.cdt.internal.ui.util.EditorUtility;
 import org.eclipse.cdt.ui.CUIPlugin;
 import org.eclipse.core.filesystem.URIUtil;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
 import org.eclipse.debug.core.DebugPlugin;
-import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.ILaunchConfiguration;
 import org.eclipse.debug.core.ILaunchConfigurationWorkingCopy;
 import org.eclipse.debug.core.ILaunchManager;
-import org.eclipse.debug.core.model.IDebugElement;
 import org.eclipse.debug.core.model.ISourceLocator;
 import org.eclipse.debug.core.sourcelookup.AbstractSourceLookupDirector;
 import org.eclipse.debug.core.sourcelookup.ISourceContainer;
@@ -57,6 +55,8 @@ import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
 
+import com.ibm.icu.text.MessageFormat;
+
 /**
  * Editor that lets you select a replacement for the missing source file
  * and modifies the source locator accordingly.
@@ -71,9 +71,9 @@ public class CSourceNotFoundEditor extends CommonSourceNotFoundEditor {
 	public static final String UID_LOCATE_FILE_BUTTON = UID_CLASS_NAME+ "locateFileButton"; //$NON-NLS-1$
 	public static final String UID_EDIT_LOOKUP_BUTTON = UID_CLASS_NAME+ "editLookupButton"; //$NON-NLS-1$
 		
-	private String missingFile;
-	private ILaunch launch;
-	private IDebugElement context;
+	private String missingFile = ""; //$NON-NLS-1$
+	private ILaunchConfiguration launch;
+	private IAdaptable context;
 	private ITranslationUnit tunit;
 
 	private Button disassemblyButton;
@@ -131,7 +131,13 @@ public class CSourceNotFoundEditor extends CommonSourceNotFoundEditor {
 		else {
 			if (context == null)
 				return super.getText();
-			return MessageFormat.format(SourceLookupUIMessages.getString( "CSourceNotFoundEditor.3" ), new String[] { context.toString() });  //$NON-NLS-1$		
+			String contextDescription;
+			ICSourceNotFoundDescription description = (ICSourceNotFoundDescription) context.getAdapter(ICSourceNotFoundDescription.class);
+			if (description != null)
+				contextDescription = description.getDescription();
+			else
+				contextDescription = context.toString();
+			return MessageFormat.format(SourceLookupUIMessages.getString( "CSourceNotFoundEditor.3" ), new String[] { contextDescription });  //$NON-NLS-1$		
 		}
 	}
 
@@ -195,7 +201,7 @@ public class CSourceNotFoundEditor extends CommonSourceNotFoundEditor {
 		IWorkbenchPage page = CUIPlugin.getActivePage();
 		if (page != null) {		
 			try {
-				page.showView(ICDebugUIConstants.ID_DISASSEMBLY_VIEW);
+				page.showView("org.eclipse.cdt.dsf.debug.ui.disassembly.view"); //$NON-NLS-1$
 			} catch (PartInitException e) {}
 		}
 	}
@@ -228,6 +234,16 @@ public class CSourceNotFoundEditor extends CommonSourceNotFoundEditor {
 		director.setSourceContainers((ISourceContainer[]) containerList.toArray(new ISourceContainer[containerList.size()]));
 	}
 
+	/**
+	 * Add a path mapping source locator to the global director.
+	 * 
+	 * @param missingPath
+	 *            the compilation source path that was not found on the local
+	 *            machine
+	 * @param newSourcePath
+	 *            the location of the file locally; the user led us to it
+	 * @throws CoreException
+	 */	
 	private void addSourceMappingToCommon(IPath missingPath, IPath newSourcePath) throws CoreException {
 		CSourceLookupDirector director = CDebugCorePlugin.getDefault().getCommonSourceLookupDirector();
 		addSourceMappingToDirector(missingPath, newSourcePath, director);
@@ -238,7 +254,7 @@ public class CSourceNotFoundEditor extends CommonSourceNotFoundEditor {
 		String memento = null;
 		String type = null;
 
-		ILaunchConfigurationWorkingCopy configuration = launch.getLaunchConfiguration().getWorkingCopy();
+		ILaunchConfigurationWorkingCopy configuration = launch.getWorkingCopy();
 		memento = configuration.getAttribute(ILaunchConfiguration.ATTR_SOURCE_LOCATOR_MEMENTO, (String) null);
 		type = configuration.getAttribute(ILaunchConfiguration.ATTR_SOURCE_LOCATOR_ID, (String) null);
 		if (type == null) {
@@ -275,16 +291,8 @@ public class CSourceNotFoundEditor extends CommonSourceNotFoundEditor {
 			if (newPath.lastSegment().equalsIgnoreCase(missingPath.lastSegment())) {
 				
 				if (missingPath.segmentCount() > 1) {
-					int missingPathSegCount = missingPath.segmentCount() - 2;
-					int newPathSegCount = newPath.segmentCount() - 2;
-					while (missingPathSegCount >= 0 && newPathSegCount >= 0) {
-						if (!newPath.segment(newPathSegCount).equalsIgnoreCase(missingPath.segment(missingPathSegCount)))
-							break;
-						newPathSegCount--;
-						missingPathSegCount--;
-					}
-					IPath compPath = missingPath.removeLastSegments(missingPath.segmentCount() - missingPathSegCount - 1);
-					IPath newSourcePath = newPath.removeLastSegments(newPath.segmentCount() - newPathSegCount - 1);
+					IPath compPath = missingPath.removeLastSegments(1);
+					IPath newSourcePath = newPath.removeLastSegments(1);
 					try {
 						if (isDebugElement)
 							addSourceMappingToLaunch(compPath, newSourcePath);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  Copyright (c) 2004, 2009 IBM Corporation and others.
+ *  Copyright (c) 2004, 2010 IBM Corporation and others.
  *  All rights reserved. This program and the accompanying materials
  *  are made available under the terms of the Eclipse Public License v1.0
  *  which accompanies this distribution, and is available at
@@ -37,7 +37,7 @@ public abstract class GNUScannerExtensionConfiguration extends AbstractScannerEx
 		addMacro("__stdcall", "");
 		addMacro("__thread", "");
 
-		addMacro("__builtin_va_arg(ap,type)", "*(type *)ap");
+		addMacro("__builtin_va_arg(ap,type)", "*(typeof(type) *)ap");
 		addMacro("__builtin_constant_p(exp)", "0");
 		addMacro("__builtin_types_compatible_p(x,y)", "__builtin_types_compatible_p(sizeof(x),sizeof(y))");
 		addMacro("__offsetof__(x)", "(x)");
@@ -50,7 +50,7 @@ public abstract class GNUScannerExtensionConfiguration extends AbstractScannerEx
     	addPreprocessorKeyword(Keywords.cASSERT, IPreprocessorDirective.ppIgnore);
     	addPreprocessorKeyword(Keywords.cUNASSERT, IPreprocessorDirective.ppIgnore);
 
-		addKeyword(GCCKeywords.cp__ALIGNOF__, IGCCToken.t___alignof__ );
+		addKeyword(GCCKeywords.cp__ALIGNOF, IGCCToken.t___alignof__ );
 		addKeyword(GCCKeywords.cp__ALIGNOF__, IGCCToken.t___alignof__ );
 		addKeyword(GCCKeywords.cp__ASM, IToken.t_asm); 
 		addKeyword(GCCKeywords.cp__ASM__, IToken.t_asm); 

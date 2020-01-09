@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2009 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,7 +17,7 @@ public interface ICProjectDescriptionPreferences {
 	 * configuration used by the core and vie a versa
 	 *  
 	 * @see #getConfigurationRelations()
-	 * @see #setConfigurationRelations(Integer)
+	 * @see #setConfigurationRelations(int)
 	 */
 	public static final int CONFIGS_INDEPENDENT = 1;
 
@@ -27,7 +27,7 @@ public interface ICProjectDescriptionPreferences {
 	 * configuration used by the core and vie a versa
 	 *  
 	 * @see #getConfigurationRelations()
-	 * @see #setConfigurationRelations(Integer)
+	 * @see #setConfigurationRelations(int)
 	 */
 	public static final int CONFIGS_LINK_SETTINGS_AND_ACTIVE = 2;
 

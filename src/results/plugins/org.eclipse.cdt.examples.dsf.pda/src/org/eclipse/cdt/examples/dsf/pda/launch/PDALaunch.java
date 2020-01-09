@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Wind River Systems and others.
+ * Copyright (c) 2008, 2009 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,6 +16,7 @@ import org.eclipse.cdt.dsf.concurrent.ImmediateExecutor;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.Sequence;
 import org.eclipse.cdt.dsf.concurrent.ThreadSafe;
+import org.eclipse.cdt.dsf.debug.model.DsfLaunch;
 import org.eclipse.cdt.dsf.service.DsfServiceEventHandler;
 import org.eclipse.cdt.dsf.service.DsfSession;
 import org.eclipse.cdt.examples.dsf.pda.PDAPlugin;
@@ -24,6 +25,7 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.MultiStatus;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.debug.core.DebugException;
+import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.ILaunchConfiguration;
 import org.eclipse.debug.core.Launch;
 import org.eclipse.debug.core.model.ISourceLocator;
@@ -42,7 +44,7 @@ import org.eclipse.debug.core.model.ITerminate;
  * </p>
  */
 @ThreadSafe
-public class PDALaunch extends Launch
+public class PDALaunch extends DsfLaunch
 implements ITerminate
 {   
     // DSF executor and session.  Both are created and shutdown by the launch. 
@@ -73,6 +75,11 @@ implements ITerminate
         dsfExecutor.prestartCoreThread();
         fExecutor = dsfExecutor;
         fSession = DsfSession.startSession(fExecutor, PDAPlugin.ID_PDA_DEBUG_MODEL);
+
+        // Register the launch as an adapter This ensures that the launch,
+        // and debug model ID will be associated with all DMContexts from this
+        // session.
+        fSession.registerModelAdapter(ILaunch.class, this);
     }
 
     /**

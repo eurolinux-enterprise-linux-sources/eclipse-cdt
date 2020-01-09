@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,7 +13,23 @@ package org.eclipse.cdt.core.settings.model.util;
 import org.eclipse.cdt.core.settings.model.ICLanguageSettingEntry;
 import org.eclipse.cdt.core.settings.model.ICSettingEntry;
 
-public class KindBasedStore implements Cloneable {
+/**
+ * A storage where stored data is organized by "kind".
+ * In most cases kind is one of {@link ICLanguageSettingEntry}, i.e. include path, macro etc.
+ * 
+ * @param <T> - stored type
+ * 
+ * @see ICSettingEntry#INCLUDE_PATH
+ * @see ICSettingEntry#INCLUDE_FILE
+ * @see ICSettingEntry#MACRO
+ * @see ICSettingEntry#MACRO_FILE
+ * @see ICSettingEntry#LIBRARY_PATH
+ * @see ICSettingEntry#LIBRARY_FILE
+ * @see ICSettingEntry#OUTPUT_PATH
+ * @see ICSettingEntry#SOURCE_PATH
+ *
+ */
+public class KindBasedStore<T> implements Cloneable {
 	private static final int INDEX_INCLUDE_PATH = 0;
 	private static final int INDEX_INCLUDE_FILE = 1;
 	private static final int INDEX_MACRO = 2;
@@ -106,11 +122,11 @@ public class KindBasedStore implements Cloneable {
 	}
 
 	public static int[] getLanguageEntryKinds(){
-		return (int[])LANG_ENTRY_KINDS.clone();
+		return LANG_ENTRY_KINDS.clone();
 	}
 
 	public static int[] getAllEntryKinds(){
-		return (int[])ALL_ENTRY_KINDS.clone();
+		return ALL_ENTRY_KINDS.clone();
 	}
 
 	private int indexToKind(int index){
@@ -134,18 +150,20 @@ public class KindBasedStore implements Cloneable {
 		}
 		throw new IllegalArgumentException(UtilMessages.getString("KindBasedStore.1")); //$NON-NLS-1$
 	}
-	public Object get(int kind){
-		return fEntryStorage[kindToIndex(kind)];
+	@SuppressWarnings("unchecked")
+	public T get(int kind){
+		return (T) fEntryStorage[kindToIndex(kind)];
 	}
 
-	public Object put(int kind, Object object){
+	public T put(int kind, T object){
 		int index = kindToIndex(kind);
-		Object old = fEntryStorage[index];
+		@SuppressWarnings("unchecked")
+		T old = (T) fEntryStorage[index];
 		fEntryStorage[index] = object;
 		return old;
 	}
 	
-	private class KindBasedInfo implements IKindBasedInfo {
+	private class KindBasedInfo implements IKindBasedInfo<T> {
 		int fIdex;
 		int fKind;
 		
@@ -159,31 +177,35 @@ public class KindBasedStore implements Cloneable {
 			}
 		}
 	
-		public Object getInfo() {
-			return fEntryStorage[fIdex];
+		public T getInfo() {
+			@SuppressWarnings("unchecked")
+			T info = (T)fEntryStorage[fIdex];
+			return info;
 		}
 
 		public int getKind() {
 			return fKind;
 		}
 
-		public Object setInfo(Object newInfo) {
-			Object old = fEntryStorage[fIdex];
+		public T setInfo(T newInfo) {
+			@SuppressWarnings("unchecked")
+			T old = (T)fEntryStorage[fIdex];
 			fEntryStorage[fIdex] = newInfo;
 			return old;
 		}
 		
 	}
 	
-	public IKindBasedInfo[] getContents(){
-		IKindBasedInfo infos[] = new IKindBasedInfo[fEntryStorage.length];
+	public IKindBasedInfo<T>[] getContents(){
+		@SuppressWarnings("unchecked")
+		IKindBasedInfo<T> infos[] = new IKindBasedInfo[fEntryStorage.length];
 		for(int i = 0; i < fEntryStorage.length; i++){
 			infos[i] = new KindBasedInfo(i, false);
 		}
 		return infos;
 	}
 	
-	public IKindBasedInfo getInfo(int kind){
+	public IKindBasedInfo<T> getInfo(int kind){
 		return new KindBasedInfo(kind, true);
 	}
 	
@@ -196,8 +218,9 @@ public class KindBasedStore implements Cloneable {
 	@Override
 	public Object clone() {
 		try {
-			KindBasedStore clone = (KindBasedStore)super.clone();
-			clone.fEntryStorage = (Object[])fEntryStorage.clone();
+			@SuppressWarnings("unchecked")
+			KindBasedStore<T> clone = (KindBasedStore<T>)super.clone();
+			clone.fEntryStorage = fEntryStorage.clone();
 			return clone;
 		} catch (CloneNotSupportedException e) {
 		}

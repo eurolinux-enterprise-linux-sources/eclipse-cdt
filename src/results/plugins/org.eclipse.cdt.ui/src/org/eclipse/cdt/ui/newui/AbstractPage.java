@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Intel Corporation, QNX Software Systems, and others.
+ * Copyright (c) 2007, 2010 Intel Corporation, QNX Software Systems, and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,19 +10,21 @@
  *     Markus Schorn (Wind River Systems)
  *     Andrew Gvozdev
  *     QNX Software Systems - [271628] NPE in configs for project that failed to convert
+ *     James Blackburn (Broadcom Corp.)
  *******************************************************************************/
 package org.eclipse.cdt.ui.newui;
 
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
@@ -70,6 +72,7 @@ import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TabFolder;
 import org.eclipse.swt.widgets.TabItem;
+import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.PlatformUI;
@@ -87,7 +90,6 @@ import org.eclipse.cdt.core.settings.model.ICFolderDescription;
 import org.eclipse.cdt.core.settings.model.ICMultiItemsHolder;
 import org.eclipse.cdt.core.settings.model.ICProjectDescription;
 import org.eclipse.cdt.core.settings.model.ICResourceDescription;
-import org.eclipse.cdt.core.settings.model.ICSettingEntry;
 import org.eclipse.cdt.core.settings.model.MultiItemsHolder;
 import org.eclipse.cdt.ui.CUIPlugin;
 import org.eclipse.cdt.ui.PreferenceConstants;
@@ -147,6 +149,8 @@ implements
 	
 	private static final String PREF_ASK_REINDEX = "askReindex"; //$NON-NLS-1$
 	
+	private Map<URL, Image> loadedIcons = new HashMap<URL, Image>();
+
 	private final Image IMG_WARN = CPluginImages.get(CPluginImages.IMG_OBJS_REFACTORING_WARNING);
 	/*
 	 * Dialog widgets
@@ -155,7 +159,7 @@ implements
 	private Button manageButton;
 	private Button excludeFromBuildCheck;
 	private Label errIcon;
-	private Label errMessage;
+	private Text errMessage;
 	private Composite errPane;
 	private Composite parentComposite;
 	/*
@@ -310,7 +314,7 @@ implements
 			errIcon.setLayoutData(new GridData(GridData.BEGINNING));
 			errIcon.setImage(IMG_WARN);
 
-			errMessage = new Label(errPane, SWT.LEFT);
+			errMessage = new Text(errPane, SWT.LEFT | SWT.READ_ONLY);
 			errMessage.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
 			if (isForFolder() || isForFile()) {
@@ -322,7 +326,11 @@ implements
 				excludeFromBuildCheck.addSelectionListener(new SelectionAdapter() {
 					@Override
 					public void widgetSelected(SelectionEvent e) {
-						getResDesc().setExcluded(excludeFromBuildCheck.getSelection());
+						ICResourceDescription rcDescription = getResDesc();
+						rcDescription.setExcluded(excludeFromBuildCheck.getSelection());
+						if (currentTab instanceof AbstractCPropertyTab) {
+							((AbstractCPropertyTab)currentTab).updateData(rcDescription);
+						}
 					}
 				});
 			}
@@ -341,7 +349,7 @@ implements
 		GridData gd;
 		parentComposite = new Composite(c, SWT.NONE);
 		parentComposite.setLayoutData(gd= new GridData(GridData.FILL_BOTH));
-		gd.widthHint= 200;
+		gd.widthHint= 800;
 		itabs.clear(); 
 		if (!isSingle()) {
 			parentComposite.setLayout(new FillLayout());
@@ -408,7 +416,7 @@ implements
 				boolean enterMultiCfgsDialog = (multiCfgs == null)
 						|| (multiCfgs == cfgDescs) || !areCfgsStillThere(multiCfgs);
 				if (enterMultiCfgsDialog) {
-					ICConfigurationDescription[] mcfgs = ConfigMultiSelectionDialog.select(cfgDescs);
+					ICConfigurationDescription[] mcfgs = ConfigMultiSelectionDialog.select(cfgDescs, parentComposite.getShell());
 					if (mcfgs == null || mcfgs.length == 0) {
 						// return back to previous selection
 						int cfgIndex = -1;
@@ -681,36 +689,8 @@ implements
 			InternalTab tab = it.next();
 			if (tab != null) {
 				ICPropertyTab tabtab = tab.tab;
-				if (tabtab instanceof AbstractLangsListTab) {
-					final AbstractLangsListTab langListTab = (AbstractLangsListTab) tabtab;
-					switch(langListTab.getKind()) {
-					case ICSettingEntry.INCLUDE_PATH:
-					case ICSettingEntry.MACRO:
-					case ICSettingEntry.INCLUDE_FILE:
-					case ICSettingEntry.MACRO_FILE:
-						if (langListTab.hadSomeModification()) {
-							return true;
-						}
-						break;
-					}
-				} else if (tabtab instanceof AbstractCPropertyTab){
-					// attempt to access API that will be introduced in CDT 6.1 (bug 144085)
-					try {
-						Class<?> clazz= tabtab.getClass();
-						Method meth = clazz.getDeclaredMethod("isIndexerAffected"); //$NON-NLS-1$
-						if (meth != null) {
-							Object result = meth.invoke(tabtab);
-							if (result instanceof Boolean && ((Boolean) result).booleanValue())
-								return true;
-						}
-					} catch (SecurityException e) {
-					} catch (NoSuchMethodException e) {
-					} catch (IllegalArgumentException e) {
-					} catch (IllegalAccessException e) {
-					} catch (InvocationTargetException e) {
-						// the method was called and has thrown an exception.
-						CUIPlugin.log(e);
-					}
+				if (tabtab instanceof AbstractCPropertyTab && ((AbstractCPropertyTab)tabtab).isIndexerAffected()) {
+					return true;
 				}
 			}
 		}
@@ -989,10 +969,16 @@ implements
 				ap.forEach(ICPropertyTab.UPDATE,getResDesc());
 		}
 	}
-	
+
 	@Override
 	public void dispose() {
-		if (displayedConfig) forEach(ICPropertyTab.DISPOSE);
+		// Dispose the tabs
+		if (displayedConfig)
+			forEach(ICPropertyTab.DISPOSE);
+		// Dispose any loaded images
+		for (Image img : loadedIcons.values())
+			img.dispose();
+		loadedIcons.clear();
 
 		if (!isNewOpening)
 			handleResize(false); // save page size 
@@ -1121,19 +1107,27 @@ implements
 		itabs.add(itab);
 		return false;
 	}
-	
+
 	private Image getIcon(IConfigurationElement config) {
 		ImageDescriptor idesc = null;
+		URL url = null;
 		try {
 			String iconName = config.getAttribute(IMAGE_NAME);
 			if (iconName != null) {
-				URL pluginInstallUrl = Platform.getBundle(config.getDeclaringExtension().getContributor().getName()).getEntry("/"); //$NON-NLS-1$			
-				idesc = ImageDescriptor.createFromURL(new URL(pluginInstallUrl, iconName));
+				URL pluginInstallUrl = Platform.getBundle(config.getDeclaringExtension().getContributor().getName()).getEntry("/"); //$NON-NLS-1$
+				url = new URL(pluginInstallUrl, iconName);
+				if (loadedIcons.containsKey(url))
+					return loadedIcons.get(url);
+				idesc = ImageDescriptor.createFromURL(url);
 			}
 		} catch (MalformedURLException exception) {}
-		return (idesc == null) ? null : idesc.createImage();
+		if (idesc == null)
+			return null;
+		Image img = idesc.createImage();
+		loadedIcons.put(url, img);
+		return img;
 	}
-	
+
 	public void informAll(int code, Object data) {
 		for (int i=0; i<CDTPropertyManager.getPagesCount(); i++) {
 			Object p = CDTPropertyManager.getPage(i);

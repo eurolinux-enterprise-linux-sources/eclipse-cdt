@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -28,8 +28,8 @@ import org.eclipse.cdt.core.index.IIndex;
 import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.testplugin.CProjectHelper;
 import org.eclipse.cdt.ui.CUIPlugin;
+import org.eclipse.cdt.ui.testplugin.EditorTestHelper;
 import org.eclipse.cdt.ui.tests.BaseUITestCase;
-import org.eclipse.cdt.ui.tests.text.EditorTestHelper;
 
 import org.eclipse.cdt.internal.ui.callhierarchy.CHViewPart;
 import org.eclipse.cdt.internal.ui.callhierarchy.CallHierarchyUI;
@@ -52,12 +52,11 @@ public class CallHierarchyBaseTest extends BaseUITestCase {
 		CallHierarchyUI.setIsJUnitTest(true);
 		String prjName= "chTest"+sProjectCounter++;
 		fCProject= CProjectHelper.createCCProject(prjName, "bin", IPDOMManager.ID_FAST_INDEXER);
-		CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, NPM);
+		CCorePlugin.getIndexManager().joinIndexer(INDEXER_WAIT_TIME, npm());
 		fIndex= CCorePlugin.getIndexManager().getIndex(fCProject);
 		IWorkbenchPage page= PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
 		IViewReference[] refs= page.getViewReferences();
-		for (int i = 0; i < refs.length; i++) {
-			IViewReference viewReference = refs[i];
+		for (IViewReference viewReference : refs) {
 			page.setPartState(viewReference, IWorkbenchPage.STATE_RESTORED);
 		}
 	}

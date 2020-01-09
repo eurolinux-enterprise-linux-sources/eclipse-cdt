@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2007 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -15,7 +15,7 @@ import java.io.IOException;
 import org.eclipse.cdt.core.AbstractCExtension;
 import org.eclipse.cdt.core.CCorePlugin;
 import org.eclipse.cdt.core.IBinaryParser;
-import org.eclipse.cdt.core.ICExtensionReference;
+import org.eclipse.cdt.core.settings.model.ICConfigExtensionReference;
 import org.eclipse.cdt.utils.CPPFilt;
 import org.eclipse.cdt.utils.macho.AR;
 import org.eclipse.cdt.utils.macho.MachO;
@@ -24,7 +24,10 @@ import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
 
 /**
+ * @deprecated. Deprecated as of CDT 6.1. Use 64 bit version {@link MachOParser64}.
+ * This class is planned for removal in next major release.
  */
+@Deprecated
 public class MachOParser extends AbstractCExtension implements IBinaryParser {
 
 	/* (non-Javadoc)
@@ -118,7 +121,7 @@ public class MachOParser extends AbstractCExtension implements IBinaryParser {
 	}
 
 	protected IPath getCPPFiltPath() {
-		ICExtensionReference ref = getExtensionReference();
+		ICConfigExtensionReference ref = getConfigExtensionReference();
 		String value = ref.getExtensionData("c++filt"); //$NON-NLS-1$
 		if (value == null || value.length() == 0) {
 			value = "c++filt"; //$NON-NLS-1$

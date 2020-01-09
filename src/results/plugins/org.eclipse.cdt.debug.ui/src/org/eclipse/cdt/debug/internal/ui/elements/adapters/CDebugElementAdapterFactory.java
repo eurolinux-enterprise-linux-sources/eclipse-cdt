@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2008 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -31,9 +31,11 @@ import org.eclipse.cdt.debug.ui.disassembly.IDocumentElementContentProvider;
 import org.eclipse.cdt.debug.ui.disassembly.IDocumentElementLabelProvider;
 import org.eclipse.cdt.debug.ui.disassembly.IElementToggleBreakpointAdapter;
 import org.eclipse.core.runtime.IAdapterFactory;
+import org.eclipse.debug.internal.ui.viewers.model.provisional.IColumnPresentationFactory;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IElementContentProvider;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IElementMementoProvider;
 import org.eclipse.debug.internal.ui.viewers.model.provisional.IModelProxyFactory;
+import org.eclipse.debug.internal.ui.viewers.model.provisional.IViewerInputProvider;
 import org.eclipse.debug.ui.sourcelookup.ISourceDisplay;
  
 public class CDebugElementAdapterFactory implements IAdapterFactory {
@@ -42,6 +44,7 @@ public class CDebugElementAdapterFactory implements IAdapterFactory {
     private static IElementContentProvider fgThreadContentProvider = new CThreadContentProvider();
     private static IElementContentProvider fgStackFrameContentProvider = new CStackFrameContentProvider();
     private static IElementContentProvider fgModuleContentProvider = new ModuleContentProvider();
+    private static IElementContentProvider fgCRegisterManagerContentProvider = new CRegisterManagerContentProvider();
 
     private static IModelProxyFactory fgDebugElementProxyFactory = new CDebugElementProxyFactory();
     
@@ -51,14 +54,19 @@ public class CDebugElementAdapterFactory implements IAdapterFactory {
     private static IDisassemblyContextProvider fgDisassemblyContextProvider = new CDisassemblyContextProvider();
     private static IDocumentElementContentProvider fgDisassemblyContentProvider = new DisassemblyElementContentProvider();
     private static IDocumentElementLabelProvider fgDisassemblyLabelProvider = new DisassemblyElementLabelProvider();
-    private static IDocumentElementAnnotationProvider fgDisassemblyAnnotationProvider = new DisassemblyElementAnnotationProvider();
     private static IElementToggleBreakpointAdapter fgDisassemblyToggleBreakpointAdapter = new DisassemblyToggleBreakpointAdapter();
     private static ISourceDisplay fgSourceDisplayAdapter = new SourceDisplayAdapter();
+
+    private static IViewerInputProvider fgDefaultViewerInputProvider = new CDefaultViewerInputProvider();
+    private static IViewerInputProvider fgStackFrameViewerInputProvider = new CStackFrameViewerInputProvider();
+    private static IColumnPresentationFactory fgRegistersViewColumnPresentationFactory = new RegistersViewColumnPresentationFactory();
+    private static IElementMementoProvider fgRegisterManagerProxyMementoProvider = new CRegisterManagerProxyMementoProvider();
     
 	/* (non-Javadoc)
 	 * @see org.eclipse.core.runtime.IAdapterFactory#getAdapter(java.lang.Object, java.lang.Class)
 	 */
-	public Object getAdapter( Object adaptableObject, Class adapterType ) {
+	@SuppressWarnings( "rawtypes" )
+    public Object getAdapter( Object adaptableObject, Class adapterType ) {
 	    if ( adapterType.isInstance( adaptableObject ) ) {
 			return adaptableObject;
 		}
@@ -72,10 +80,13 @@ public class CDebugElementAdapterFactory implements IAdapterFactory {
             if ( adaptableObject instanceof ICStackFrame ) {
                 return fgStackFrameContentProvider;
             }
-			if ( adaptableObject instanceof ICModule || 
-			     adaptableObject instanceof ICElement ) {
-				return fgModuleContentProvider;
-			}
+            if ( adaptableObject instanceof CRegisterManagerProxy ) {
+                return fgCRegisterManagerContentProvider;
+            }
+            if ( adaptableObject instanceof ICModule || 
+                    adaptableObject instanceof ICElement ) {
+                   return fgModuleContentProvider;
+            }
 		}
 		if ( adapterType.equals( IModelProxyFactory.class ) ) {
 			if ( adaptableObject instanceof ICDebugTarget ) {
@@ -93,17 +104,22 @@ public class CDebugElementAdapterFactory implements IAdapterFactory {
             if ( adaptableObject instanceof DisassemblyRetrieval ) {
                 return fgDebugElementProxyFactory;
             }
+            if ( adaptableObject instanceof CRegisterManagerProxy ) {
+                return fgDebugElementProxyFactory;
+            }
 		}
         if ( adapterType.equals( IElementMementoProvider.class ) ) {
             if ( adaptableObject instanceof ICStackFrame ) {
                 return fgStackFrameMementoProvider;
             }
-            if ( adaptableObject instanceof IModuleRetrieval ||
-                adaptableObject instanceof ICThread ||
-                 adaptableObject instanceof ICModule || 
-                 adaptableObject instanceof ICElement) 
-            {
+            if ( adaptableObject instanceof IModuleRetrieval 
+                    || adaptableObject instanceof ICThread 
+                    || adaptableObject instanceof ICModule
+                    || adaptableObject instanceof ICElement ) {
                 return fgModuleMementoProvider;
+            }
+            if ( adaptableObject instanceof CRegisterManagerProxy ) {
+                return fgRegisterManagerProxyMementoProvider;
             }
         }
         if ( adapterType.equals( IDisassemblyContextProvider.class ) ) {
@@ -121,11 +137,6 @@ public class CDebugElementAdapterFactory implements IAdapterFactory {
                 return fgDisassemblyLabelProvider;
             }
         }
-        if ( adapterType.equals( IDocumentElementAnnotationProvider.class ) ) {
-            if ( adaptableObject instanceof IDisassemblyLine ) {
-                return fgDisassemblyAnnotationProvider;
-            }
-        }
         if ( adapterType.equals( IElementToggleBreakpointAdapter.class ) ) {
             if ( adaptableObject instanceof IDisassemblyLine ) {
                 return fgDisassemblyToggleBreakpointAdapter;
@@ -136,13 +147,27 @@ public class CDebugElementAdapterFactory implements IAdapterFactory {
                 return fgSourceDisplayAdapter;
             }
         }
+        if ( adapterType.equals( IViewerInputProvider.class ) ) {
+            if ( adaptableObject instanceof ICDebugTarget 
+                    || adaptableObject instanceof ICThread )
+                return fgDefaultViewerInputProvider;
+            if ( adaptableObject instanceof ICStackFrame ) {
+                return fgStackFrameViewerInputProvider;
+            }
+        }
+        if ( adapterType.equals( IColumnPresentationFactory.class ) ) {
+            if ( adaptableObject instanceof CRegisterManagerProxy ) {
+                return fgRegistersViewColumnPresentationFactory;
+            }
+        }
     	return null;
 	}
 
 	/* (non-Javadoc)
 	 * @see org.eclipse.core.runtime.IAdapterFactory#getAdapterList()
 	 */
-	public Class[] getAdapterList() {
+	@SuppressWarnings( "rawtypes" )
+    public Class[] getAdapterList() {
 		return new Class[] {
 				IElementContentProvider.class,
 				IModelProxyFactory.class,
@@ -153,6 +178,7 @@ public class CDebugElementAdapterFactory implements IAdapterFactory {
                 IDocumentElementAnnotationProvider.class,
                 IElementToggleBreakpointAdapter.class,
                 ISourceDisplay.class,
+                IViewerInputProvider.class,
 			};
 	}
 }

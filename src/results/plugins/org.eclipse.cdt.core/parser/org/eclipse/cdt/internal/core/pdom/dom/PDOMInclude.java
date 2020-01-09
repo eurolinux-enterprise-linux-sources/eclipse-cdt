@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 QNX Software Systems and others.
+ * Copyright (c) 2006, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -80,10 +80,10 @@ public class PDOMInclude implements IIndexFragmentInclude {
 		boolean deducible_name = isDeducibleName(targetFile, nameChars);
 		// If the name is the same as an end part of the path of the included file,
 		// store the length of the name instead of the name itself.
-		if( deducible_name ) {
-			db.putInt( record + INCLUDE_NAME_OR_LENGTH, nameChars.length );
+		if (deducible_name) {
+			db.putInt(record + INCLUDE_NAME_OR_LENGTH, nameChars.length);
 		} else {
-			db.putRecPtr( record + INCLUDE_NAME_OR_LENGTH, db.newString(nameChars).getRecord() );
+			db.putRecPtr(record + INCLUDE_NAME_OR_LENGTH, db.newString(nameChars).getRecord());
 		}
 		setFlag(encodeFlags(include, deducible_name));
 		setIncludedBy(containerFile);
@@ -141,6 +141,11 @@ public class PDOMInclude implements IIndexFragmentInclude {
 		return rec != 0 ? new PDOMFile(linkage, rec) : null;
 	}
 
+	void setIncludes(PDOMFile includedFile) throws CoreException {
+		long rec = includedFile != null ? includedFile.getRecord() : 0;
+		linkage.getDB().putRecPtr(record + INCLUDED_FILE, rec);
+	}
+
 	/**
 	 * Checks if the name is the same as the end part of the path of the included file.
 	 */
@@ -166,7 +171,7 @@ public class PDOMInclude implements IIndexFragmentInclude {
 		return rec != 0 ? new PDOMFile(linkage, rec) : null;
 	}
 
-	private void setIncludedBy(PDOMFile includedBy) throws CoreException {
+	void setIncludedBy(PDOMFile includedBy) throws CoreException {
 		long rec = includedBy != null ? includedBy.getRecord() : 0;
 		linkage.getDB().putRecPtr(record + INCLUDED_BY, rec);
 	}

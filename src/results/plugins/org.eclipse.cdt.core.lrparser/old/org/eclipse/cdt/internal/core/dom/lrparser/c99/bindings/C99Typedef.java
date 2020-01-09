@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 IBM Corporation and others.
+ * Copyright (c) 2006, 2009 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -69,13 +69,10 @@ public class C99Typedef extends PlatformObject implements IC99Binding, ITypedef,
 		if(t == this)
 			return true;
 		
-		try {
-			if(t instanceof ITypedef)
-				return type.isSameType(((ITypedef)t).getType());
-			return type.isSameType(t);
-		} catch(DOMException _) {
-			return false;
-		}
+		if(t instanceof ITypedef)
+			return type.isSameType(((ITypedef)t).getType());
+		return type.isSameType(t);
+
 	}
 
 	@Override

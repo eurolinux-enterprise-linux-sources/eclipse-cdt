@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2007 QNX Software Systems and others.
+ * Copyright (c) 2000, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -405,6 +405,7 @@ public class PE {
 			case PEConstants.IMAGE_FILE_MACHINE_ARM:
 			case PEConstants.IMAGE_FILE_MACHINE_ARM2:
 			case PEConstants.IMAGE_FILE_MACHINE_ALPHA64:
+			case PEConstants.IMAGE_FILE_MACHINE_AMD64:
 			case PEConstants.IMAGE_FILE_MACHINE_I386:
 			case PEConstants.IMAGE_FILE_MACHINE_IA64:
 			case PEConstants.IMAGE_FILE_MACHINE_M68K:
@@ -441,6 +442,9 @@ public class PE {
 			break;
 			case PEConstants.IMAGE_FILE_MACHINE_ALPHA64:
 				attrib.cpu = "arm64"; //$NON-NLS-1$
+			break;
+			case PEConstants.IMAGE_FILE_MACHINE_AMD64:
+				attrib.cpu = "amd64"; //$NON-NLS-1$
 			break;
 			case PEConstants.IMAGE_FILE_MACHINE_I386:
 				attrib.cpu = "x86"; //$NON-NLS-1$
@@ -644,15 +648,24 @@ public class PE {
 
 	public Symbol[] getSymbols() throws IOException {
 		if (symbolTable == null) {
+			SectionHeader[] secHeaders = getSectionHeaders();
+			NTOptionalHeader ntHeader = getNTOptionalHeader();
+
 			RandomAccessFile accessFile = getRandomAccessFile();
 			long offset = fileHeader.f_symptr;
 			symbolTable = new Symbol[fileHeader.f_nsyms];
 			for (int i = 0; i < symbolTable.length; i++, offset += Symbol.SYMSZ) {
-				symbolTable[i] = new Symbol(accessFile, offset);
-				NTOptionalHeader ntHeader = getNTOptionalHeader();
-				// FIXME: What is this again ?
+				Symbol newSym = new Symbol(accessFile, offset);
+				
+				// Now convert section offset of the symbol to image offset.
+				if (newSym.n_scnum >= 1 && newSym.n_scnum <= secHeaders.length)	// valid section #
+					newSym.n_value += secHeaders[newSym.n_scnum-1].s_vaddr;
+				
+				// convert to absolute address.
 				if (ntHeader != null)
-					symbolTable[i].n_value += ntHeader.ImageBase + ntHeader.FileAlignment;
+					newSym.n_value += ntHeader.ImageBase;
+				
+				symbolTable[i] = newSym;
 			}				
 		}
 		return symbolTable;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2007 QNX Software Systems and others.
+ * Copyright (c) 2004, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,6 +13,8 @@ package org.eclipse.cdt.debug.internal.core.model;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Set;
+
 import org.eclipse.cdt.debug.core.CDebugCorePlugin;
 import org.eclipse.cdt.debug.core.cdi.CDIException;
 import org.eclipse.cdt.debug.core.cdi.ICDISession;
@@ -23,22 +25,23 @@ import org.eclipse.cdt.debug.core.cdi.event.ICDIRestartedEvent;
 import org.eclipse.cdt.debug.core.cdi.event.ICDIResumedEvent;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIMemoryBlock;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIMemoryBlockManagement2;
+import org.eclipse.cdt.debug.core.cdi.model.ICDIMemorySpaceEncoder;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIMemorySpaceManagement;
 import org.eclipse.cdt.debug.core.cdi.model.ICDIObject;
 import org.eclipse.cdt.debug.core.cdi.model.ICDITarget;
 import org.eclipse.cdt.debug.core.model.IExecFileInfo;
+import org.eclipse.cdt.debug.core.model.provisional.IMemorySpaceAwareMemoryBlock;
 import org.eclipse.cdt.debug.internal.core.CMemoryBlockRetrievalExtension;
 import org.eclipse.debug.core.DebugEvent;
 import org.eclipse.debug.core.DebugException;
 import org.eclipse.debug.core.DebugPlugin;
-import org.eclipse.debug.core.model.IMemoryBlockExtension;
 import org.eclipse.debug.core.model.IMemoryBlockRetrieval;
 import org.eclipse.debug.core.model.MemoryByte;
 
 /**
  * Represents a memory block in the CDI model.
  */
-public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlockExtension, ICDIEventListener {
+public class CMemoryBlockExtension extends CDebugElement implements IMemorySpaceAwareMemoryBlock, ICDIEventListener {
 
 	/**
 	 * The address expression this memory block is based on.
@@ -66,7 +69,7 @@ public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlock
 	 */
 	private MemoryByte[] fBytes = null;
 
-	private HashSet fChanges = new HashSet();
+	private Set<BigInteger> fChanges = new HashSet<BigInteger>();
 
 	/**
 	 * is fWordSize available?
@@ -80,41 +83,63 @@ public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlock
 
 
 	/** 
-	 * Constructor for CMemoryBlockExtension. 
+	 * Constructor 
 	 */
 	public CMemoryBlockExtension( CDebugTarget target, String expression, BigInteger baseAddress ) {
-		super( target );
-		
-		fExpression = expression;
-		fBaseAddress = baseAddress;
+		this(target, expression, baseAddress, null);
 	}
 
 	/** 
-	 * Constructor for CMemoryBlockExtension. 
+	 * Constructor that takes a memory space identifier 
+	 */
+	@SuppressWarnings("deprecation")
+	public CMemoryBlockExtension( CDebugTarget target, String expression, BigInteger baseAddress, String memorySpaceID ) {
+		super( target );
+		
+		fBaseAddress = baseAddress;
+		fMemorySpaceID = memorySpaceID;
+
+		if (memorySpaceID == null) {
+			fExpression = expression;
+		}
+		else {
+			assert memorySpaceID.length() > 0;
+			ICDITarget cdiTarget = target.getCDITarget();
+			if (cdiTarget instanceof ICDIMemorySpaceEncoder) {
+				// new interface
+				fExpression = ((ICDIMemorySpaceEncoder)cdiTarget).encodeAddress(expression, memorySpaceID);
+			}
+			else if (cdiTarget instanceof ICDIMemorySpaceManagement) {
+				// old interface
+				fExpression = ((ICDIMemorySpaceManagement)target.getCDITarget()).addressToString(baseAddress, memorySpaceID);
+			}
+			
+			if (fExpression == null) {
+				// If the backend supports memory spaces, it should implement ICDIMemorySpaceManagement
+				// Even if it does, it may choose to use our built-in encoding/decoding
+				fExpression = CMemoryBlockRetrievalExtension.encodeAddressDefault(expression, memorySpaceID);
+			}
+		}
+		
+	}
+
+	/** 
+	 * Constructor that takes the addressable size 
 	 */
 	public CMemoryBlockExtension( CDebugTarget target, String expression, BigInteger baseAddress, int wordSize ) {
+		this( target, expression, baseAddress, wordSize, null );
+	}
+	
+	/** 
+	 * Constructor that takes the addressable size and a memory space identifier 
+	 */
+	public CMemoryBlockExtension( CDebugTarget target, String expression, BigInteger baseAddress, int wordSize, String memorySpaceID ) {
 		super( target );
 		fExpression = expression;
 		fBaseAddress = baseAddress;
 		fWordSize= wordSize;
 		fHaveWordSize= true;
-	}
-
-	/** 
-	 * Constructor for CMemoryBlockExtension that supports memory spaces
-	 *  
-	 */
-	public CMemoryBlockExtension( CDebugTarget target, BigInteger baseAddress, String memorySpaceID ) {
-		super( target );
-		fBaseAddress = baseAddress;
-		fMemorySpaceID = memorySpaceID; 
-		if (target.getCDITarget() instanceof ICDIMemorySpaceManagement)
-			fExpression = ((ICDIMemorySpaceManagement)target.getCDITarget()).addressToString(baseAddress, memorySpaceID);
-		
-		if (fExpression == null)
-			// If the backend supports memory spaces, it should implement ICDIMemorySpaceManagement
-			// Even if it does, it may choose to use our built-in encoding/decoding
-			fExpression = CMemoryBlockRetrievalExtension.addressToString(baseAddress, memorySpaceID);
+		fMemorySpaceID = memorySpaceID;
 	}
 
 	/* (non-Javadoc)
@@ -156,8 +181,10 @@ public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlock
 							targetRequestFailed( e.getMessage(), null );
 						}
 					}
-					fWordSize= block.getWordSize();
-					fHaveWordSize= true;
+					if (block != null) {
+						fWordSize= block.getWordSize();
+						fHaveWordSize= true;
+					}
 				}
 			}
 		}
@@ -175,14 +202,19 @@ public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlock
 	 * @see org.eclipse.debug.core.model.IMemoryBlockExtension#setBaseAddress(java.math.BigInteger)
 	 */
 	public void setBaseAddress( BigInteger address ) throws DebugException {
+		BigInteger current = fBaseAddress;
+		if (current == address || (current != null && current.equals(address))) {
+			return;	// optimization
+		}
+		fBaseAddress = address;
+		fireChangeEvent(DebugEvent.STATE);
 	}
 
 	/* (non-Javadoc)
 	 * @see org.eclipse.debug.core.model.IMemoryBlockExtension#getBytesFromOffset(java.math.BigInteger, long)
 	 */
 	public MemoryByte[] getBytesFromOffset( BigInteger unitOffset, long addressableUnits ) throws DebugException {
-		// TODO Auto-generated method stub
-		return null;
+		return getBytesFromAddress(unitOffset.add(getBigBaseAddress()) , addressableUnits);
 	}
 
 	/* (non-Javadoc)
@@ -211,14 +243,16 @@ public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlock
 				catch( CDIException e ) {
 					targetRequestFailed( e.getMessage(), null );
 				}
-				fBytes = new MemoryByte[bytes.length];
-				for ( int i = 0; i < bytes.length; ++i ) {
-					fBytes[i] = createMemoryByte( bytes[i], getCDIBlock().getFlags( i ), hasChanged( getRealBlockAddress().add( BigInteger.valueOf( i ) ) ) );
+				if (bytes != null) {
+					fBytes = new MemoryByte[bytes.length];
+					for ( int i = 0; i < bytes.length; ++i ) {
+						fBytes[i] = createMemoryByte( bytes[i], getCDIBlock().getFlags( i ), hasChanged( getRealBlockAddress().add( BigInteger.valueOf( i ) ) ) );
+					}
 				}
 			}
 		}
 		MemoryByte[] result = new MemoryByte[0];
-		if ( fBytes != null ) {
+		if ( fBytes != null && cdiBlock != null ) {
 			int offset = address.subtract( getRealBlockAddress() ).intValue();
 			int offsetInBytes = offset * cdiBlock.getWordSize();
 			long lengthInBytes = length * cdiBlock.getWordSize();
@@ -376,7 +410,7 @@ public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlock
 	private void handleChangedEvent( ICDIMemoryChangedEvent event ) {
 		ICDIMemoryBlock block = getCDIBlock();
 		if ( block != null && fBytes != null ) {
-			MemoryByte[] memBytes = (MemoryByte[])fBytes.clone();
+			MemoryByte[] memBytes = fBytes.clone();
 			try {
 				BigInteger start = getRealBlockAddress();
 				long length = block.getLength();
@@ -414,7 +448,7 @@ public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlock
 
 	private void resetChanges() {
 		if ( fBytes != null ) {
-			BigInteger[] changes = (BigInteger[])fChanges.toArray( new BigInteger[fChanges.size()] );
+			BigInteger[] changes = fChanges.toArray( new BigInteger[fChanges.size()] );
 			for ( int i = 0; i < changes.length; ++i ) {
 				BigInteger real = getRealBlockAddress();
 				if ( real.compareTo( changes[i] ) <= 0 && real.add( BigInteger.valueOf( getBlockSize() ) ).compareTo( changes[i] ) > 0 ) {
@@ -482,6 +516,7 @@ public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlock
 	/* (non-Javadoc)
 	 * @see org.eclipse.core.runtime.IAdaptable#getAdapter(java.lang.Class)
 	 */
+	@SuppressWarnings("rawtypes")
 	public Object getAdapter( Class adapter ) {
 		if ( IMemoryBlockRetrieval.class.equals( adapter ) )
 			return getMemoryBlockRetrieval();
@@ -535,13 +570,7 @@ public class CMemoryBlockExtension extends CDebugElement implements IMemoryBlock
 
 	
 	/**
-	 * Provides the memory space associated with this block if and only if the 
-	 * block was created with an address value + memory space qualifier. If the 
-	 * block was created from an expression, this method should return null--
-	 * even if the target CDI backend supports memory spaces. 
-	 * 
-	 * @return a memory space ID or null
-	 * expression
+	 * @see org.eclipse.cdt.debug.core.model.provisional.IMemorySpaceAwareMemoryBlock#getMemorySpaceID()
 	 */
 	public String getMemorySpaceID() {
 		return fMemorySpaceID;

@@ -14,10 +14,9 @@
 	<target name="init">
 		<touch file="${user.home}/.cvspass" />
 		<tstamp/>
-		<property name="eclipseDist" value="/home/data/httpd/download.eclipse.org/eclipse/downloads/drops/R-3.5-200906111540/eclipse-SDK-3.5-linux-gtk-ppc.tar.gz"/>
-		<property name="mylynDist" value="/home/data/httpd/download.eclipse.org/tools/mylyn/update/galileo/mylyn-3.2.0.I20090520-2300-e3.4.zip"/>
-		<property name="rseDist" value="/home/data/httpd/download.eclipse.org/dsdp/tm/downloads/drops/R-3.1-200906171400/RSE-SDK-3.1.zip"/>
-		<property name="branchVersion" value="6.0.2"/>
+		<property name="eclipseDist" value="/home/data/httpd/download.eclipse.org/eclipse/downloads/drops/R-3.6-201006080911/eclipse-SDK-3.6-linux-gtk-${osgi.arch}.tar.gz"/>
+		<property name="rseDist" value="/home/data/httpd/download.eclipse.org/dsdp/tm/downloads/drops/R-3.2-201006071030/RSE-SDK-3.2.zip"/>
+		<property name="branchVersion" value="7.0.1"/>
 		<property name="timestamp" value="${DSTAMP}${TSTAMP}" />
 		<property name="forceContextQualifier" value="${timestamp}"/>
 		<property name="buildingOSGi" value="true"/>
@@ -32,7 +31,7 @@
 		<property name="zipsdir" value="${buildDirectory}/${buildType}.${buildId}"/>
 		<property name="masterFile" value="cdt-master-${branchVersion}-${buildId}.zip"/>
 		<property name="masterFeature" value="org.eclipse.cdt.master_${branchVersion}.jar"/>
-		<property name="cdtTest" value="org.eclipse.cdt.testing_6.0.0.${timestamp}"/>
+		<property name="cdtTest" value="org.eclipse.cdt.testing_7.0.0.${timestamp}"/>
 		<property name="eclipseTest" value="org.eclipse.test_3.3.0"/>
 		<property name="messagefile" value="message.in"/>
 		<property name="mailto" value="vivkong@ca.ibm.com"/>
@@ -40,11 +39,12 @@
 		<property name="baseos" value="${osgi.os}"/>
 		<property name="basews" value="${osgi.ws}"/>
 		<property name="basearch" value="${osgi.arch}"/>
-		<property name="tagbranch" value="-r cdt_6_0"/>
+		<property name="tagbranch" value="-r cdt_7_0"/>
 		<property name="tagname" value="v${timestamp}"/>
 		<property name="testReports" value="${zipsdir}/testReports"/>
 		<property name="junit-report-output" value="${testReports}"/>
-		<property name="jvm1.5" value="/opt/public/common/ibm-java2-ppc-50/bin/java"/>
+		<!--property name="jvm1.5" value="/opt/public/common/ibm-java2-ppc-50/bin/java"/-->
+		<property name="jvm1.5" value="java"/>
 		<condition property="onWindows">
 			<os family="windows"/>
 		</condition>
@@ -69,6 +69,9 @@
 			<property name="builder" value="${basedir}/lrparser.sdk"/>
 		</ant>
 		<ant antfile="build.xml" dir="${pde.build.scripts}" target="preBuild">
+			<property name="builder" value="${basedir}/codan"/>
+		</ant>
+		<ant antfile="build.xml" dir="${pde.build.scripts}" target="preBuild">
 			<property name="builder" value="${basedir}/testing"/>
 		</ant>
 		<ant antfile="build.xml" dir="${pde.build.scripts}" target="preBuild">
@@ -94,14 +97,14 @@
 			<property name="builder" value="${basedir}/dsfgdb"/>
 		</ant>
 		-->
+		<ant antfile="build.xml" dir="${pde.build.scripts}" target="preBuild">
+			<property name="builder" value="${basedir}/memory"/>
+		</ant>
 		<ant antfile="build.xml" dir="${pde.build.scripts}" target="fetch">
 			<property name="builder" value="${basedir}/testing"/>
 		</ant>
 		<ant antfile="build.xml" dir="${pde.build.scripts}" target="fetch">
 			<property name="builder" value="${basedir}/master"/>
-		</ant>
-		<ant antfile="build.xml" dir="${pde.build.scripts}" target="preBuild">
-			<property name="builder" value="${basedir}/memory"/>
 		</ant>
 		<ant antfile="build.xml" dir="${pde.build.scripts}" target="fetch">
 			<property name="builder" value="${basedir}/platform"/>
@@ -141,11 +144,13 @@
 		<ant antfile="build.xml" dir="${pde.build.scripts}" target="fetch">
 			<property name="builder" value="${basedir}/memory"/>
 		</ant>
+		<ant antfile="build.xml" dir="${pde.build.scripts}" target="fetch">
+			<property name="builder" value="${basedir}/codan"/>
+		</ant>
 	</target>
 	
 	<target name="unzip" depends="init" unless="dontUnzip">
 		<untar src="${eclipseDist}" dest="${buildDirectory}" compression="gzip"/>
-		<unzip src="${mylynDist}" dest="${buildDirectory}/eclipse"/>
 		<unzip src="${rseDist}" dest="${buildDirectory}"/>
 	</target>
 	
@@ -167,8 +172,12 @@
 		</replace>
 		<move file="${zipsdir}/${masterFile}" todir="${buildDirectory}"/>
 		<unzip src="${buildDirectory}/${masterFile}" dest="${buildDirectory}/site"/>
+		<!--
 		<move file="${buildDirectory}/site/linux.gtk.x86/eclipse/epl-v10.html" todir="${buildDirectory}/site/eclipse"/>
 		<move file="${buildDirectory}/site/linux.gtk.x86/eclipse/notice.html" todir="${buildDirectory}/site/eclipse"/>
+		-->
+		<copy file="epl-v10.html" tofile="${buildDirectory}/site/eclipse/epl-v10.html"/>
+		<copy file="notice.html" tofile="${buildDirectory}/site/eclipse/notice.html"/>
 		<copy file="buildsite.xml" tofile="${buildDirectory}/site/eclipse/site.xml"/>
 		<replace file="${buildDirectory}/site/eclipse/site.xml">
 			<replacefilter token="@buildVersion@" value="${branchVersion}"/>
@@ -245,7 +254,7 @@
 	<target name="test" depends="init" unless="hasErrors">
 		<record name="${testReports}/testsLog.txt" action="start" loglevel="verbose"/>
 		<untar src="${eclipseDist}" dest="${testDirectory}" compression="gzip"/>
-		<unzip src="${mylynDist}" dest="${testDirectory}/eclipse"/>
+		<!--unzip src="${mylynDist}" dest="${testDirectory}/eclipse"/-->
 		<unzip src="${zipsdir}/cdt-master-${branchVersion}-${buildId}.zip"
 			dest="${testDirectory}/eclipse"/>
 		<unzip src="${testDirectory}/eclipse/plugins/${cdtTest}.jar"
@@ -318,6 +327,8 @@
 			<replacefilter token="@buildType@" value="${buildType}"/>
 			<replacefilter token="@buildId@" value="${buildId}"/>
 		</replace>
+		<chmod file="${copyToDir}/index.html" perm="664"/>
+
 	</target>
 	
 	<target name="copy" depends="init" unless="hasErrors">
@@ -357,284 +368,9 @@
 		</mail>
 	</target>
 
-	<target name="tagone">
-		<cvs cvsroot="/cvsroot/tools" command="rtag ${tagbranch} ${tagname} ${tagmodule}"/>
-	</target>
-	
 	<target name="tag" depends="init">
 		<property name="cdtTag" value="${tagname}"/>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.aix"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.linux"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.linux.ia64"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.linux.ppc"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.linux.x86"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.linux.x86_64"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.macosx"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.qnx"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.solaris"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.core.win32"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.ui.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.make.core"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.make.core.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.make.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.managedbuilder.core"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.managedbuilder.core.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.managedbuilder.gnu.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.managedbuilder.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.managedbuilder.ui.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.debug.core"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.debug.core.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.debug.mi.core"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.debug.mi.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.debug.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.debug.ui.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.doc.isv"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.doc.user"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.launch"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.platform-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.gnu.build-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.gnu.debug-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.releng"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.sdk"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.sdk-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.testing"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/all/org.eclipse.cdt.testing-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/jtag/org.eclipse.cdt.debug.gdbjtag"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/jtag/org.eclipse.cdt.debug.gdbjtag.core"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/jtag/org.eclipse.cdt.debug.gdbjtag.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/jtag/org.eclipse.cdt.debug.gdbjtag-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/lrparser/org.eclipse.cdt.core.lrparser"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/lrparser/org.eclipse.cdt.core.lrparser.feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/lrparser/org.eclipse.cdt.core.lrparser.sdk.feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/lrparser/org.eclipse.cdt.core.lrparser.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/upc/org.eclipse.cdt.core.parser.upc"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/upc/org.eclipse.cdt.core.parser.upc.feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/upc/org.eclipse.cdt.core.parser.upc.sdk.feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/upc/org.eclipse.cdt.core.parser.upc.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.managedbuilder.xlc.core"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.managedbuilder.xlc.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.managedbuilder.xlupc.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.errorparsers.xlc"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.errorparsers.xlc.tests"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.core.lrparser.xlc"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.core.lrparser.xlc.tests"/>
-		</antcall>				
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.make.xlc.core"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.xlc.feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/xlc/org.eclipse.cdt.xlc.sdk-feature"/>
-		</antcall>		
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/util/org.eclipse.cdt.util"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/util/org.eclipse.cdt.util-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/mylyn/org.eclipse.cdt.mylyn"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/mylyn/org.eclipse.cdt.mylyn.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/mylyn/org.eclipse.cdt.mylyn-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/releng/org.eclipse.cdt.master"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/memory/org.eclipse.cdt.debug.ui.memory.traditional"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/memory/org.eclipse.cdt.debug.ui.memory.memorybrowser"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/memory/org.eclipse.cdt.debug.ui.memory.transport"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/memory/org.eclipse.cdt.debug.ui.memory.search"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/memory/org.eclipse.cdt.debug.ui.memory-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf/org.eclipse.cdt.dsf"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf/org.eclipse.cdt.dsf.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf/org.eclipse.cdt.examples.dsf"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf/org.eclipse.cdt.examples.dsf.pda"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf/org.eclipse.cdt.examples.dsf.pda.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf/org.eclipse.cdt.tests.dsf"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf/org.eclipse.cdt.examples.dsf-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf-gdb/org.eclipse.cdt.dsf.gdb"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf-gdb/org.eclipse.cdt.dsf.gdb.ui"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf-gdb/org.eclipse.cdt.tests.dsf.gdb"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/dsf-gdb/org.eclipse.cdt.gnu.dsf-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/cross/org.eclipse.cdt.launch.remote-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/cross/org.eclipse.cdt.launch.remote"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/cross/org.eclipse.cdt.build.crossgcc-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/cross/org.eclipse.cdt.build.crossgcc"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/p2/org.eclipse.cdt.p2-feature"/>
-		</antcall>
-		<antcall target="tagone">
-			<param name="tagmodule" value="org.eclipse.cdt/p2/org.eclipse.cdt.p2"/>
-		</antcall>
+		<cvs cvsroot="/cvsroot/tools" command="rtag ${tagbranch} ${tagname} org.eclipse.cdt"/>
 	</target>
+
 </project>

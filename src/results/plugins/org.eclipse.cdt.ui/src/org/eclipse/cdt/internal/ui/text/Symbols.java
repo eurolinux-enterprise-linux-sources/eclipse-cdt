@@ -38,6 +38,7 @@ public interface Symbols {
 	int TokenARROW= 19;
 	int TokenDOUBLECOLON= 20;
 	int TokenSHIFTLEFT= 21;
+	int TokenPLUS= 22;
 	int TokenIF= 109;
 	int TokenDO= 1010;
 	int TokenFOR= 1011;
@@ -67,5 +68,9 @@ public interface Symbols {
 	int TokenTHROW= 1035;
 	int TokenCONST= 1036;
 	int TokenEXTERN= 1037;
+	int TokenTYPEDEF= 1038;
+	int TokenUSING= 1039;
+	int TokenTEMPLATE= 1040;
+	int TokenTYPENAME= 1041;
 	int TokenIDENT= 2000;
 }

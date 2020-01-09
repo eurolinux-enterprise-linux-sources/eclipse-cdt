@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -221,7 +221,11 @@ public class CompletionTests extends AbstractContentAssistTest {
 	protected void assertCompletionResults(String[] expected) throws Exception {
 		assertCompletionResults(fCursorOffset, expected, AbstractContentAssistTest.COMPARE_REP_STRINGS);
 	}
-	
+
+	protected void assertParameterHint(String[] expected) throws Exception {
+		assertContentAssistResults(fCursorOffset, expected, false, AbstractContentAssistTest.COMPARE_DISP_STRINGS);
+	}
+
 	//void gfunc() {C1 v; v.m/*cursor*/
 	public void testLocalVariable() throws Exception {
 		final String[] expected= {
@@ -785,12 +789,30 @@ public class CompletionTests extends AbstractContentAssistTest {
 	//   void blah(const vector3& v) { x += v./*cursor*/; }
 	//   float x;
 	// };
-	public void _testForwardMembersInInlineMethods_Bug185652() throws Exception {
-		// see https://bugs.eclipse.org/bugs/show_bug.cgi?id=185652
+	public void testForwardMembersInInlineMethods_Bug103857a() throws Exception {
+		// see https://bugs.eclipse.org/bugs/show_bug.cgi?id=103857
 		final String[] expected= {
 				"x"
 		};
 		assertMinimumCompletionResults(fCursorOffset, expected, AbstractContentAssistTest.COMPARE_REP_STRINGS);
+	}
+
+	//	struct S {
+	//		int mem;
+	//	};
+	//	class X {
+	//		void test() {
+	//			T t;
+	//			t.m/*cursor*/;
+	//		}
+	//		typedef S T;
+	//	};
+	public void testForwardMembersInInlineMethods_Bug103857b() throws Exception {
+		// see https://bugs.eclipse.org/bugs/show_bug.cgi?id=185652
+		final String[] expected= {
+				"mem"
+		};
+		assertCompletionResults(fCursorOffset, expected, AbstractContentAssistTest.COMPARE_REP_STRINGS);
 	}
 
 	// void Pri/*cursor*/
@@ -833,11 +855,11 @@ public class CompletionTests extends AbstractContentAssistTest {
 		};
 		String disturbContent= readTaggedComment(DISTURB_FILE_NAME);
 		IFile dfile= createFile(fProject, DISTURB_FILE_NAME, disturbContent);
-		assertTrue(CCorePlugin.getIndexManager().joinIndexer(8000, NPM));
+		assertTrue(CCorePlugin.getIndexManager().joinIndexer(8000, npm()));
 		assertCompletionResults(fCursorOffset, expected, AbstractContentAssistTest.COMPARE_REP_STRINGS);
 		
-		dfile.delete(true, NPM);
-		assertTrue(CCorePlugin.getIndexManager().joinIndexer(8000, NPM));
+		dfile.delete(true, npm());
+		assertTrue(CCorePlugin.getIndexManager().joinIndexer(8000, npm()));
 		assertCompletionResults(fCursorOffset, expected2, AbstractContentAssistTest.COMPARE_REP_STRINGS);
 	}
 	
@@ -927,8 +949,8 @@ public class CompletionTests extends AbstractContentAssistTest {
 	public void testExternC_bug191315() throws Exception {
 		StringBuffer[] content= getContentsForTest(3);
 		createFile(fProject, "header191315.h", content[0].toString());
-		createFile(fProject, "source191315.c", content[0].toString());
-		createFile(fProject, "source191315.cpp", content[0].toString());
+		createFile(fProject, "source191315.c", content[1].toString());
+		createFile(fProject, "source191315.cpp", content[1].toString());
 		IFile dfile= createFile(fProject, "header191315.h", content[0].toString());
 		TestSourceReader.waitUntilFileIsIndexed(CCorePlugin.getIndexManager().getIndex(fCProject), dfile, 8000);
 		final String[] expected= {
@@ -1286,8 +1308,22 @@ public class CompletionTests extends AbstractContentAssistTest {
 	//public:
 	//  InitializerListTest() : h/*cursor*/
 	//};
-	public void testCunstructorInitializerList_BaseClassInput_Bug266586() throws Exception {
+	public void testConstructorInitializerList_BaseClassInput_Bug266586() throws Exception {
 		final String[] expected= { "Helper(void)", "Helper(const Helper &)" };
 		assertCompletionResults(fCursorOffset, expected, COMPARE_ID_STRINGS);
+	}
+	
+	//	template <typename T> struct vector {
+	//      typedef T value_type;
+	//		void push_back(const value_type& value) {}
+	//	};
+	//	typedef int MyType;
+	//	void test() {
+	//	    vector<MyType> v;
+	//	    v.push_back(/*cursor*/);
+	//	} 
+	public void testTypedefSpecialization_Bug307818() throws Exception {
+		final String[] expected= { "push_back(const int & value) : void" };
+		assertParameterHint(expected);
 	}
 }

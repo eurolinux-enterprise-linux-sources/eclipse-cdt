@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -25,7 +25,7 @@ import org.eclipse.cdt.core.model.ICProject;
 import org.eclipse.cdt.core.model.ILanguage;
 import org.eclipse.cdt.core.model.ITranslationUnit;
 import org.eclipse.cdt.core.model.LanguageManager;
-import org.eclipse.cdt.core.parser.CodeReader;
+import org.eclipse.cdt.core.parser.FileContent;
 import org.eclipse.cdt.core.parser.IScannerInfo;
 import org.eclipse.cdt.core.parser.ScannerInfo;
 import org.eclipse.cdt.internal.core.pdom.IndexerInputAdapter;
@@ -42,11 +42,13 @@ import org.eclipse.core.runtime.content.IContentType;
  * @since 5.0
  */
 public class ProjectIndexerInputAdapter extends IndexerInputAdapter {
+	private static final AbstractLanguage[] NO_LANGUAGE = new AbstractLanguage[0];
 	private final ICProject fCProject;
 	private final HashMap<String, IIndexFileLocation> fIflCache;
 	private final FileExistsCache fExistsCache;
 	private AbstractLanguage fLangC;
 	private AbstractLanguage fLangCpp;
+	private String fProjectPrefix;
 
 	public ProjectIndexerInputAdapter(ICProject cproject) {
 		this(cproject, true);
@@ -54,6 +56,7 @@ public class ProjectIndexerInputAdapter extends IndexerInputAdapter {
 
 	public ProjectIndexerInputAdapter(ICProject cproject, boolean useCache) {
 		fCProject= cproject;
+		fProjectPrefix= cproject.getProject().getFullPath().toString() + IPath.SEPARATOR;
 		if (useCache) {
 			fIflCache= new HashMap<String, IIndexFileLocation>();
 			fExistsCache= new FileExistsCache();
@@ -119,6 +122,11 @@ public class ProjectIndexerInputAdapter extends IndexerInputAdapter {
 		}
 		return new File(includePath).isFile();
 	}
+	
+	@Override
+	public long getFileSize(String astFilePath) {
+		return new File(astFilePath).length();
+	}
 
 	@Override
 	public String getASTPath(IIndexFileLocation ifl) {
@@ -155,9 +163,21 @@ public class ProjectIndexerInputAdapter extends IndexerInputAdapter {
 		return 0;
 	}
 
-	
 	@Override
 	public AbstractLanguage[] getLanguages(Object tuo, boolean bothForHeaders) {
+		if (tuo instanceof PotentialTranslationUnit) {
+			if (fLangC != null) {
+				if (fLangCpp != null) {
+					return new AbstractLanguage[] {fLangC, fLangCpp};
+				}
+				return new AbstractLanguage[] {fLangC};
+			}
+			if (fLangCpp != null) {
+				return new AbstractLanguage[] {fLangCpp};
+			}
+			return NO_LANGUAGE;
+		}
+		
 		ITranslationUnit tu= (ITranslationUnit) tuo;
 		try {
 			ILanguage lang= tu.getLanguage();
@@ -179,13 +199,18 @@ public class ProjectIndexerInputAdapter extends IndexerInputAdapter {
 		catch (CoreException e) {
 			CCorePlugin.log(e);
 		}
-		return new AbstractLanguage[0];
+		return NO_LANGUAGE;
 	}
 
 	@Override
 	public boolean isFileBuildConfigured(Object tuo) {
 		ITranslationUnit tu= (ITranslationUnit) tuo;
 		return !CoreModel.isScannerInformationEmpty(tu.getResource());
+	}
+
+	@Override
+	public boolean isIndexedOnlyIfIncluded(Object tu) {
+		return tu instanceof PotentialTranslationUnit;
 	}
 
 	@Override
@@ -214,7 +239,8 @@ public class ProjectIndexerInputAdapter extends IndexerInputAdapter {
 	
 	@Override
 	public boolean canBePartOfSDK(IIndexFileLocation ifl) {
-		return ifl.getFullPath() == null;
+		final String fullPath = ifl.getFullPath();
+		return fullPath == null || !fullPath.startsWith(fProjectPrefix);
 	}
 
 	@Override
@@ -228,12 +254,15 @@ public class ProjectIndexerInputAdapter extends IndexerInputAdapter {
 	}
 
 	@Override
-	public CodeReader getCodeReader(Object tuo) {
+	public FileContent getCodeReader(Object tuo) {
 		ITranslationUnit tu= (ITranslationUnit) tuo;
-		final CodeReader reader= tu.getCodeReader();
+		if (tu.getLocation() == null)
+			return null;
+		
+		final FileContent reader= FileContent.create(tu);
 		if (reader != null) {
 			IIndexFileLocation ifl= IndexLocationFactory.getIFL(tu);
-			fIflCache.put(reader.getPath(), ifl);
+			fIflCache.put(reader.getFileLocation(), ifl);
 		}
 		return reader;
 	}

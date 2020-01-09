@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2008 QNX Software Systems and others.
+ * Copyright (c) 2000, 2009 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -687,7 +687,11 @@ public class VariableManager extends Manager {
 				variable.setMIVarCreate(var);						
 				update(target, variable, eventList);
 			} catch (MIException e) {
-				throw new MI2CDIException(e);
+				// Creating failed, variable not in scope => remove
+				// No events to fire as the variable isn't backed by a MIVar
+				getVariablesList(target).remove(variable);
+				variable.setUpdated(false);
+				return;
 			} catch (CDIException e) {
 				throw e;
 			}

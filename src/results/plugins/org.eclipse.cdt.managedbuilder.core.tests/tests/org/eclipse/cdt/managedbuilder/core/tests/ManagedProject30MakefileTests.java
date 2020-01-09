@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2007 Intel Corporation and others.
+ * Copyright (c) 2005, 2009 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,27 +18,32 @@ package org.eclipse.cdt.managedbuilder.core.tests;
 import java.io.File;
 import java.io.FileFilter;
 import java.util.ArrayList;
-import java.util.Iterator;
 
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
 
 import org.eclipse.cdt.managedbuilder.core.IAdditionalInput;
+import org.eclipse.cdt.managedbuilder.core.IConfiguration;
 import org.eclipse.cdt.managedbuilder.core.IInputType;
 import org.eclipse.cdt.managedbuilder.core.IManagedBuildInfo;
 import org.eclipse.cdt.managedbuilder.core.IManagedProject;
 import org.eclipse.cdt.managedbuilder.core.IOutputType;
-import org.eclipse.cdt.managedbuilder.core.ManagedBuildManager;
-import org.eclipse.cdt.managedbuilder.core.IConfiguration;
 import org.eclipse.cdt.managedbuilder.core.IResourceConfiguration;
 import org.eclipse.cdt.managedbuilder.core.ITool;
-import org.eclipse.cdt.managedbuilder.internal.core.Tool;
+import org.eclipse.cdt.managedbuilder.core.ManagedBuildManager;
 import org.eclipse.cdt.managedbuilder.internal.core.ToolChain;
 import org.eclipse.cdt.managedbuilder.projectconverter.UpdateManagedProjectManager;
 import org.eclipse.cdt.managedbuilder.testplugin.CTestPlugin;
 import org.eclipse.cdt.managedbuilder.testplugin.ManagedBuildTestHelper;
-import org.eclipse.core.resources.*;
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IPathVariableManager;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.IWorkspace;
+import org.eclipse.core.resources.IWorkspaceRunnable;
+import org.eclipse.core.resources.IncrementalProjectBuilder;
+import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -52,6 +57,8 @@ public class ManagedProject30MakefileTests extends TestCase {
 
 	static boolean pathVariableCreated = false;
 	
+	private IPath resourcesLocation = new Path(CTestPlugin.getFileInPlugin(new Path("resources/test30Projects/")).getAbsolutePath());
+
 	public ManagedProject30MakefileTests(String name) {
 		super(name);
 	}
@@ -66,7 +73,7 @@ public class ManagedProject30MakefileTests extends TestCase {
 		//  TODO: testLinkedFolder fails intermittently saying that it cannot find
 		//        the makefiles to compare.  This appears to be a test set issue,
 		//        rather than an MBS functionality issue
-		//suite.addTest(new ManagedProject30MakefileTests("test30LinkedFolder"));
+		suite.addTest(new ManagedProject30MakefileTests("test30LinkedFolder"));
 		suite.addTest(new ManagedProject30MakefileTests("test30CopyandDeploy"));
 		suite.addTest(new ManagedProject30MakefileTests("test30DeleteFile"));
 		suite.addTest(new ManagedProject30MakefileTests("test30NoFilesToBuild"));
@@ -90,7 +97,7 @@ public class ManagedProject30MakefileTests extends TestCase {
 	}
 
 	private IProject[] createProject(String projName, IPath location, String projectTypeId, boolean containsZip){
-		ArrayList projectList = null;
+		ArrayList<IProject> projectList = new ArrayList<IProject>();
 		if (containsZip) {
 			File testDir = CTestPlugin.getFileInPlugin(new Path("resources/test30Projects/" + projName));
 			if(testDir == null) {
@@ -106,7 +113,7 @@ public class ManagedProject30MakefileTests extends TestCase {
 				}
 			});
 			
-			projectList = new ArrayList(projectZips.length);
+			projectList = new ArrayList<IProject>(projectZips.length);
 			for(int i = 0; i < projectZips.length; i++){
 				try{
 					String projectName = projectZips[i].getName();
@@ -131,12 +138,13 @@ public class ManagedProject30MakefileTests extends TestCase {
 			try{
 				IProject project = ManagedBuildTestHelper.createProject(projName, null, location, projectTypeId);
 				if(project != null)
-					projectList = new ArrayList(1);
+					projectList = new ArrayList<IProject>(1);
 					projectList.add(project);
-			} catch(Exception e){}
+			} catch(Exception e){
+			}
 		}
 		
-		return (IProject[])projectList.toArray(new IProject[projectList.size()]);
+		return projectList.toArray(new IProject[projectList.size()]);
 	}
 	
 	private IProject[] createProjects(String projName, IPath location, String projectTypeId, boolean containsZip) {
@@ -146,11 +154,6 @@ public class ManagedProject30MakefileTests extends TestCase {
 			public String queryOverwrite(String file) {
 				return ALL;
 			}};
-		IOverwriteQuery queryNOALL = new IOverwriteQuery(){
-			public String queryOverwrite(String file) {
-				return NO_ALL;
-			}};
-		
 		UpdateManagedProjectManager.setBackupFileOverwriteQuery(queryALL);
 		UpdateManagedProjectManager.setUpdateProjectQuery(queryALL);
 		
@@ -189,10 +192,13 @@ public class ManagedProject30MakefileTests extends TestCase {
 					if (i == 0) {
 						String configName = info.getDefaultConfiguration().getName();
 						IPath buildDir = Path.fromOSString(configName);
-						if (compareBenchmark)
-						    succeeded = ManagedBuildTestHelper.compareBenchmarks(curProject, buildDir, files);
-						else
+						if (compareBenchmark) {
+							IPath benchmarkLocationBase = resourcesLocation.append(curProject.getName());
+							IPath buildLocation = curProject.getLocation().append(buildDir);
+							succeeded = ManagedBuildTestHelper.compareBenchmarks(curProject, buildLocation, files, benchmarkLocationBase);
+						} else {
 							succeeded = ManagedBuildTestHelper.verifyFilesDoNotExist(curProject, buildDir, files);
+						}
 					}
 				}
 			}
@@ -246,7 +252,9 @@ public class ManagedProject30MakefileTests extends TestCase {
 			} else {
 				fail("could not create the link to " + name);
 			}
-		} catch (Exception e) {fail("could not create the link to " + name);}		
+		} catch (Exception e) {
+			fail("could not create the link to " + name + ": " + e);
+		}		
 	}
 	
 	/* (non-Javadoc)
@@ -386,11 +394,11 @@ public class ManagedProject30MakefileTests extends TestCase {
 
 		IProject[] projects = createProjects("deleteFile", null, null, true);
 		final IWorkspace workspace = ResourcesPlugin.getWorkspace();
-		ArrayList resourceList = new ArrayList(1);
+		ArrayList<IFile> resourceList = new ArrayList<IFile>(1);
 		IProject project = projects[0];
 		IFile projfile = project.getFile("filetobedeleted.cxx");
 		resourceList.add(projfile);
-		final IResource[] fileResource = (IResource[])resourceList.toArray(new IResource[resourceList.size()]);
+		final IResource[] fileResource = resourceList.toArray(new IResource[resourceList.size()]);
 		IWorkspaceRunnable runnable = new IWorkspaceRunnable() {
 			public void run(IProgressMonitor monitor) throws CoreException {
 			    workspace.delete(fileResource, false, null);
@@ -457,7 +465,6 @@ public class ManagedProject30MakefileTests extends TestCase {
 		IProject project = projects[0];
 		IManagedBuildInfo info = ManagedBuildManager.getBuildInfo(project);
 		IConfiguration config = info.getDefaultConfiguration();
-		IFile projfile = project.getFile("main.cxx");
 		config.setPreannouncebuildStep("Pre-announce Build Step");
 		config.setPrebuildStep("echo 'executing Pre-Build Step' ");
 		config.setPostannouncebuildStep("Post-announce Build Step");
@@ -548,13 +555,7 @@ public class ManagedProject30MakefileTests extends TestCase {
 		for (int i=0; i<configs.length; i++) {
 			IConfiguration config = configs[i];
 			ToolChain tc = (ToolChain)config.getToolChain();
-			Iterator iter = tc.getToolList().listIterator();
-			int j = 0;
-			while (iter.hasNext()) {
-				Tool toolChild = (Tool) iter.next();
-				j++;
-			}
-			assertEquals(5, j);
+			assertEquals(5, tc.getToolList().size());
 		}
 		buildDegenerativeProjects(projects, null);
 	}

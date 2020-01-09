@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Dictionary;
+import java.util.Formatter;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -29,7 +30,9 @@ import org.eclipse.cdt.dsf.concurrent.DsfExecutor;
 import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
 import org.eclipse.cdt.dsf.concurrent.ThreadSafe;
 import org.eclipse.cdt.dsf.internal.DsfPlugin;
+import org.eclipse.cdt.dsf.internal.LoggingUtils;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
 import org.osgi.framework.Filter;
 
@@ -53,7 +56,50 @@ import org.osgi.framework.Filter;
  */
 @ConfinedToDsfExecutor("getExecutor") 
 public class DsfSession 
-{    
+{
+	/**
+	 * Has the "debug/session" tracing option been turned on? Requires "debug"
+	 * to also be turned on.
+	 * 
+	 * @since 2.1
+	 */
+	private static final boolean DEBUG_SESSION;
+
+	/**
+	 * Has the "debug/session/listeners" tracing option been turned on? Requires
+	 * "debug/session" to also be turned on.
+	 * 
+	 * @since 2.1
+	 */
+    private static final boolean DEBUG_SESSION_LISTENERS;
+
+	/**
+	 * Has the "debug/session/dispatches" tracing option been turned on? Requires
+	 * "debug/session" to also be turned on.
+	 * 
+	 * @since 2.1
+	 */
+    private static final boolean DEBUG_SESSION_DISPATCHES;
+
+	/**
+	 * Has the "debug/session/modelAdapters" tracing option been turned on? Requires
+	 * "debug/session" to also be turned on.
+	 * 
+	 * @since 2.1
+	 */
+    private static final boolean DEBUG_SESSION_MODELADAPTERS;
+
+    static {
+    	DEBUG_SESSION = DsfPlugin.DEBUG && "true".equals( //$NON-NLS-1$
+                Platform.getDebugOption("org.eclipse.cdt.dsf/debug/session")); //$NON-NLS-1$
+    	DEBUG_SESSION_LISTENERS = DEBUG_SESSION && "true".equals( //$NON-NLS-1$
+            Platform.getDebugOption("org.eclipse.cdt.dsf/debug/session/listeners")); //$NON-NLS-1$
+    	DEBUG_SESSION_DISPATCHES = DEBUG_SESSION && "true".equals( //$NON-NLS-1$
+                Platform.getDebugOption("org.eclipse.cdt.dsf/debug/session/dispatches")); //$NON-NLS-1$
+    	DEBUG_SESSION_MODELADAPTERS = DEBUG_SESSION && "true".equals( //$NON-NLS-1$     	
+    	        Platform.getDebugOption("org.eclipse.cdt.dsf/debug/session/modelAdapters")); //$NON-NLS-1$
+    }  
+	
     /** 
      * Listener for session started events.  This listener is always going to be
      * called in the dispatch thread of the session's executor.  
@@ -100,7 +146,17 @@ public class DsfSession
         }
         return null;
     }
-    
+
+	/**
+	 * Returns the active sessions
+	 * 
+	 * @since 2.1
+	 */
+	@ThreadSafe
+	public static DsfSession[] getActiveSessions() {
+		return fgActiveSessions.toArray(new DsfSession[fgActiveSessions.size()]);
+	}
+
     /** 
      * Registers a listener for session started events.
      * Can be called on any thread. 
@@ -207,13 +263,13 @@ public class DsfSession
     }
 
     /** ID (plugin ID preferably) of the owner of this session */
-    private String fOwnerId;
+    private final String fOwnerId;
     
     /** Session ID of this session. */
-    private String fId;
+    private final String fId;
     
     /** Dispatch-thread executor for this session */
-    private DsfExecutor fExecutor;
+    private final DsfExecutor fExecutor;
     
     /** Service start-up counter for this session */ 
     private int fServiceInstanceCounter;
@@ -222,43 +278,80 @@ public class DsfSession
     private Map<ListenerEntry,Method[]> fListeners = new HashMap<ListenerEntry,Method[]>();
     
     /** 
-     * Map of registered adapters, for implementing the 
-     * IModelContext.getAdapter() method.
+     * Map of registered adapters, for implementing the <code>IDMContext.getAdapter()</code> 
+     * method.
      * @see org.eclipse.cdt.dsf.datamodel.AbstractDMContext#getAdapter 
      */
-    @SuppressWarnings("unchecked") 
-    private Map<Class,Object> fAdapters = Collections.synchronizedMap(new HashMap<Class,Object>());
+    private Map<Class<?>,Object> fAdapters = Collections.synchronizedMap(new HashMap<Class<?>,Object>());
 
     /** Returns the owner ID of this session */
+    @ThreadSafe
     public String getOwnerId() { return fOwnerId; }    
     
     public boolean isActive() { return DsfSession.isSessionActive(fId); }
     
     /** Returns the ID of this session */
+    @ThreadSafe
     public String getId() { return fId; }
     
     /** Returns the DSF executor of this session */
+    @ThreadSafe
     public DsfExecutor getExecutor() { return fExecutor; }
- 
-    /**
-     * Adds a new listener for service events in this session.
-     * @param listener the listener that will receive service events
-     * @param filter optional filter to restrict the services that the 
-     * listener will receive events from 
-     */
+
+	/**
+	 * Adds a new listener for service events in this session.  If the given 
+	 * object is already registered as a listener, then this call does nothing.
+	 * 
+	 * <p>
+	 * Listeners don't implement any particular interfaces. They declare one or
+	 * more methods that are annotated with '@DsfServiceEventHandler', and which
+	 * take a single event parameter. The type of the parameter indicates what
+	 * events the handler is interested in. Any event that can be cast to that
+	 * type (and which meets the optional filter) will be sent to it.
+	 * 
+	 * @param listener
+	 *            the listener that will receive service events.
+	 * @param filter
+	 *            optional filter to restrict the services that the listener
+	 *            will receive events from
+	 */
     public void addServiceEventListener(Object listener, Filter filter) {
+        assert getExecutor().isInExecutorThread();
+        
         ListenerEntry entry = new ListenerEntry(listener, filter);
-        assert !fListeners.containsKey(entry);
+        if (DEBUG_SESSION_LISTENERS) {
+        	String msg = new Formatter().format(
+        			"%s %s added as a service listener to %s (id=%s)", //$NON-NLS-1$
+        			DsfPlugin.getDebugTime(),
+        			LoggingUtils.toString(listener),
+        			LoggingUtils.toString(this),
+        			getId()
+        			).toString();
+        	DsfPlugin.debug(msg);
+        }
         fListeners.put(entry, getEventHandlerMethods(listener));
     }
     
     /**
-     * Removes the given listener.
+     * Removes the given listener.  If the given object is not registered as a 
+     * listener, then this call does nothing.
+     * 
      * @param listener listener to remove
      */
     public void removeServiceEventListener(Object listener) {
+        assert getExecutor().isInExecutorThread();
+
         ListenerEntry entry = new ListenerEntry(listener, null);
-        assert fListeners.containsKey(entry);
+        if (DEBUG_SESSION_LISTENERS) {
+        	String msg = new Formatter().format(
+        			"%s %s removed as a service listener to %s (id=%s)", //$NON-NLS-1$
+        			DsfPlugin.getDebugTime(),
+        			LoggingUtils.toString(listener),
+        			LoggingUtils.toString(this),
+        			getId()
+        			).toString();
+        	DsfPlugin.debug(msg);
+        }
         fListeners.remove(entry);
     }
 
@@ -278,8 +371,20 @@ public class DsfSession
      * @param serviceProperties properties of the service requesting the event to be dispatched
      */
     @ThreadSafe
-    @SuppressWarnings("unchecked")
-    public void dispatchEvent(final Object event, final Dictionary serviceProperties) {
+    public void dispatchEvent(final Object event, final Dictionary<?,?> serviceProperties) {
+    	assert event != null;
+        if (DEBUG_SESSION_DISPATCHES) {
+        	String msg = new Formatter().format(
+        			"%s Dispatching event %s to session %s from thread \"%s\" (%d)", //$NON-NLS-1$
+        			DsfPlugin.getDebugTime(),
+        			LoggingUtils.toString(event),
+        			LoggingUtils.toString(this),
+        			Thread.currentThread().getName(),
+        			Thread.currentThread().getId()
+        			).toString();
+        	
+        	DsfPlugin.debug(msg);
+        }
         getExecutor().submit(new DsfRunnable() { 
             public void run() { doDispatchEvent(event, serviceProperties);}
             @Override
@@ -288,37 +393,59 @@ public class DsfSession
     }
     
     /**
-     * Registers a IModelContext adapter of given type.
+     * Registers a <code>IDMContext</code> adapter of given type.
      * @param adapterType class type to register the adapter for
      * @param adapter adapter instance to register
      * @see org.eclipse.dsdp.model.AbstractDMContext#getAdapter
      */
     @ThreadSafe
-    @SuppressWarnings("unchecked") 
-    public void registerModelAdapter(Class adapterType, Object adapter) {
+    public void registerModelAdapter(Class<?> adapterType, Object adapter) {
+        if (DEBUG_SESSION_MODELADAPTERS) {
+        	String msg = new Formatter().format(
+        			"%s Registering model adapter %s of type %s to session %s (%s)", //$NON-NLS-1$
+        			DsfPlugin.getDebugTime(),
+        			LoggingUtils.toString(adapter),
+        			adapterType.getName(),
+        			LoggingUtils.toString(this),
+        			getId()
+        			).toString();
+        	
+        	DsfPlugin.debug(msg);
+        }
+    	
         fAdapters.put(adapterType, adapter);
     }
     
     /**
-     * Un-registers a IModelContext adapter of given type.
+     * Un-registers a <code>IDMContext</code> adapter of given type.
      * @param adapterType adapter type to unregister
      * @see org.eclipse.dsdp.model.AbstractDMContext#getAdapter
      */
     @ThreadSafe
-    @SuppressWarnings("unchecked")
-    public void unregisterModelAdapter(Class adapterType) {
+    public void unregisterModelAdapter(Class<?> adapterType) {
+        if (DEBUG_SESSION_MODELADAPTERS) {
+        	String msg = new Formatter().format(
+        			"%s Unregistering model adapter of type %s from session %s (%s)", //$NON-NLS-1$
+        			DsfPlugin.getDebugTime(),
+        			adapterType.getName(),
+        			LoggingUtils.toString(this),
+        			getId()
+        			).toString();
+        	
+        	DsfPlugin.debug(msg);
+        }
+    	
         fAdapters.remove(adapterType);
     }
     
     /** 
-     * Retrieves an adapter for given type for IModelContext.
+     * Retrieves an adapter for given type for <code>IDMContext</code>.
      * @param adapterType adapter type to look fors
      * @return adapter object for given type, null if none is registered with the session
      * @see org.eclipse.dsdp.model.AbstractDMContext#getAdapter
      */
     @ThreadSafe
-    @SuppressWarnings("unchecked") 
-    public Object getModelAdapter(Class adapterType) {
+    public Object getModelAdapter(Class<?> adapterType) {
         return fAdapters.get(adapterType);
     }
     
@@ -332,8 +459,7 @@ public class DsfSession
     @ThreadSafe
     public int hashCode() { return fId.hashCode(); }
 
-    @SuppressWarnings("unchecked") 
-    private void doDispatchEvent(Object event, Dictionary serviceProperties) {
+    private void doDispatchEvent(Object event, Dictionary<?,?> serviceProperties) {
         // Build a list of listeners;
         SortedMap<ListenerEntry,List<Method>> listeners = new TreeMap<ListenerEntry,List<Method>>(new Comparator<ListenerEntry>() {
                 public int compare(ListenerEntry o1, ListenerEntry o2) {
@@ -380,6 +506,9 @@ public class DsfSession
         for (Map.Entry<ListenerEntry,List<Method>> entry : listeners.entrySet()) {
             for (Method method : entry.getValue()) {
                 try {
+                    if (DEBUG_SESSION_DISPATCHES) {
+                    	DsfPlugin.debug(DsfPlugin.getDebugTime() + " Listener " + LoggingUtils.toString(entry.getKey().fListener) + " invoked with event " + LoggingUtils.toString(event));  //$NON-NLS-1$ //$NON-NLS-2$
+                    }
                     method.invoke(entry.getKey().fListener, new Object[] { event } );
                 }
                 catch (IllegalAccessException e) {
@@ -396,6 +525,22 @@ public class DsfSession
         }
     }
 
+	/**
+	 * DSF event handlers don't implement any particular interfaces. They
+	 * declare one or more methods that are annotated with
+	 * '@DsfServiceEventHandler', and which take a single event parameter. The
+	 * type of the parameter indicates what events the handler is interested in.
+	 * Any event that can be cast to that type (and which meets the optional
+	 * filter provided when the listener is registered) will be sent to it.
+	 * 
+	 * This method returns the methods annotated as handlers. Each method is
+	 * checked to ensure it takes a single parameter; an
+	 * {@link IllegalArgumentException} is thrown otherwise.
+	 * 
+	 * @param listener
+	 *            an object which should contain handler methods
+	 * @return the collection of handler methods
+	 */
     private Method[] getEventHandlerMethods(Object listener) 
     {
         List<Method> retVal = new ArrayList<Method>();
@@ -404,7 +549,7 @@ public class DsfSession
             for (Method method : methods) {
                 if (method.isAnnotationPresent(DsfServiceEventHandler.class)) {
                     Class<?>[] paramTypes = method.getParameterTypes();
-                    if (paramTypes.length > 2) {
+                    if (paramTypes.length != 1) {	// must have one and only param
                         throw new IllegalArgumentException("ServiceEventHandler method has incorrect number of parameters"); //$NON-NLS-1$
                     } 
                     retVal.add(method);
@@ -429,5 +574,4 @@ public class DsfSession
         fOwnerId = ownerId;
         fExecutor = executor;
     }
-    
 }

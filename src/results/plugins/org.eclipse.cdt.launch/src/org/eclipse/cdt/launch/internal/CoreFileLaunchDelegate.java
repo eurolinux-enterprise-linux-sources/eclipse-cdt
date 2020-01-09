@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002 - 2005 QNX Software Systems and others.
+ * Copyright (c) 2002, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -53,8 +53,8 @@ public class CoreFileLaunchDelegate extends AbstractCLaunchDelegate {
 		}
 		try {
 			monitor.worked(1);
-			IPath exePath = verifyProgramPath(config);
-			ICProject project = verifyCProject(config);
+			IPath exePath = CDebugUtils.verifyProgramPath(config);
+			ICProject project = CDebugUtils.verifyCProject(config);
 			IBinaryObject exeFile = verifyBinary(project, exePath);
 
 			ICDebugConfiguration debugConfig = getDebugConfig(config);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2008 IBM Corporation.
+ * Copyright (c) 2006, 2009 IBM Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -108,7 +108,7 @@ class PDOMCPPAnnotation {
 	 * @param annotation Annotation containing visibility information.
 	 * @return The visibility component of the annotation.
 	 */
-	public static int getVisibility(byte annotation) {
+	public static int getVisibility(int annotation) {
 		return (annotation >> VISIBILITY_OFFSET) & VISIBILITY_MASK;
 	}
 }

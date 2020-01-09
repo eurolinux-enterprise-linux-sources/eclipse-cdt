@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,6 +8,8 @@
  * Contributors:
  * Intel Corporation - Initial API and implementation
  * IBM Corporation
+ * Dmitry Kozlov (CodeSourcery) - save build output preferences (bug 294106)
+ * Andrew Gvozdev (Quoin Inc)   - Saving build output implemented in different way (bug 306222)
  *******************************************************************************/
 package org.eclipse.cdt.managedbuilder.ui.properties;
 
@@ -36,6 +38,10 @@ import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Widget;
 
 
+/**
+ * @noextend This class is not intended to be subclassed by clients.
+ * @noinstantiate This class is not intended to be instantiated by clients.
+ */
 public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 	// Widgets
 	//1
@@ -56,6 +62,7 @@ public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 	private IConfiguration icfg;
 	private boolean canModify = true;
 	
+	@Override
 	public void createControls(Composite parent) {
 		super.createControls(parent);
 		usercomp.setLayout(new GridLayout(1, false));
@@ -68,10 +75,11 @@ public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 		c_builderType.add(Messages.getString("BuilderSettingsTab.2")); //$NON-NLS-1$
 		c_builderType.add(Messages.getString("BuilderSettingsTab.3")); //$NON-NLS-1$
 		c_builderType.addSelectionListener(new SelectionAdapter() {
-		    public void widgetSelected(SelectionEvent event) {
+			@Override
+			public void widgetSelected(SelectionEvent event) {
 				enableInternalBuilder(c_builderType.getSelectionIndex() == 1);
-		    	updateButtons();
-		 }});
+				updateButtons();
+			}});
 		
 		b_useDefault = setupCheck(g1, Messages.getString("BuilderSettingsTab.4"), 3, GridData.BEGINNING); //$NON-NLS-1$
 		
@@ -126,6 +134,7 @@ public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 	/**
 	 * sets widgets states
 	 */
+	@Override
 	protected void updateButtons() {
 		bldr = icfg.getEditableBuilder();
 		
@@ -198,9 +207,10 @@ public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 		b.setLayoutData(fd);
 		b.setData(t_dir);
 		b.addSelectionListener(new SelectionAdapter() {
-	        public void widgetSelected(SelectionEvent event) {
-	        	buttonVarPressed(event);
-	        }});
+			@Override
+			public void widgetSelected(SelectionEvent event) {
+				buttonVarPressed(event);
+			}});
 		return b;
 	}
 	
@@ -214,9 +224,10 @@ public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 		b.setData(t); // to get know which text is affected
 		t.setData(b); // to get know which button to enable/disable
 		b.addSelectionListener(new SelectionAdapter() {
-	        public void widgetSelected(SelectionEvent event) {
-	        	buttonVarPressed(event);
-	        }});
+			@Override
+			public void widgetSelected(SelectionEvent event) {
+				buttonVarPressed(event);
+			}});
 		if (check != null) check.setData(t);
 		return t;
 	}
@@ -242,10 +253,11 @@ public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 		}
 	}
 	
-    public void checkPressed(SelectionEvent e) {
-    	checkPressed((Control)e.widget, true);
-    	updateButtons();
-    }
+	@Override
+	public void checkPressed(SelectionEvent e) {
+		checkPressed((Control)e.widget, true);
+		updateButtons();
+	}
 	
 	private void checkPressed(Control b, boolean needUpdate) {	
 		if (b == null) return;
@@ -278,8 +290,7 @@ public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 	}
 
 	/**
-	 * get make command
-	 * @return
+	 * @return make command
 	 */
 	private String getMC() {
 		String makeCommand = bldr.getCommand();
@@ -290,15 +301,15 @@ public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 	/**
 	 * Performs common settings for all controls
 	 * (Copy from config to widgets)
-	 * @param cfgd - 
 	 */
-	
+	@Override
 	public void updateData(ICResourceDescription cfgd) {
 		if (cfgd == null) return;
 		icfg = getCfg(cfgd.getConfiguration());
 		updateButtons();
 	}
 
+	@Override
 	public void performApply(ICResourceDescription src, ICResourceDescription dst) {
 		BuildBehaviourTab.apply(src, dst, page.isMultiCfg());
 	}
@@ -317,14 +328,17 @@ public class BuilderSettingsTab extends AbstractCBuildPropertyTab {
 		
 	}
 	// This page can be displayed for project only
+	@Override
 	public boolean canBeVisible() {
 		return page.isForProject() || page.isForPrefs();
 	}
 	
+	@Override
 	public void setVisible (boolean b) {
 		super.setVisible(b);
 	}
 
+	@Override
 	protected void performDefaults() {
 		if (icfg instanceof IMultiConfiguration) {
 			IConfiguration[] cfs = (IConfiguration[])((IMultiConfiguration)icfg).getItems();

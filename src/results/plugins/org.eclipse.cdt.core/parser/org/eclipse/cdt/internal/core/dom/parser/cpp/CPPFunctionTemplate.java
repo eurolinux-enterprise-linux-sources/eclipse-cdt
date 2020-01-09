@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 IBM Corporation and others.
+ * Copyright (c) 2005, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *    Markus Schorn (Wind River Systems)
  *******************************************************************************/
 package org.eclipse.cdt.internal.core.dom.parser.cpp;
+
+import static org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.SemanticUtil.TDEF;
+import static org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.SemanticUtil.getNestedType;
 
 import org.eclipse.cdt.core.dom.ast.ASTTypeUtil;
 import org.eclipse.cdt.core.dom.ast.DOMException;
@@ -24,16 +27,15 @@ import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTTypeId;
 import org.eclipse.cdt.core.dom.ast.IBinding;
 import org.eclipse.cdt.core.dom.ast.IFunctionType;
-import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IProblemBinding;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTFunctionDeclarator;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassTemplatePartialSpecialization;
-import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunction;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionTemplate;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameter;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPTemplateParameter;
 import org.eclipse.cdt.internal.core.dom.parser.ASTInternal;
 import org.eclipse.cdt.internal.core.dom.parser.ASTQueries;
@@ -44,9 +46,9 @@ import org.eclipse.cdt.internal.core.dom.parser.cpp.semantics.CPPVisitor;
  * Implementation of function templates
  */
 public class CPPFunctionTemplate extends CPPTemplateDefinition
-		implements ICPPFunctionTemplate, ICPPFunction, ICPPInternalFunction {
+		implements ICPPFunctionTemplate, ICPPInternalFunction {
 	public static final class CPPFunctionTemplateProblem extends ProblemBinding
-			implements ICPPFunctionTemplate, ICPPFunction {
+			implements ICPPFunctionTemplate {
 		public CPPFunctionTemplateProblem(IASTNode node, int id, char[] arg) {
 			super(node, id, arg);
 		}
@@ -74,7 +76,7 @@ public class CPPFunctionTemplate extends CPPTemplateDefinition
 		public boolean isExternC() throws DOMException {
 			throw new DOMException(this);
 		}
-		public IParameter[] getParameters() throws DOMException {
+		public ICPPParameter[] getParameters() throws DOMException {
 			throw new DOMException(this);
 		}
 		public IScope getFunctionScope() throws DOMException {
@@ -101,6 +103,12 @@ public class CPPFunctionTemplate extends CPPTemplateDefinition
 		public IType[] getExceptionSpecification() throws DOMException {
 			throw new DOMException( this );
 		}
+		public int getRequiredArgumentCount() throws DOMException {
+			throw new DOMException( this );
+		}
+		public boolean hasParameterPack() {
+			return false;
+		}
 	}
 	
 	protected ICPPFunctionType type = null;
@@ -113,57 +121,75 @@ public class CPPFunctionTemplate extends CPPTemplateDefinition
 	public void addDefinition(IASTNode node) {
 		if (!(node instanceof IASTName))
 			return;
-		updateFunctionParameterBindings((IASTName) node);
-		super.addDefinition(node);
+		IASTDeclarator fdecl= getDeclaratorByName(node);
+		if (fdecl instanceof ICPPASTFunctionDeclarator) {
+			updateFunctionParameterBindings((ICPPASTFunctionDeclarator) fdecl);
+			super.addDefinition(node);
+		}
 	}
-
+	
 	@Override
 	public void addDeclaration(IASTNode node) {
 		if (!(node instanceof IASTName))
 			return;
-		updateFunctionParameterBindings((IASTName) node);
+		IASTDeclarator fdecl= getDeclaratorByName(node);
+		if (fdecl == null)
+			return;
+
+		if (fdecl instanceof ICPPASTFunctionDeclarator)
+			updateFunctionParameterBindings((ICPPASTFunctionDeclarator) fdecl);
+		
 		super.addDeclaration(node);
 	}
 
-	private void updateFunctionParameterBindings(IASTName declName) {
-		IASTName defName = definition != null ? definition : declarations[0];
-		ICPPASTFunctionDeclarator orig = getDeclaratorByName(defName);
-    	IASTParameterDeclaration[] ops = orig.getParameters();
-    	IASTParameterDeclaration[] nps = getDeclaratorByName(declName).getParameters();
-    	CPPParameter temp = null;
-    	for(int i = 0; i < nps.length; i++) {
-    		temp = (CPPParameter) ASTQueries.findInnermostDeclarator(ops[i].getDeclarator()).getName().getBinding();
-    		if (temp != null) {
-    		    IASTName name = ASTQueries.findInnermostDeclarator(nps[i].getDeclarator()).getName();
-    			name.setBinding(temp);
-    			ASTInternal.addDeclaration(temp, name);
-    		}
-    	}
+	private ICPPASTFunctionDeclarator getFirstFunctionDtor() {
+		IASTDeclarator dtor= getDeclaratorByName(getDefinition());
+        if (dtor instanceof ICPPASTFunctionDeclarator) 
+        	return (ICPPASTFunctionDeclarator) dtor;
+
+        IASTNode[] decls = getDeclarations();
+        if (decls != null) {
+        	for (IASTNode decl : decls) {
+        		dtor= getDeclaratorByName(decl);
+        		if (dtor instanceof ICPPASTFunctionDeclarator) 
+        			return (ICPPASTFunctionDeclarator) dtor;
+        	}
+        }
+        return null;
 	}
 
-	public IParameter[] getParameters() {
-		IASTName name = getTemplateName();
-		ICPPASTFunctionDeclarator fdecl= getDeclaratorByName(name);
+	public ICPPParameter[] getParameters() {
+		ICPPASTFunctionDeclarator fdecl= getFirstFunctionDtor();
 		if (fdecl != null) {
 			IASTParameterDeclaration[] params = fdecl.getParameters();
 			int size = params.length;
-			IParameter[] result = new IParameter[size];
-			if (size > 0) {
-				for(int i = 0; i < size; i++) {
-					IASTParameterDeclaration p = params[i];
-					final IASTName pname = ASTQueries.findInnermostDeclarator(p.getDeclarator()).getName();
-					final IBinding binding= pname.resolveBinding();
-					if (binding instanceof IParameter) {
-						result[i]= (IParameter) binding;
-					} else {
-						result[i] = new CPPParameter.CPPParameterProblem(p,
-								IProblemBinding.SEMANTIC_INVALID_TYPE, pname.toCharArray());
-					}
+			if (size == 0) {
+				return ICPPParameter.EMPTY_CPPPARAMETER_ARRAY;
+			}
+			ICPPParameter[] result = new ICPPParameter[size];
+			for (int i = 0; i < size; i++) {
+				IASTParameterDeclaration p = params[i];
+				final IASTName pname = ASTQueries.findInnermostDeclarator(p.getDeclarator()).getName();
+				final IBinding binding= pname.resolveBinding();
+				if (binding instanceof ICPPParameter) {
+					result[i]= (ICPPParameter) binding;
+				} else {
+					result[i] = new CPPParameter.CPPParameterProblem(p,
+							IProblemBinding.SEMANTIC_INVALID_TYPE, pname.toCharArray());
 				}
 			}
 			return result;
 		}
-		return null;
+		return CPPBuiltinParameter.createParameterList(getType());
+	}
+
+	public int getRequiredArgumentCount() throws DOMException {
+		return CPPFunction.getRequiredArgumentCount(getParameters());
+	}
+
+	public boolean hasParameterPack() {
+		ICPPParameter[] pars= getParameters();
+		return pars.length > 0 && pars[pars.length-1].isParameterPack();
 	}
 
 	public IScope getFunctionScope() {
@@ -174,10 +200,10 @@ public class CPPFunctionTemplate extends CPPTemplateDefinition
 		if (type == null) {
 			IASTName name = getTemplateName();
 			IASTNode parent = name.getParent();
-			while(parent.getParent() instanceof IASTDeclarator)
+			while (parent.getParent() instanceof IASTDeclarator)
 				parent = parent.getParent();
-			
-			IType temp = CPPVisitor.createType((IASTDeclarator)parent);
+
+			IType temp = getNestedType(CPPVisitor.createType((IASTDeclarator)parent), TDEF);
 			if (temp instanceof ICPPFunctionType)
 				type = (ICPPFunctionType) temp;
 		}
@@ -212,49 +238,73 @@ public class CPPFunctionTemplate extends CPPTemplateDefinition
         return false;
 	}
 
-	public IBinding resolveParameter(IASTParameterDeclaration param) {
-	   	IASTName name = ASTQueries.findInnermostDeclarator(param.getDeclarator()).getName();
-    	IBinding binding = name.getBinding();
-    	if (binding != null)
-    		return binding;
+    public IBinding resolveParameter(CPPParameter param) {
+		int pos= param.getParameterPosition();
 		
-    	ICPPASTFunctionDeclarator fdtor = (ICPPASTFunctionDeclarator) param.getParent();
-    	IASTParameterDeclaration[] ps = fdtor.getParameters();
-    	int i = 0;
-    	for (; i < ps.length; i++) {
-    		if (param == ps[i])
+    	final IASTNode[] decls= getDeclarations();
+		int tdeclLen= decls == null ? 0 : decls.length;
+    	for (int i= -1; i < tdeclLen; i++) {
+    		IASTDeclarator tdecl;
+    		if (i == -1) {
+    			tdecl= getDeclaratorByName(getDefinition());
+    			if (tdecl == null)
+    				continue;
+    		} else if (decls != null){
+    			tdecl= getDeclaratorByName(decls[i]);
+    			if (tdecl == null)
+    				break;
+    		} else {
     			break;
-    	}
-    	
-    	//create a new binding and set it for the corresponding parameter in all known defns and decls
-    	binding = new CPPParameter(name);
-    	IASTParameterDeclaration temp = null;
-    	if (definition != null) {
-    		ICPPASTFunctionDeclarator fdecl= getDeclaratorByName(definition);
-    		if (fdecl != null) {
-    			temp = fdecl.getParameters()[i];
-    			IASTName n = ASTQueries.findInnermostDeclarator(temp.getDeclarator()).getName();
-    			if (n != name) {
-    				n.setBinding(binding);
-    				ASTInternal.addDeclaration(binding, n);
+    		}
+    		
+    		if (tdecl instanceof ICPPASTFunctionDeclarator) {
+    			IASTParameterDeclaration[] params = ((ICPPASTFunctionDeclarator) tdecl).getParameters();
+    			if (pos < params.length) {
+    				final IASTName oName = getParamName(params[pos]);
+    				return oName.resolvePreBinding();
     			}
     		}
     	}
-    	if (declarations != null) {
-    		for(int j = 0; j < declarations.length && declarations[j] != null; j++) {
-        		ICPPASTFunctionDeclarator fdecl= getDeclaratorByName(declarations[j]);
-        		if (fdecl != null) {
-        			temp = fdecl.getParameters()[i];
-        			IASTName n = ASTQueries.findInnermostDeclarator(temp.getDeclarator()).getName();
-        			if (n != name) {
-        				n.setBinding(binding);
-        				ASTInternal.addDeclaration(binding, n);
-        			}
-        		}
+    	return param;
+    }
+    
+    protected void updateFunctionParameterBindings(ICPPASTFunctionDeclarator fdtor) {
+		IASTParameterDeclaration[] updateParams = fdtor.getParameters();
+
+    	int k= 0;
+    	final IASTNode[] decls= getDeclarations();
+    	int tdeclLen= decls == null ? 0 : decls.length;
+    	for (int i= -1; i < tdeclLen && k < updateParams.length; i++) {
+    		IASTDeclarator tdecl;
+    		if (i == -1) {
+    			tdecl= getDeclaratorByName(getDefinition());
+    			if (tdecl == null)
+    				continue;
+    		} else if (decls != null) {
+    			tdecl= getDeclaratorByName(decls[i]);
+    			if (tdecl == null)
+    				break;
+    		} else {
+    			break;
+    		}
+    		
+    		if (tdecl instanceof ICPPASTFunctionDeclarator) {
+    			IASTParameterDeclaration[] params = ((ICPPASTFunctionDeclarator) tdecl).getParameters();
+    			int end= Math.min(params.length, updateParams.length);
+    			for (; k < end; k++) {
+    				final IASTName oName = getParamName(params[k]);
+    				IBinding b= oName.resolvePreBinding();
+    				IASTName n = getParamName(updateParams[k]);
+    				n.setBinding(b);
+    				ASTInternal.addDeclaration(b, n);
+    			}
     		}
     	}
-    	return binding;	
     }
+
+	private IASTName getParamName(final IASTParameterDeclaration paramDecl) {
+		return ASTQueries.findInnermostDeclarator(paramDecl.getDeclarator()).getName();
+	}
 
 	public boolean isStatic() {
 		return hasStorageClass(IASTDeclSpecifier.sc_static);
@@ -320,28 +370,19 @@ public class CPPFunctionTemplate extends CPPTemplateDefinition
     }
 
     public boolean takesVarArgs() {
-    	ICPPASTFunctionDeclarator fdecl= getDeclaratorByName(getDefinition());
-    	if (fdecl == null) {
-    		IASTName[] ns = (IASTName[]) getDeclarations();
-    		if (ns != null && ns.length > 0) {
-    			for (int i = 0; i < ns.length && fdecl == null; i++) {
-					IASTName name = ns[i];
-					fdecl= getDeclaratorByName(name);
-				}
-    		}
-    	}
+    	ICPPASTFunctionDeclarator fdecl= getFirstFunctionDtor();
     	if (fdecl != null) {
     		return fdecl.takesVarArgs();
     	}
         return false;
     }
 
-	private ICPPASTFunctionDeclarator getDeclaratorByName(IASTNode node) {
+	private IASTDeclarator getDeclaratorByName(IASTNode node) {
 		// skip qualified names and nested declarators.
     	while (node != null) {
     		node= node.getParent();	
-    		if (node instanceof ICPPASTFunctionDeclarator) {
-    			return ((ICPPASTFunctionDeclarator) node);
+    		if (node instanceof IASTDeclarator) {
+    			return ASTQueries.findTypeRelevantDeclarator((IASTDeclarator) node);
     		}
         }
     	return null;
@@ -361,7 +402,7 @@ public class CPPFunctionTemplate extends CPPTemplateDefinition
 	}
 
 	public IType[] getExceptionSpecification() throws DOMException {
-    	ICPPASTFunctionDeclarator declarator = getDeclaratorByName(getDefinition());
+    	ICPPASTFunctionDeclarator declarator = getFirstFunctionDtor();
 		if (declarator != null) {
 			IASTTypeId[] astTypeIds = declarator.getExceptionSpecification();
 			if (astTypeIds.equals(ICPPASTFunctionDeclarator.NO_EXCEPTION_SPECIFICATION)) {

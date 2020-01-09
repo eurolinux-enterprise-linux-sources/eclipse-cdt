@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Intel Corporation and others.
+ * Copyright (c) 2007, 2010 Intel Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -81,10 +81,8 @@ public class EnvironmentTab extends AbstractCPropertyTab {
 
 	private class TabData implements Comparable<TabData> {
 		IEnvironmentVariable var;
-		boolean changed;
-		TabData(IEnvironmentVariable _var, boolean _changed) {
+		TabData(IEnvironmentVariable _var) {
 			var = _var;
-			changed = _changed;
 		}
 		public int compareTo(TabData a) {
 			String s = var.getName();
@@ -115,7 +113,7 @@ public class EnvironmentTab extends AbstractCPropertyTab {
 				return td.var.getName();
 			case 1:
 				if(td.var.getOperation() == IEnvironmentVariable.ENVVAR_REMOVE)
-					return UIMessages.getString(UIMessages.getString("EnvironmentTab.20")); //$NON-NLS-1$
+					return UIMessages.getString("EnvironmentTab.20"); //$NON-NLS-1$
 				return td.var.getValue();
 			case 2:
 				return ce.getOrigin(td.var);
@@ -176,10 +174,10 @@ public class EnvironmentTab extends AbstractCPropertyTab {
 		tv = new TableViewer(table);
 		tv.setContentProvider(new IStructuredContentProvider() {
 
-			@SuppressWarnings("unchecked")
 			public Object[] getElements(Object inputElement) {
-				if (inputElement != null && inputElement instanceof ArrayList) {
-					ArrayList<Object> ar = (ArrayList)inputElement;
+				if (inputElement != null && inputElement instanceof ArrayList<?>) {
+					@SuppressWarnings("unchecked")
+					ArrayList<TabData> ar = (ArrayList<TabData>)inputElement;
 					return ar.toArray(new TabData[0]);
 				}
 				return null;
@@ -336,7 +334,7 @@ public class EnvironmentTab extends AbstractCPropertyTab {
 		data.clear();
 		if (_vars != null) {
 			for (IEnvironmentVariable _var : _vars) {
-				data.add(new TabData(_var, false));
+				data.add(new TabData(_var));
 			}
 		}
 		Collections.sort(data);
@@ -543,7 +541,7 @@ public class EnvironmentTab extends AbstractCPropertyTab {
 				String[] els = null;
 				if (inputElement instanceof Map<?, ?>) {
 					@SuppressWarnings("unchecked")
-					Map<String,?> m = (Map)inputElement;
+					Map<String, String> m = (Map<String, String>)inputElement;
 					els = new String[m.size()];  
 					int index = 0;
 					for (Iterator<String> iterator = m.keySet().iterator(); iterator.hasNext(); index++) {

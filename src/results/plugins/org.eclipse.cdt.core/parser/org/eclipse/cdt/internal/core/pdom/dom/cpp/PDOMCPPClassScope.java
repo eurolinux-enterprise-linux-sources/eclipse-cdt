@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2009 QNX Software Systems and others.
+ * Copyright (c) 2005, 2010 QNX Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -50,12 +50,42 @@ import org.eclipse.cdt.internal.core.index.IIndexScope;
 import org.eclipse.cdt.internal.core.pdom.PDOM;
 import org.eclipse.cdt.internal.core.pdom.dom.BindingCollector;
 import org.eclipse.cdt.internal.core.pdom.dom.PDOMBinding;
+import org.eclipse.cdt.internal.core.pdom.dom.PDOMNode;
 import org.eclipse.core.runtime.CoreException;
 
 /**
  * Represents the class scope for a class stored in the index.
  */
 class PDOMCPPClassScope implements ICPPClassScope, IIndexScope {
+	private static final class PopulateMap implements IPDOMVisitor {
+		private final CharArrayMap<List<PDOMBinding>> fResult;
+		private PopulateMap(CharArrayMap<List<PDOMBinding>> result) {
+			fResult = result;
+		}
+
+		public boolean visit(IPDOMNode node) throws CoreException {
+			if (node instanceof PDOMBinding) {
+				final PDOMBinding binding= (PDOMBinding) node;
+				final char[] nchars = binding.getNameCharArray();
+				List<PDOMBinding> list= fResult.get(nchars);
+				if (list == null) {
+					list= new ArrayList<PDOMBinding>();
+					fResult.put(nchars, list);
+				}
+				list.add(binding);
+				try {
+					if (binding instanceof ICompositeType && ((ICompositeType) binding).isAnonymous()) {
+						return true; // visit children
+					}
+				} catch (DOMException e) {
+				}
+			}
+			return false;
+		}
+
+		public void leave(IPDOMNode node){}
+	}
+
 	private static final IndexFilter CONVERSION_FILTER = new DeclaredBindingsFilter(ILinkage.CPP_LINKAGE_ID, true, false) {
 		@Override
 		public boolean acceptBinding(IBinding binding) throws CoreException {
@@ -91,9 +121,6 @@ class PDOMCPPClassScope implements ICPPClassScope, IIndexScope {
 		try {
 		    final char[] nameChars = name.getSimpleID();
 			if (CharArrayUtils.equals(fBinding.getNameCharArray(), nameChars)) {
-		        if (CPPClassScope.isConstructorReference(name)){
-		            return CPPSemantics.resolveAmbiguities(name, fBinding.getConstructors());
-		        }
 	            //9.2 ... The class-name is also inserted into the scope of the class itself
 		        return getClassNameBinding();
 		    }
@@ -125,7 +152,7 @@ class PDOMCPPClassScope implements ICPPClassScope, IIndexScope {
 			final char[] nameChars = name.getSimpleID();
 			if (!prefixLookup) {
 				if (CharArrayUtils.equals(fBinding.getNameCharArray(), nameChars)) {
-			        if (CPPClassScope.isConstructorReference(name)){
+			        if (CPPClassScope.shallReturnConstructors(name, prefixLookup)){
 			            return fBinding.getConstructors();
 			        }
 			        return new IBinding[] {getClassNameBinding()};
@@ -186,6 +213,19 @@ class PDOMCPPClassScope implements ICPPClassScope, IIndexScope {
 		}
 	}
 
+	public static void updateCache(IPDOMCPPClassType ct, PDOMNode member) throws CoreException {
+		if (member instanceof PDOMBinding) {
+			final Long key= ct.getRecord() + PDOMCPPLinkage.CACHE_MEMBERS;
+			final PDOM pdom = ct.getPDOM();
+			@SuppressWarnings("unchecked")
+			Reference<CharArrayMap<List<PDOMBinding>>> cached= (Reference<CharArrayMap<List<PDOMBinding>>>) pdom.getCachedResult(key);
+			CharArrayMap<List<PDOMBinding>> map= cached == null ? null : cached.get();
+			if (map != null) {
+				new PopulateMap(map).visit(member);
+			}
+		}
+	}
+
 	public static CharArrayMap<List<PDOMBinding>> getBindingMap(IPDOMCPPClassType ct) throws CoreException {
 		final Long key= ct.getRecord() + PDOMCPPLinkage.CACHE_MEMBERS;
 		final PDOM pdom = ct.getPDOM();
@@ -195,34 +235,10 @@ class PDOMCPPClassScope implements ICPPClassScope, IIndexScope {
 		
 		if (map == null) {
 			// there is no cache, build it:
-			final CharArrayMap<List<PDOMBinding>> result= new CharArrayMap<List<PDOMBinding>>();
-			IPDOMVisitor visitor= new IPDOMVisitor() {
-				public boolean visit(IPDOMNode node) throws CoreException {
-					if (node instanceof PDOMBinding) {
-						final PDOMBinding binding= (PDOMBinding) node;
-						final char[] nchars = binding.getNameCharArray();
-						List<PDOMBinding> list= result.get(nchars);
-						if (list == null) {
-							list= new ArrayList<PDOMBinding>();
-							result.put(nchars, list);
-						}
-						list.add(binding);
-
-						try {
-							if (binding instanceof ICompositeType && ((ICompositeType) binding).isAnonymous()) {
-								return true; // visit children
-							}
-						} catch (DOMException e) {
-						}
-					}
-					return false;
-				}
-				public void leave(IPDOMNode node){}
-			};
-			
+			map= new CharArrayMap<List<PDOMBinding>>();
+			IPDOMVisitor visitor= new PopulateMap(map);
 			visitor.visit(ct);
 			ct.acceptUncached(visitor);
-			map= result;
 			pdom.putCachedResult(key, new SoftReference<CharArrayMap<?>>(map));
 		}
 		return map;

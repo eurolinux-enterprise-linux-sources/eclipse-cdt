@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2008 Symbian Software Systems and others.
+ * Copyright (c) 2007, 2009 Symbian Software Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,7 +14,6 @@ import org.eclipse.cdt.core.dom.ast.DOMException;
 import org.eclipse.cdt.core.dom.ast.IEnumerator;
 import org.eclipse.cdt.core.dom.ast.IType;
 import org.eclipse.cdt.core.dom.ast.IValue;
-import org.eclipse.cdt.internal.core.index.IIndexType;
 import org.eclipse.cdt.internal.core.index.composite.ICompositesFactory;
 
 class CompositeCPPEnumerator extends CompositeCPPBinding implements IEnumerator {
@@ -23,11 +22,16 @@ class CompositeCPPEnumerator extends CompositeCPPBinding implements IEnumerator 
 	}
 
 	public IType getType() throws DOMException {
-		IType type = ((IEnumerator)rbinding).getType();
-		return cf.getCompositeType((IIndexType)type);
+		IType type = ((IEnumerator) rbinding).getType();
+		return cf.getCompositeType(type);
 	}
 	
 	public IValue getValue() {
-		return ((IEnumerator)rbinding).getValue();
+		return ((IEnumerator) rbinding).getValue();
+	}
+
+	@Override
+	public String toString() {
+		return getName();
 	}
 }

@@ -16,6 +16,7 @@ import org.eclipse.cdt.core.dom.ast.ASTVisitor;
 import org.eclipse.cdt.core.dom.ast.IASTLiteralExpression;
 import org.eclipse.cdt.core.dom.ast.IBasicType;
 import org.eclipse.cdt.core.dom.ast.IType;
+import org.eclipse.cdt.core.dom.ast.IBasicType.Kind;
 import org.eclipse.cdt.core.parser.util.CharArrayUtils;
 import org.eclipse.cdt.internal.core.dom.parser.ASTNode;
 
@@ -86,32 +87,35 @@ public class CASTLiteralExpression extends ASTNode implements IASTLiteralExpress
 	public IType getExpressionType() {
 		switch (getKind()) {
 		case IASTLiteralExpression.lk_char_constant:
-			return new CBasicType(IBasicType.t_char, 0, this);
+			return new CBasicType(IBasicType.Kind.eChar, 0, this);
 		case IASTLiteralExpression.lk_float_constant:
 			return classifyTypeOfFloatLiteral();
 		case IASTLiteralExpression.lk_integer_constant:
 			return classifyTypeOfIntLiteral();
 		case IASTLiteralExpression.lk_string_literal:
-			IType type = new CBasicType(IBasicType.t_char, 0, this);
+			IType type = new CBasicType(IBasicType.Kind.eChar, 0, this);
 			type = new CQualifierType(type, true, false, false);
 			return new CPointerType(type, 0);
 		}
 		return null;
 	}
-    
+	
+	public boolean isLValue() {
+		return getKind() == IASTLiteralExpression.lk_string_literal;
+	}
+
 	private IType classifyTypeOfFloatLiteral() {
 		final char[] lit= getValue();
 		final int len= lit.length;
-		int kind= IBasicType.t_double;
+		IBasicType.Kind kind= IBasicType.Kind.eDouble;
 		int flags= 0;
 		if (len > 0) {
 			switch (lit[len - 1]) {
 			case 'f': case 'F':
-				kind= IBasicType.t_float;
+				kind= Kind.eFloat;
 				break;
 			case 'l': case 'L':
-				kind= IBasicType.t_double;
-				flags |= CBasicType.IS_LONG;
+				flags |= IBasicType.IS_LONG;
 				break;
 			}
 		}
@@ -143,15 +147,15 @@ public class CASTLiteralExpression extends ASTNode implements IASTLiteralExpress
 
 		int flags= 0;
 		if (unsigned) {
-			flags |= CBasicType.IS_UNSIGNED;
+			flags |= IBasicType.IS_UNSIGNED;
 		} 
 		
 		if (makelong > 1) {
-			flags |= CBasicType.IS_LONGLONG;
+			flags |= IBasicType.IS_LONG_LONG;
 		} else if (makelong == 1) {
-			flags |= CBasicType.IS_LONG;
+			flags |= IBasicType.IS_LONG;
 		} 
-		return new CBasicType(IBasicType.t_int, flags, this);
+		return new CBasicType(IBasicType.Kind.eInt, flags, this);
 	}
 	
 	

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 Nokia and others.
+ * Copyright (c) 2007, 2010 Nokia and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -73,7 +73,6 @@ public class GlobalActionsList extends Composite {
 		summaryTableColumn.setText(Messages.getString("GlobalActionsList.2")); //$NON-NLS-1$
 
 		ArrayList actions = CDebugCorePlugin.getDefault().getBreakpointActionManager().getBreakpointActions();
-		boolean hasActions = actions.size() > 0;
 
 		for (Iterator iter = CDebugCorePlugin.getDefault().getBreakpointActionManager().getBreakpointActions().iterator(); iter.hasNext();) {
 			IBreakpointAction element = (IBreakpointAction) iter.next();
@@ -114,22 +113,23 @@ public class GlobalActionsList extends Composite {
 		});
 		if (!useAttachButton)
 			editButton.setLayoutData(new GridData(GridData.GRAB_HORIZONTAL + GridData.HORIZONTAL_ALIGN_END));
-		editButton.setEnabled(hasActions);
 
 		deleteButton = new Button(this, SWT.NONE);
-		deleteButton.addSelectionListener(new SelectionAdapter() {
-			public void widgetSelected(SelectionEvent e) {
-				HandleDeleteButton();
-			}
-		});
 		deleteButton.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_END));
 		deleteButton.setText(Messages.getString("GlobalActionsList.6")); //$NON-NLS-1$
-		deleteButton.setEnabled(hasActions);
-		//
+
+		updateButtons();
 	}
 
 	public Button getAttachButton() {
 		return attachButton;
+	}
+
+	/**
+	 * @since 7.0
+	 */
+	public Button getDeleteButton() {
+		return deleteButton;
 	}
 
 	public IBreakpointAction[] getSelectedActions() {

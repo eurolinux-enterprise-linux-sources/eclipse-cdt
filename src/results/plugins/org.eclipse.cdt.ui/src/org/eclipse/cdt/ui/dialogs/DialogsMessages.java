@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2009 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,6 +20,8 @@ import org.eclipse.osgi.util.NLS;
  */
 public class DialogsMessages extends NLS {
 	private static final String BUNDLE_NAME = "org.eclipse.cdt.ui.dialogs.DialogsMessages"; //$NON-NLS-1$
+	/** @since 5.2 */
+	public static String AbstractIndexerPage_fileSizeLimit;
 	/** @since 5.1 */
 	public static String AbstractIndexerPage_heuristicIncludes;
 	public static String AbstractIndexerPage_indexAllFiles;
@@ -33,6 +35,8 @@ public class DialogsMessages extends NLS {
 	public static String AbstractIndexerPage_skipAllReferences;
 	/** @since 5.1 */
 	public static String AbstractIndexerPage_skipImplicitReferences;
+	/** @since 5.2 */
+	public static String AbstractIndexerPage_skipTypeAndMacroReferences;
 	public static String AbstractIndexerPage_skipTypeReferences;
 	public static String AbstractIndexerPage_skipMacroReferences;
 	public static String CacheSizeBlock_MB;
@@ -57,6 +61,52 @@ public class DialogsMessages extends NLS {
 	public static String DocCommentOwnerBlock_SelectDocToolDescription;
 	public static String DocCommentOwnerCombo_None;
 	public static String DocCommentOwnerComposite_DocumentationToolGroupTitle;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_ConsumeNo;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_ConsumeYes;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_DescriptionColumn;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_EatColumn;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_FileColumn;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_LineColumn;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_LinkToPreferencesMessage;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_Pattern_Column;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_SeverityColumn;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_SeverityError;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_SeverityIgnore;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_SeverityInfo;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_SeverityWarning;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_Title;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_TooltipConsume;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_TooltipDescription;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_TooltipFile;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_TooltipLine;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_TooltipPattern;
+	/** @since 5.2 */
+	public static String RegexErrorParserOptionPage_TooltipSeverity;
+	/** @since 5.2 */
+	public static String RegularExpression_EmptyPattern;
+	/** @since 5.2 */
+	public static String RegularExpression_Validate;
+	/** @since 5.2 */
+	public static String RegularExpression_Enter;
 
 	static {
 		// initialize resource bundle

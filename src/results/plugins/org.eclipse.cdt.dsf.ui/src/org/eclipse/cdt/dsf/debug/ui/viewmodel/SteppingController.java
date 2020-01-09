@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2009 Wind River Systems and others.
+ * Copyright (c) 2006, 2010 Wind River Systems and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,14 +16,18 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.eclipse.cdt.dsf.concurrent.ConfinedToDsfExecutor;
 import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.DsfExecutor;
 import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
 import org.eclipse.cdt.dsf.concurrent.IDsfStatusConstants;
 import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
+import org.eclipse.cdt.dsf.concurrent.ThreadSafe;
 import org.eclipse.cdt.dsf.datamodel.AbstractDMEvent;
 import org.eclipse.cdt.dsf.datamodel.DMContexts;
 import org.eclipse.cdt.dsf.debug.service.IRunControl;
@@ -52,8 +56,8 @@ import org.eclipse.jface.util.PropertyChangeEvent;
  * 
  * @since 1.1
  */
-public final class SteppingController
-{
+@ConfinedToDsfExecutor("#getExecutor()")
+public final class SteppingController {
     /**
      * Amount of time in milliseconds, that it takes the SteppingTimedOutEvent 
      * event to be issued after a step is started. 
@@ -131,7 +135,7 @@ public final class SteppingController
 	/**
 	 * Minimum step interval in milliseconds.
 	 */
-	private int fMinStepInterval= 0;
+	private AtomicInteger fMinStepInterval= new AtomicInteger(0);
 
 	/**
 	 * Map of execution contexts for which a step is in progress.
@@ -163,10 +167,19 @@ public final class SteppingController
         setMinimumStepInterval(store.getInt(IDsfDebugUIConstants.PREF_MIN_STEP_INTERVAL));
     }
 
+    @ThreadSafe
     public void dispose() {
-    	if (fRunControl != null) {
-    		getSession().removeServiceEventListener(this);
-    	}
+        try {
+            fSession.getExecutor().execute(new DsfRunnable() {
+                public void run() {
+                    if (fRunControl != null) {
+                        getSession().removeServiceEventListener(SteppingController.this);
+                    }
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            // Session already gone.
+        }
     	
         IPreferenceStore store= DsfUIPlugin.getDefault().getPreferenceStore();
         store.removePropertyChangeListener(fPreferencesListener);
@@ -179,8 +192,9 @@ public final class SteppingController
      * 
      * @param interval
      */
+    @ThreadSafe
     public void setMinimumStepInterval(int interval) {
-    	fMinStepInterval = interval;
+    	fMinStepInterval.set(interval);
     }
 
 	/**
@@ -196,6 +210,7 @@ public final class SteppingController
 	 * 
 	 * @param participant
 	 */
+    @ThreadSafe
     public void addSteppingControlParticipant(ISteppingControlParticipant participant) {
     	fParticipants.add(participant);
     }
@@ -205,6 +220,7 @@ public final class SteppingController
      * 
      * @param participant
      */
+    @ThreadSafe
     public void removeSteppingControlParticipant(final ISteppingControlParticipant participant) {
     	fParticipants.remove(participant);
     }
@@ -237,6 +253,7 @@ public final class SteppingController
     	}
     }
 
+    @ThreadSafe
 	public DsfSession getSession() {
 		return fSession;
 	}
@@ -245,6 +262,7 @@ public final class SteppingController
 	 * All access to this class should happen through this executor.
 	 * @return the executor this class is confined to
 	 */
+    @ThreadSafe
 	public DsfExecutor getExecutor() {
 		return getSession().getExecutor();
 	}
@@ -297,11 +315,12 @@ public final class SteppingController
 	 * @return  the number of milliseconds before the next possible step
 	 */
 	private int getStepDelay(IExecutionDMContext execCtx) {
-		if (fMinStepInterval > 0) {
+	    int minStepInterval = fMinStepInterval.get();
+		if (minStepInterval > 0) {
 	        for (IExecutionDMContext lastStepCtx : fLastStepTimes.keySet()) {
 	            if (execCtx.equals(lastStepCtx) || DMContexts.isAncestorOf(execCtx, lastStepCtx)) {
 	                long now = System.currentTimeMillis();
-					int delay= (int) (fLastStepTimes.get(lastStepCtx) + fMinStepInterval - now);
+					int delay= (int) (fLastStepTimes.get(lastStepCtx) + minStepInterval - now);
 					return Math.max(delay, 0);
 	            }
 	        }
@@ -487,7 +506,7 @@ public final class SteppingController
 	 * 
 	 * @param execCtx
 	 */
-	private void enableStepping(final IExecutionDMContext execCtx) {
+	public void enableStepping(final IExecutionDMContext execCtx) {
         fStepInProgress.remove(execCtx);
 		for (IExecutionDMContext disabledCtx : fStepInProgress.keySet()) {
 			if (DMContexts.isAncestorOf(disabledCtx, execCtx)) {
@@ -531,32 +550,41 @@ public final class SteppingController
     @DsfServiceEventHandler 
     public void eventDispatched(final ISuspendedDMEvent e) {
         // Take care of the stepping time out
-        fTimedOutFlags.remove(e.getDMContext());
-        ScheduledFuture<?> future = fTimedOutFutures.remove(e.getDMContext()); 
+        IExecutionDMContext dmc = e.getDMContext();
+		boolean timedout = fTimedOutFlags.remove(dmc) == Boolean.TRUE;
+        ScheduledFuture<?> future = fTimedOutFutures.remove(dmc); 
         if (future != null) future.cancel(false);
         
-        // Check if there's a step pending, if so execute it
-        processStepQueue(e.getDMContext());
+        if (timedout || e.getReason() != StateChangeReason.STEP) {
+        	// after step timeout or any other suspend reason do not process queued steps
+        	fStepQueues.remove(dmc);
+        } else {
+        	// Check if there's a step pending, if so execute it
+        	processStepQueue(dmc);
+        }
     }
 
     @DsfServiceEventHandler 
     public void eventDispatched(final IResumedDMEvent e) {
         if (e.getReason().equals(StateChangeReason.STEP)) {
-            fTimedOutFlags.put(e.getDMContext(), Boolean.FALSE);
+            final IExecutionDMContext dmc = e.getDMContext();
+            fTimedOutFlags.put(dmc, Boolean.FALSE);
             // We shouldn't have a stepping timeout running unless we get two 
             // stepping events in a row without a suspended, which would be a 
             // protocol error.
-            assert !fTimedOutFutures.containsKey(e.getDMContext());
+            assert !fTimedOutFutures.containsKey(dmc);
             fTimedOutFutures.put(
-                e.getDMContext(), 
+                dmc, 
                 getExecutor().schedule(
                     new DsfRunnable() { public void run() {
-                        fTimedOutFutures.remove(e.getDMContext());
+						fTimedOutFutures.remove(dmc);
 
                         if (getSession().isActive()) {
+                            fTimedOutFlags.put(dmc, Boolean.TRUE);
+                            enableStepping(dmc);
                             // Issue the stepping time-out event.
                             getSession().dispatchEvent(
-                                new SteppingTimedOutEvent(e.getDMContext()), 
+                                new SteppingTimedOutEvent(dmc), 
                                 null);
                         }
                     }},
@@ -565,11 +593,4 @@ public final class SteppingController
             
         } 
     }    
-
-    @DsfServiceEventHandler 
-    public void eventDispatched(SteppingTimedOutEvent e) {
-        fTimedOutFlags.put(e.getDMContext(), Boolean.TRUE);
-        enableStepping(e.getDMContext());
-    }
-    
 }

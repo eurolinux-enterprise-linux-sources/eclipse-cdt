@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2007 IBM Corporation.
+ * Copyright (c) 2006, 2010 IBM Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -52,7 +52,8 @@ public class CPPVariableTests extends PDOMTestBase {
 		IBinding[] bindings = findQualifiedName(pdom, "autoCPPVariable");
 		assertEquals(1, bindings.length);
 		ICPPVariable variable = (ICPPVariable) bindings[0];
-		assertTrue(variable.isAuto());
+		assertFalse(variable.isExtern());
+		assertFalse(variable.isStatic());
 	}
 
 	public void testCPPExternVariable() throws Exception {

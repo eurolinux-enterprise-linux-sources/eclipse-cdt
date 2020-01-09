@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2009 IBM Corporation and others.
+ * Copyright (c) 2004, 2010 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -31,12 +31,11 @@ import org.eclipse.cdt.core.dom.ast.IASTParameterDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTTypeId;
-import org.eclipse.cdt.core.dom.ast.IBasicType;
 import org.eclipse.cdt.core.dom.ast.IBinding;
-import org.eclipse.cdt.core.dom.ast.IParameter;
 import org.eclipse.cdt.core.dom.ast.IProblemBinding;
 import org.eclipse.cdt.core.dom.ast.IScope;
 import org.eclipse.cdt.core.dom.ast.IType;
+import org.eclipse.cdt.core.dom.ast.IBasicType.Kind;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTFunctionDeclarator;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTNamedTypeSpecifier;
@@ -50,6 +49,7 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPClassType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPConstructor;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPFunctionType;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
+import org.eclipse.cdt.core.dom.ast.cpp.ICPPParameter;
 import org.eclipse.cdt.core.index.IIndexFileSet;
 import org.eclipse.cdt.core.parser.util.ArrayUtil;
 import org.eclipse.cdt.core.parser.util.CharArrayObjectMap;
@@ -99,9 +99,9 @@ public class CPPClassScope extends CPPScope implements ICPPClassScope {
         }
         char[] className = name.getLookupKey();
 
-		IParameter[] voidPs = new IParameter[] { new CPPParameter(CPPSemantics.VOID_TYPE) };
-		IType pType = new CPPReferenceType(SemanticUtil.addQualifiers(clsType, true, false));
-		IParameter[] ps = new IParameter[] { new CPPParameter(pType) };
+        ICPPParameter[] voidPs = new ICPPParameter[] { new CPPParameter(CPPSemantics.VOID_TYPE, 0) };
+		IType pType = new CPPReferenceType(SemanticUtil.addQualifiers(clsType, true, false), false);
+		ICPPParameter[] ps = new ICPPParameter[] { new CPPParameter(pType, 0) };
 
 		int i= 0;
 		ImplicitsAnalysis ia= new ImplicitsAnalysis(compTypeSpec);
@@ -124,7 +124,7 @@ public class CPPClassScope extends CPPScope implements ICPPClassScope {
 
 		if (!ia.hasUserDeclaredCopyAssignmentOperator()) {
 			//copy assignment operator: A& operator = (const A &)
-			IType refType = new CPPReferenceType(clsType);
+			IType refType = new CPPReferenceType(clsType, false);
 			ICPPFunctionType ft= CPPVisitor.createImplicitFunctionType(refType, ps, false, false);
 			ICPPMethod m = new CPPImplicitMethod(this, OverloadableOperator.ASSIGN.toCharArray(), ft, ps);
 			implicits[i++] = m;
@@ -133,7 +133,7 @@ public class CPPClassScope extends CPPScope implements ICPPClassScope {
 
 		if (!ia.hasUserDeclaredDestructor()) {
 			//destructor: ~A()
-			ICPPFunctionType ft= CPPVisitor.createImplicitFunctionType(new CPPBasicType(IBasicType.t_unspecified, 0), voidPs, false, false);
+			ICPPFunctionType ft= CPPVisitor.createImplicitFunctionType(new CPPBasicType(Kind.eUnspecified, 0), voidPs, false, false);
 			char[] dtorName = CharArrayUtils.concat("~".toCharArray(), className);  //$NON-NLS-1$
 			ICPPMethod m = new CPPImplicitMethod(this, dtorName, ft, voidPs);
 			implicits[i++] = m;
@@ -190,7 +190,7 @@ public class CPPClassScope extends CPPScope implements ICPPClassScope {
 		super.addName(name);
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	private void addConstructor(Object constructor) {
 		if (bindings == null)
             bindings = new CharArrayObjectMap(1);
@@ -222,9 +222,6 @@ public class CPPClassScope extends CPPScope implements ICPPClassScope {
 			compName= ((ICPPASTTemplateId) compName).getTemplateName();
 		}
 	    if (CharArrayUtils.equals(c, compName.getLookupKey())) {
-	        if (isConstructorReference(name)) {
-	            return CPPSemantics.resolveAmbiguities(name, getConstructors(name, resolve));
-	        }
             //9.2 ... The class-name is also inserted into the scope of the class itself
             return compName.resolveBinding();
 	    }
@@ -243,8 +240,8 @@ public class CPPClassScope extends CPPScope implements ICPPClassScope {
 		}
 	    IBinding[] result = null;
 	    if ((!prefixLookup && CharArrayUtils.equals(c, compName.getLookupKey()))
-	    	|| (prefixLookup && CharArrayUtils.equals(compName.getLookupKey(), 0, c.length, c, true))) {
-	        if (isConstructorReference(name)) {
+	    		|| (prefixLookup && CharArrayUtils.equals(compName.getLookupKey(), 0, c.length, c, true))) {
+	        if (shallReturnConstructors(name, prefixLookup)) {
 	            result = (IBinding[]) ArrayUtil.addAll(IBinding.class, result, getConstructors(name, resolve));
 	        }
             //9.2 ... The class-name is also inserted into the scope of the class itself
@@ -332,26 +329,31 @@ public class CPPClassScope extends CPPScope implements ICPPClassScope {
 	    return super.find(name);
 	}
 
-	public static boolean isConstructorReference(IASTName name) {
-	    if (name.getPropertyInParent() == CPPSemantics.STRING_LOOKUP_PROPERTY) return false;
-	    IASTNode node = name.getParent();
-	    if (node instanceof ICPPASTTemplateId)
-	    	return false;
-	    if (node instanceof ICPPASTQualifiedName) {
-	    	if (((ICPPASTQualifiedName) node).getLastName() == name)
-	    		node = node.getParent();
-	    	else
-	    		return false;
-	    }
-	    if (node instanceof IASTDeclSpecifier) {
-	        IASTNode parent = node.getParent();
-	        if (parent instanceof IASTTypeId && parent.getParent() instanceof ICPPASTNewExpression)
-	            return true;
-	        return false;
-	    } else if (node instanceof IASTFieldReference) {
-	    	return false;
-	    }
-	    return true;
+	public static boolean shallReturnConstructors(IASTName name, boolean isPrefixLookup) {
+		if (!isPrefixLookup)
+			return CPPVisitor.isConstructorDeclaration(name);
+		
+		if (name.getPropertyInParent() == CPPSemantics.STRING_LOOKUP_PROPERTY)
+			return false;
+		
+		IASTNode node = name.getParent();
+		if (node instanceof ICPPASTTemplateId)
+			return false;
+		if (node instanceof ICPPASTQualifiedName) {
+			if (((ICPPASTQualifiedName) node).getLastName() == name)
+				node = node.getParent();
+			else
+				return false;
+		}
+		if (node instanceof IASTDeclSpecifier) {
+			IASTNode parent = node.getParent();
+			if (parent instanceof IASTTypeId && parent.getParent() instanceof ICPPASTNewExpression)
+				return true;
+			return false;
+		} else if (node instanceof IASTFieldReference) {
+			return false;
+		}
+		return true;
 	}
 
 	/* (non-Javadoc)
